@@ -567,14 +567,38 @@ connectBtn.addEventListener('click', async () => {
 });
 
 function onDisconnected() {
+    console.log("BLE Disconnected. Intentando reconectar...");
     rxCharacteristic = null;
     txCharacteristic = null;
-    if (currentMac) {
-        setConexionModo("NUBE"); // Fallback
-    } else {
+    
+    if (bleDevice && currentMac) {
         setConexionModo("OFFLINE");
-        connectOverlay.style.display = 'flex';
-        connectStatus.innerText = "Dispositivo desconectado.";
+        document.getElementById('lblConnMode').innerText = "Reconectando BLE...";
+        
+        setTimeout(async () => {
+            try {
+                if (bleDevice.gatt.connected) return;
+                bleServer = await bleDevice.gatt.connect();
+                const service = await bleServer.getPrimaryService(SERVICE_UUID);
+                rxCharacteristic = await service.getCharacteristic(RX_UUID);
+                txCharacteristic = await service.getCharacteristic(TX_UUID);
+                await txCharacteristic.startNotifications();
+                txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+                setConexionModo("BLE");
+                showToast("Bluetooth reconectado automáticamente");
+            } catch (e) {
+                console.error("Fallo auto-reconexión BLE:", e);
+                setConexionModo("NUBE"); // Fallback final
+            }
+        }, 2000);
+    } else {
+        if (currentMac) {
+            setConexionModo("NUBE");
+        } else {
+            setConexionModo("OFFLINE");
+            connectOverlay.style.display = 'flex';
+            connectStatus.innerText = "Dispositivo desconectado.";
+        }
     }
 }
 
