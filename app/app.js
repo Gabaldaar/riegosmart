@@ -473,6 +473,8 @@ let globalRefuerzo = 0;
 const LED_PATRONES = {
     'inactivo':             [[1, 200], [0, 5000]],
     'inactivo_refuerzo':    [[1, 200], [0, 200], [1, 200], [0, 5000]],
+    'esperando_dosis':      [[1, 200], [0, 200]],
+    'esperando_dosis_refuerzo': [[1, 200], [0, 200]],
     'dosificando':          [[1, 1000], [0, 1000]],
     'dosificando_refuerzo': [[1, 5000], [0, 200]],
     'solo_bomba':           [[1, 500], [0, 500]],
@@ -489,6 +491,8 @@ setInterval(() => {
     let base_patron = 'inactivo';
     if (globalEstadoDosificador === "dosificando" || globalEstadoDosificador === "manual") {
         base_patron = 'dosificando';
+    } else if (globalEstadoDosificador === "esperando_dosis" || globalEstadoDosificador === "esperando_manual") {
+        base_patron = 'esperando_dosis';
     } else if (globalEstadoDosificador === "solo_bomba") {
         base_patron = 'solo_bomba';
     }

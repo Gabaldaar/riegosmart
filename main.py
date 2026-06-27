@@ -965,6 +965,7 @@ def run_main_loop():
                         "Fverano": Fverano,
                         "Finvierno": Finvierno,
                         "wifi_ssid": ssid_configurado,
+                        "dosis_total_seg": calcular_dosis_total(),
                         "cronograma": cronograma,
                         "redes_wifi": redes_wifi,
                         "historial": cargar_historial(),
