@@ -42,6 +42,21 @@ document.getElementById('btnGuardarWifi').onclick = async () => {
     }
 };
 
+// Toggle Password Visibility
+const btnToggleWifiPwd = document.getElementById('btnToggleWifiPwd');
+if (btnToggleWifiPwd) {
+    btnToggleWifiPwd.onclick = () => {
+        const inp = document.getElementById('inpWifiPwd');
+        if (inp.type === "password") {
+            inp.type = "text";
+            btnToggleWifiPwd.innerText = "🙈";
+        } else {
+            inp.type = "password";
+            btnToggleWifiPwd.innerText = "👁️";
+        }
+    };
+}
+
 // ==========================================
 // PWA INSTALL LOGIC
 // ==========================================
@@ -916,6 +931,13 @@ function updateUI(data) {
         if(document.getElementById('inpDosisMin')) document.getElementById('inpDosisMin').value = data.DosisMin;
         if(document.getElementById('inpEspera')) document.getElementById('inpEspera').value = data.Espera;
         if(document.getElementById('inpEsperaMin')) document.getElementById('inpEsperaMin').value = data.EsperaMin;
+        
+        if (data.wifi_ssid !== undefined) {
+            const inpWifiSsid = document.getElementById('inpWifiSsid');
+            if (inpWifiSsid && !document.activeElement.isEqualNode(inpWifiSsid)) {
+                inpWifiSsid.value = data.wifi_ssid;
+            }
+        }
         
         let container = document.getElementById('cronogramaContainer');
         if (container) {

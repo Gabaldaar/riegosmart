@@ -123,8 +123,10 @@ print("====================================")
 wifi_conectado = False
 FIREBASE_URL = "https://firestore.googleapis.com/v1/projects/dosimat-iot/databases/(default)/documents/equipos/" + id_equipo + "?key=AIzaSyCkkrfiHOcMG1_djAxg1G3ZzrD7F8SwcOY"
 
+ssid_configurado = ""
+
 def conectar_wifi():
-    global wifi_conectado
+    global wifi_conectado, ssid_configurado
     try:
         with open("wifi_config.json", "r") as f:
             cred = json.load(f)
@@ -135,6 +137,8 @@ def conectar_wifi():
     ssid = cred.get("ssid", "")
     password = cred.get("pass", "")
     if not ssid: return False
+    
+    ssid_configurado = ssid
     
     print(f"Conectando a Wi-Fi: {ssid}...")
     wlan = network.WLAN(network.STA_IF)
@@ -921,6 +925,7 @@ def run_main_loop():
                         "EsperaMin": EsperaMin,
                         "Fverano": Fverano,
                         "Finvierno": Finvierno,
+                        "wifi_ssid": ssid_configurado,
                         "rtc_fecha": fecha_str,
                         "rtc_hora": hora_str,
                         "dosis_total_seg": calcular_dosis_total(),
@@ -959,6 +964,7 @@ def run_main_loop():
                         "EsperaMin": EsperaMin,
                         "Fverano": Fverano,
                         "Finvierno": Finvierno,
+                        "wifi_ssid": ssid_configurado,
                         "cronograma": cronograma,
                         "redes_wifi": redes_wifi,
                         "historial": cargar_historial(),
