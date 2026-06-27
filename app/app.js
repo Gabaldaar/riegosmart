@@ -885,7 +885,7 @@ function updateUI(data) {
         renderHistorial(data.historial);
     }
 
-    if (firstSync) {
+    if (!unsavedChanges) {
         if(document.getElementById('inpFverano')) document.getElementById('inpFverano').value = dateToStr(data.Fverano);
         if(document.getElementById('inpFinvierno')) document.getElementById('inpFinvierno').value = dateToStr(data.Finvierno);
         if(document.getElementById('inpDosis')) document.getElementById('inpDosis').value = data.Dosis;
@@ -921,8 +921,6 @@ function updateUI(data) {
                 syncRTC();
             }
         }
-        
-        firstSync = false;
     }
 }
 
