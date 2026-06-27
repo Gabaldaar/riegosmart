@@ -689,11 +689,15 @@ def procesar_comando(data):
             try: os.remove("wifi_config.json")
             except: pass
             
-            # Borrar EEPROM: llenamos con ceros los primeros bytes donde estn las variables vitales
-            # y los de historial/cronograma, pero para asegurar, reiniciamos y la prxima lectura fallar.
+            # Borrar EEPROM: llenamos con ceros las variables vitales y el cronograma para forzar defaults
             try: eeprom.write(0, b'\x00' * 32)
             except: pass
             try: eeprom.write(100, b'\x00' * 32)
+            except: pass
+            
+            # Limpiamos explícitamente el historial guardando una lista vacía
+            historial_dosis = []
+            try: guardar_en_eeprom(600, historial_dosis, 1000)
             except: pass
             
             print("Reseteo de fabrica completado. Reiniciando...")
