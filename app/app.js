@@ -755,11 +755,11 @@ function customConfirm(mensaje, titulo = "Confirmación", btnOkText = "Aceptar",
 function updateLocalTimerDisplay() {
     const lblEstadoSubtexto = document.getElementById('lblEstadoSubtexto');
     if (currentEstado === "esperando_dosis" || currentEstado === "esperando_manual") {
-        let displaySec = Math.min(currentDosisSec, currentTEspera);
-        lblEstadoSubtexto.innerText = `Dosis ${currentTipo} - T.Espera: ${displaySec} / ${currentTEspera} - TDosis: 0 / ${currentTDosis}`;
+        let displaySec = Math.max(0, currentTEspera - currentDosisSec);
+        lblEstadoSubtexto.innerText = `Dosis ${currentTipo} - T.Espera: ${displaySec}s (Dosis de ${currentTDosis}s)`;
     } else if (currentEstado === "dosificando" || currentEstado === "manual") {
-        let displaySec = Math.min(currentDosisSec, currentTDosis);
-        lblEstadoSubtexto.innerText = `Dosis ${currentTipo} - T.Espera: ${currentTEspera} / ${currentTEspera} - TDosis: ${displaySec} / ${currentTDosis}`;
+        let displaySec = Math.max(0, currentTDosis - currentDosisSec);
+        lblEstadoSubtexto.innerText = `Dosis ${currentTipo} - Dosificando: ${displaySec}s restantes`;
     } else if (currentEstado === "solo_bomba") {
         if (currentDosisSec > 31000000) {
             lblEstadoSubtexto.innerText = "Apagado de forma manual";
@@ -818,6 +818,7 @@ function updateUI(data) {
             lblEstado.innerText = "Solo Bomba";
         } else {
             let realElapsed = (data.t_estado || 0) + ageSeconds;
+            if (realElapsed < 0) realElapsed = 0;
             
             if (Math.abs(currentDosisSec - realElapsed) > 3 || !localTimer) {
                 currentDosisSec = realElapsed;
