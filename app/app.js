@@ -793,9 +793,9 @@ function updateUI(data) {
         panelEstado.className = "panel-estado bg-green-soft text-green-dark";
         lblEstadoSubtexto.className = "estado-subtexto text-green-dark";
         
-        let t_espera = 0;
-        if (data.Espera || data.EsperaMin) t_espera = (data.EsperaMin || 0) * 60 + (data.Espera || 0);
-        let t_dosis = data.dosis_total_seg || 0;
+        let t_espera = (parseInt(data.EsperaMin) || 0) * 60 + (parseInt(data.Espera) || 0);
+        let baseTDosis = (parseInt(data.DosisMin) || 0) * 60 + (parseInt(data.Dosis) || 0);
+        let t_dosis = (data.dosis_total_seg !== undefined && data.dosis_total_seg !== null) ? parseInt(data.dosis_total_seg) : baseTDosis;
         
         currentEstado = data.estado;
         currentTipo = (data.estado === "manual" || data.estado === "esperando_manual") ? "Manual" : "Programada";
