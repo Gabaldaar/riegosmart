@@ -897,9 +897,15 @@ function updateUI(data) {
         if (container) {
             container.innerHTML = "";
             if (data.cronograma) {
-                data.cronograma.forEach(c => {
-                    agregarFilaCronograma(timeToStr(c.on), c.duracion, c.dosis, c.dias || "0123456");
-                });
+                let cronData = data.cronograma;
+                if (typeof cronData === 'string') {
+                    try { cronData = JSON.parse(cronData); } catch(e) { cronData = []; }
+                }
+                if (Array.isArray(cronData)) {
+                    cronData.forEach(c => {
+                        agregarFilaCronograma(timeToStr(c.on || c.hora), c.duracion, (c.dosis !== undefined ? c.dosis : (c.dosificar ? 1 : 0)), c.dias || "0123456");
+                    });
+                }
             }
         }
         
@@ -953,7 +959,11 @@ function renderSysLog(sysLogArray) {
 
 
 function calcularProximaDosis(cronograma, rtc_fecha, rtc_hora) {
-    if (!cronograma || cronograma.length === 0) return "Sin programar";
+    let cronData = cronograma;
+    if (typeof cronData === 'string') {
+        try { cronData = JSON.parse(cronData); } catch(e) { cronData = []; }
+    }
+    if (!cronData || !Array.isArray(cronData) || cronData.length === 0) return "Sin programar";
     if (!rtc_fecha || !rtc_hora) return "Calculando...";
 
     const horaActual = rtc_hora.replace(/:/g, "");
@@ -964,18 +974,18 @@ function calcularProximaDosis(cronograma, rtc_fecha, rtc_hora) {
 
     for (let d = 0; d < 7; d++) {
         const checkDay = (currentWeekday + d) % 7;
-        let eventosDelDia = cronograma.filter(c => c.dosis == 1 && (c.dias || "0123456").includes(checkDay.toString()));
+        let eventosDelDia = cronData.filter(c => ((c.dosis == 1) || (c.dosificar == true)) && (c.dias || "0123456").includes(checkDay.toString()));
         
         if (d === 0) {
-            eventosDelDia = eventosDelDia.filter(c => c.on > horaActual);
+            eventosDelDia = eventosDelDia.filter(c => (c.on || c.hora) > horaActual);
         }
         
         if (eventosDelDia.length > 0) {
-            eventosDelDia.sort((a,b) => a.on.localeCompare(b.on));
-            const nextOn = timeToStr(eventosDelDia[0].on);
+            eventosDelDia.sort((a,b) => (a.on || a.hora).localeCompare(b.on || b.hora));
+            const nextOn = timeToStr(eventosDelDia[0].on || eventosDelDia[0].hora);
             if (d === 0) return `Hoy ${nextOn}`;
             if (d === 1) return `Mañana ${nextOn}`;
-            return `${nombres[checkDay].substring(0,3)} ${nextOn}`;
+            return `${nombres[checkDay]} ${nextOn}`;
         }
     }
     return "Ningún día";
