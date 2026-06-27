@@ -822,9 +822,9 @@ def leer_comandos_firestore():
             
         if json_str:
             print("Nube: Comando recibido:", json_str)
-            # Encolar el borrado del comando para que se envíe junto con la telemetría
+            # Encolar el borrado del comando directamente para saltar la validación de duplicados
             print("[Nube] Encolando borrado de comando...")
-            encolar_telemetria({"comando_pendiente": ""})
+            cola_telemetria["comando_pendiente"] = ""
             
             try:
                 cmd_dict = json.loads(json_str)
