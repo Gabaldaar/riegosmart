@@ -737,18 +737,19 @@ def to_firestore(v):
     else: return {"nullValue": None}
 
 ultima_telemetria_enviada = {}
+ultimo_intento_telemetria = 0
 cola_telemetria = {}
 
 def procesar_telemetria_pendiente():
-    global cola_telemetria, ultima_telemetria_enviada, last_activity
+    global cola_telemetria, ultima_telemetria_enviada, ultimo_intento_telemetria
     if not cola_telemetria: return
     
     # IMPORTANTE: Firestore tiene un límite de 1 escritura por segundo por documento.
     # Espaciamos los envíos de los chunks (y después de borrar comandos) al menos 2 segundos.
-    if time.time() - last_activity < 2.0:
+    if time.time() - ultimo_intento_telemetria < 2.0:
         return
         
-    last_activity = time.time()
+    ultimo_intento_telemetria = time.time()
     keys = list(cola_telemetria.keys()) # Enviamos TODO de un solo golpe para evitar retrasos
     payload = {"fields": {k: to_firestore(cola_telemetria[k]) for k in keys}}
     url = FIREBASE_URL
@@ -798,8 +799,7 @@ def registrar_evento_nube(coleccion, datos):
     except: pass
 
 def leer_comandos_firestore():
-    global last_activity
-    last_activity = time.time()
+    global ultimo_intento_telemetria
     try:
         print("[Nube] Consultando comandos pendientes...")
         res = urequests.get(FIREBASE_URL + "&mask.fieldPaths=comando_pendiente")
