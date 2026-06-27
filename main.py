@@ -843,7 +843,7 @@ def leer_comandos_firestore():
 # ======================================================================
 def run_main_loop():
     global mensaje_temporal, tiempo_mensaje, duracion_mensaje, Refuerzo, estado_dosificador
-    global Espera, EsperaMin, Dosis, DosisMin, DosisNo, cronograma_modificado
+    global Espera, EsperaMin, Dosis, DosisMin, DosisNo, cronograma_modificado, tiempo_estado
     
     gc.collect()
     print("Servidor Iniciado:", version)
@@ -874,6 +874,16 @@ def run_main_loop():
             if t_rtc[3] == 0 and t_rtc[4] == 0 and ultimo_cambio_dia != t_rtc[2]:
                 ultimo_cambio_dia = t_rtc[2]
             
+            # Recalcular tiempo_estado antes de enviarlo por si cambió internamente
+            if estado_dosificador in ("esperando_dosis", "esperando_manual"):
+                tiempo_estado = int(ahora - tiempo_inicio_espera)
+            elif estado_dosificador in ("dosificando", "manual"):
+                tiempo_estado = int(ahora - tiempo_inicio_dosis)
+            elif estado_dosificador == "solo_bomba":
+                tiempo_estado = 0
+            elif estado_dosificador == "inactivo":
+                tiempo_estado = int(ahora - timestamp_bomba_off) if not bomba_encendida_manual else 0
+            
             # --- TAREAS DE RED (BLE o WI-FI) ---
             if wifi_conectado:
                 comando_procesado = False
@@ -890,16 +900,6 @@ def run_main_loop():
                     hora_str = f"{t_rtc[3]:02d}:{t_rtc[4]:02d}:{t_rtc[5]:02d}"
                     t_bomba_off_seg = max(0, int(timestamp_bomba_off - ahora)) if estado_dosificador == "solo_bomba" else 0
                     
-                    # Recalcular tiempo_estado antes de enviarlo por si cambió internamente
-                    if estado_dosificador in ("esperando_dosis", "esperando_manual"):
-                        tiempo_estado = int(ahora - tiempo_inicio_espera)
-                    elif estado_dosificador in ("dosificando", "manual"):
-                        tiempo_estado = int(ahora - tiempo_inicio_dosis)
-                    elif estado_dosificador == "solo_bomba":
-                        tiempo_estado = 0
-                    elif estado_dosificador == "inactivo":
-                        tiempo_estado = int(ahora - timestamp_bomba_off) if not bomba_encendida_manual else 0
-                        
                     telemetria = {
                         "id_equipo": id_equipo,
                         "version": version,
