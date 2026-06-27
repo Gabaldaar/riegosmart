@@ -893,17 +893,12 @@ function updateUI(data) {
         if(document.getElementById('inpEspera')) document.getElementById('inpEspera').value = data.Espera;
         if(document.getElementById('inpEsperaMin')) document.getElementById('inpEsperaMin').value = data.EsperaMin;
         
-        let cTable = document.getElementById('cronogramaBody');
-        if (cTable) {
-            cTable.innerHTML = "";
+        let container = document.getElementById('cronogramaContainer');
+        if (container) {
+            container.innerHTML = "";
             if (data.cronograma) {
-                data.cronograma.forEach((c, idx) => {
-                    cTable.innerHTML += `<tr>
-                        <td><input type="time" id="c_time_${idx}" value="${timeToStr(c.hora)}" onchange="setUnsaved()"></td>
-                        <td><input type="number" id="c_dur_${idx}" value="${c.duracion}" min="1" max="1440" onchange="setUnsaved()"> min</td>
-                        <td><input type="checkbox" id="c_dos_${idx}" ${c.dosificar ? 'checked' : ''} onchange="setUnsaved()"></td>
-                        <td><button class="btn danger" style="padding:0.2rem 0.5rem" onclick="borrarFila(${idx})">X</button></td>
-                    </tr>`;
+                data.cronograma.forEach(c => {
+                    agregarFilaCronograma(timeToStr(c.on), c.duracion, c.dosis, c.dias || "0123456");
                 });
             }
         }
