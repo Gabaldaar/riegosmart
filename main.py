@@ -25,13 +25,13 @@ mock_socket.socket = custom_socket
 
 sys.modules['usocket'] = mock_socket
 sys.modules['socket'] = mock_socket
-
 import json
 import network
 import urequests
 import binascii
 import machine
 import os
+import socket
 
 # Inicialización de hardware básico
 ref = global_vars['ref'] # LED indicador del tablero
@@ -776,6 +776,9 @@ def procesar_telemetria_pendiente():
     except Exception as e:
         print("Error Patch Exception:", e)
     finally:
+        if res:
+            try: res.close()
+            except: pass
         # Siempre borramos las llaves procesadas para no atascar la cola
         for k in keys:
             if k in cola_telemetria: del cola_telemetria[k]
