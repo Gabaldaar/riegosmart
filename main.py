@@ -124,6 +124,8 @@ print("====================================")
 
 wifi_conectado = False
 FIREBASE_URL = "https://firestore.googleapis.com/v1/projects/dosimat-iot/databases/(default)/documents/equipos/" + id_equipo + "?key=AIzaSyCkkrfiHOcMG1_djAxg1G3ZzrD7F8SwcOY"
+FIREBASE_COMMIT_URL = "https://firestore.googleapis.com/v1/projects/dosimat-iot/databases/(default)/documents:commit?key=AIzaSyCkkrfiHOcMG1_djAxg1G3ZzrD7F8SwcOY"
+DOC_NAME = "projects/dosimat-iot/databases/(default)/documents/equipos/" + id_equipo
 
 ssid_configurado = ""
 
@@ -817,27 +819,33 @@ def procesar_telemetria_pendiente():
     
     # Extraemos solo la primera llave de la cola, pero PRIORIZAMOS el borrado de comandos
     k = "comando_pendiente" if "comando_pendiente" in cola_telemetria else list(cola_telemetria.keys())[0]
-    payload = {"fields": {k: to_firestore(cola_telemetria[k])}}
     
-    url = FIREBASE_URL + f"&updateMask.fieldPaths={k}&mask.fieldPaths=estado"
+    # Usamos el endpoint COMMIT para evitar que Firestore responda con el documento completo.
+    # Esto elimina el error -116 y los cuelgues del Watchdog Timer al 100%.
+    payload = {
+        "writes": [{
+            "update": {
+                "name": DOC_NAME,
+                "fields": {k: to_firestore(cola_telemetria[k])}
+            },
+            "updateMask": {
+                "fieldPaths": [k]
+            }
+        }]
+    }
     
     res = None
     try:
         gc.collect()
-        res = urequests.patch(url, json=payload)
+        res = urequests.post(FIREBASE_COMMIT_URL, json=payload)
         if res.status_code == 200:
             ultima_telemetria_enviada[k] = cola_telemetria[k]
         else:
-            print("Error HTTP Patch:", res.status_code, res.text)
+            print("Error HTTP Commit:", res.status_code, res.text)
     except Exception as e:
-        print("Error Patch Exception:", e)
-        # El error -116 (MBEDTLS_ERR_NET_RECV_FAILED) ocurre al leer la respuesta si es muy grande o 'chunked', 
-        # pero Firestore YA PROCESÓ LA PETICIÓN. Asumimos éxito para no reintentar infinitamente.
-        if "-116" in str(e):
-            print(f"Ignorando -116 para la llave '{k}', asumiendo éxito en la nube.")
-            ultima_telemetria_enviada[k] = cola_telemetria[k]
+        print("Error Commit Exception:", e)
     finally:
-        # Siempre borramos la llave para no atascar la cola. Si falló (y no es -116), se reencolará luego
+        # Siempre borramos la llave para no atascar la cola. Si falló se reencolará luego
         if k in cola_telemetria: del cola_telemetria[k]
         if res:
             try: res.close()
