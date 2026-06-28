@@ -112,6 +112,8 @@ tiempo_mensaje = 0
 duracion_mensaje = 3
 historial_modificado = False
 redes_wifi = []
+ultimo_timestamp_dosis = 0
+tiempo_inicio_mantenimiento = 0
 
 # ======================================================================
 # 🌐 ID DE EQUIPO Y GESTIÓN WI-FI
@@ -352,20 +354,34 @@ def cargar_estado_recuperacion():
                 estado_dosificador = e
                 timestamp_bomba_off = tb
                 bomba_encendida_por_dosis = bpd
-                
-                if e == "solo_bomba":
-                    bomba_rele.value(1)
-                elif e in ["esperando_dosis", "esperando_manual"]:
+                if "esperando" in e:
                     tiempo_inicio_espera = ti
-                    bomba_rele.value(1)
-                elif e in ["dosificando", "manual"]:
+                else:
                     tiempo_inicio_dosis = ti
+                    
+                # Restaurar el estado físico de los relés según corresponda
+                if e in ["dosificando", "manual"]:
+                    bomba_rele.value(1)
                     man.value(1)
-                    if e == "manual" and bpd: bomba_rele.value(1)
-                    if e == "dosificando": bomba_rele.value(1)
+                elif e == "solo_bomba":
+                    bomba_rele.value(1)
     except: pass
 
+def cargar_ultimo_timestamp_dosis():
+    global ultimo_timestamp_dosis
+    try:
+        datos = cargar_de_eeprom(700, 50)
+        if isinstance(datos, dict) and "ts" in datos:
+            ultimo_timestamp_dosis = datos["ts"]
+        else:
+            ultimo_timestamp_dosis = time.time()
+            try: guardar_en_eeprom(700, {"ts": ultimo_timestamp_dosis}, 50)
+            except: pass
+    except:
+        ultimo_timestamp_dosis = time.time()
+
 cargar_estado_recuperacion()
+cargar_ultimo_timestamp_dosis()
 
 # Configuración de patrones LED
 LED_PATRONES = {
@@ -439,8 +455,12 @@ def calcular_delta_minutos(hora_desde, hora_hasta):
     return min_hasta - min_desde
 
 def registrar_dosificacion_exitosa(duracion_aplicada, tipo="Programada"):
-    global historial_modificado
+    global historial_modificado, ultimo_timestamp_dosis
     try:
+        ultimo_timestamp_dosis = time.time()
+        try: guardar_en_eeprom(700, {"ts": ultimo_timestamp_dosis}, 50)
+        except: pass
+        
         historial = cargar_historial()
         t = reloj.get_time()
         nuevo_registro = {
@@ -467,6 +487,7 @@ def verificar_dosificacion():
     global DosisNo, Refuerzo, man, bomba_rele
     global tiempo_estado, ultimo_minuto_disparado
     global bomba_encendida_manual, bomba_encendida_por_dosis
+    global ultimo_timestamp_dosis, tiempo_inicio_mantenimiento, historial_modificado
     
     if estado_dosificador in ["inactivo", "solo_bomba"]:
         tiempo_estado = 0
@@ -481,6 +502,13 @@ def verificar_dosificacion():
     dia_actual_str = str(t_rtc[6])
 
     if estado_dosificador == "inactivo":
+        if ahora - ultimo_timestamp_dosis >= 90000: # 25 horas
+            estado_dosificador = "mantenimiento_valvula"
+            tiempo_inicio_mantenimiento = ahora
+            man.value(1)
+            print("Mantenimiento: Iniciando anti-atasco de valvula.")
+            return
+
         for idx, evento in enumerate(cronograma):
             dias_permitidos = str(evento.get("dias", "0123456"))
             if evento.get("on") == hora_actual_str and ultimo_minuto_disparado != minuto_actual_str and dia_actual_str in dias_permitidos:
@@ -571,6 +599,29 @@ def verificar_dosificacion():
             if Refuerzo == 1:
                 eeprom.write(13, b'0')
                 Refuerzo = 0
+
+    elif estado_dosificador == "mantenimiento_valvula":
+        if ahora - tiempo_inicio_mantenimiento >= 3:
+            man.value(0)
+            estado_dosificador = "inactivo"
+            ultimo_timestamp_dosis = ahora
+            try: guardar_en_eeprom(700, {"ts": ultimo_timestamp_dosis}, 50)
+            except: pass
+            print("Mantenimiento: Fin de anti-atasco.")
+            try:
+                historial = cargar_historial()
+                nuevo_registro = {
+                    "fecha": f"{t_rtc[0]:04d}-{t_rtc[1]:02d}-{t_rtc[2]:02d} {t_rtc[3]:02d}:{t_rtc[4]:02d}",
+                    "segundos": 3,
+                    "temp": "Fallo (Anti-atasco)",
+                    "ref": 0,
+                    "tipo": "Mantenimiento"
+                }
+                historial.insert(0, nuevo_registro)
+                historial = historial[:10]
+                guardar_en_eeprom(600, historial, 1000)
+                historial_modificado = True
+            except: pass
 
 # ======================================================================
 # 🔵 PROCESADOR DE COMANDOS (NUBE + BLE)
