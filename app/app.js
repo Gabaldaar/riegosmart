@@ -343,6 +343,10 @@ async function loadUserProfile(uid) {
         
         if (userSnap.exists()) {
             const data = userSnap.data();
+            
+            if (currentUser.displayName) {
+                await setDoc(userRef, { nombre: currentUser.displayName }, { merge: true });
+            }
 
             if (data.id_equipo) {
                 currentMac = data.id_equipo;
@@ -468,7 +472,7 @@ const LED_PATRONES = {
     'dosificando_refuerzo': [[1, 5000], [0, 200]],
     'solo_bomba':           [[1, 500], [0, 500]],
     'solo_bomba_refuerzo':  [[1, 200], [0, 200], [1, 200], [0, 500]],
-    'esperando_manual':     [[1, 1000], [0, 200]]
+    'esperando_manual':     [[1, 1000], [0, 1000]]
 };
 
 let estado_led_actual = {
@@ -1287,7 +1291,9 @@ async function loadAdminGlobal() {
             const q = query(collection(db, "usuarios"), where("id_equipo", "==", mac));
             const userSnaps = await getDocs(q);
             if (!userSnaps.empty) {
-                owner = userSnaps.docs[0].data().email || "Usuario sin email";
+                const userData = userSnaps.docs[0].data();
+                owner = userData.email || "Usuario sin email";
+                if (userData.nombre) owner = `${userData.nombre} (${owner})`;
             }
             
             const div = document.createElement('div');
@@ -1306,7 +1312,6 @@ async function loadAdminGlobal() {
             div.innerHTML = `
                 <h3 style="color: var(--accent); margin-bottom: 0.5rem;">ID: ${mac}</h3>
                 <p><strong>Usuario:</strong> ${owner}</p>
-                <p><strong>Bomba:</strong> ${data.bomba ? 'ON' : 'OFF'} | <strong>Estado:</strong> ${data.estado}</p>
                 <p><strong>Última Sincro:</strong> ${data.rtc_fecha || '-'} ${data.rtc_hora || '-'}</p>
                 <p><strong>Firmware:</strong> ${firmwareStr}</p>
                 ${btnHtml}

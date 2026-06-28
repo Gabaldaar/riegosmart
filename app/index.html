@@ -491,7 +491,7 @@
 
     <header style="align-items: flex-start;">
         <div style="display: flex; flex-direction: column; gap: 0.3rem;">
-            <h1 style="font-size: 1.4rem; color: var(--accent); margin: 0;">Dosimat-IoT <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">v5.25</span></h1>
+            <h1 style="font-size: 1.4rem; color: var(--accent); margin: 0;">Dosimat-IoT <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">v5.27</span></h1>
             <div style="font-size: 0.95rem; color: var(--text-color);">Hola, <strong id="lblUserName"></strong></div>
             <div id="lblConnMode" class="conn-badge conn-offline" style="width: fit-content; margin-top: 0.2rem;">Cargando...</div>
         </div>
@@ -733,6 +733,7 @@
                 <strong>RTC:</strong> <span id="lblRTC">-</span><br>
                 <strong style="display:inline-flex; align-items:center; gap:0.3rem;">MAC / ID: <span id="lblMac">-</span> <button id="btnCopyMac" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;" title="Copiar Datos del Equipo"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: var(--text-muted);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg></button></strong>
             </p>
+            <button id="btnSyncRtcBLE" class="btn" style="background: var(--accent); display: none; margin-bottom: 0.5rem;">Sincronizar Hora (BLE)</button>
             <button id="btnForceBLE" class="btn" style="background: var(--text-main); color: var(--bg-color); margin-bottom: 0;">Conectar por Bluetooth (Fallback)</button>
         </div>
     </main>
@@ -754,15 +755,7 @@
             </div>
         </div>
 
-        <div class="card" style="border: 1px solid var(--border); background: var(--bg-color);">
-            <h2 style="color: var(--text-main); display: flex; justify-content: space-between; align-items: center;">
-                Log de Diagnóstico (En vivo)
-            </h2>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.5rem;">Visualiza los últimos eventos en memoria RAM de la placa conectada actualmente.</p>
-            <div id="terminalLog" style="background: #000; color: #0f0; font-family: monospace; font-size: 0.85rem; padding: 1rem; border-radius: var(--radius); height: 250px; overflow-y: auto; white-space: pre-wrap; line-height: 1.4;">
-Esperando datos de telemetría...
-            </div>
-        </div>
+
 
         <div class="card" id="cardSuperAdmin" style="display: none; border: 2px solid var(--accent);">
             <h2 style="color: var(--accent);">Panel Súper Admin</h2>
