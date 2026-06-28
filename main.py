@@ -766,7 +766,10 @@ def procesar_telemetria_pendiente():
     url = FIREBASE_URL
     for k in keys:
         url += f"&updateMask.fieldPaths={k}"
-        
+    
+    # Restringir la respuesta al minimo posible para evitar desbordar el buffer SSL del ESP32 (error -116)
+    url += "&mask.fieldPaths=estado"
+    
     res = None
     try:
         gc.collect()
