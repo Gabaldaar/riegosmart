@@ -804,39 +804,33 @@ def procesar_telemetria_pendiente():
     global cola_telemetria, ultima_telemetria_enviada, ultimo_intento_telemetria
     if not cola_telemetria: return
     
-    # IMPORTANTE: Firestore tiene un límite de 1 escritura por segundo por documento.
-    # Espaciamos los envíos de los chunks (y después de borrar comandos) al menos 2 segundos.
-    if time.time() - ultimo_intento_telemetria < 2.0:
+    # IMPORTANTE: Firestore tiene un limite de 1 escritura por segundo por documento.
+    # Enviamos solo UNA llave por ciclo, separadas por 1.5 segundos, para evitar 
+    # desbordar la RAM y bloquear el loop principal.
+    if time.time() - ultimo_intento_telemetria < 1.5:
         return
         
     ultimo_intento_telemetria = time.time()
-    keys = list(cola_telemetria.keys()) # Enviamos TODO de un solo golpe para evitar retrasos
-    payload = {"fields": {k: to_firestore(cola_telemetria[k]) for k in keys}}
-    url = FIREBASE_URL
-    for k in keys:
-        url += f"&updateMask.fieldPaths={k}"
     
-    # Restringir la respuesta al minimo posible para evitar desbordar el buffer SSL del ESP32 (error -116)
-    url += "&mask.fieldPaths=estado"
+    # Extraemos solo la primera llave de la cola
+    k = list(cola_telemetria.keys())[0]
+    payload = {"fields": {k: to_firestore(cola_telemetria[k])}}
+    
+    url = FIREBASE_URL + f"&updateMask.fieldPaths={k}&mask.fieldPaths=estado"
     
     res = None
     try:
         gc.collect()
         res = urequests.patch(url, json=payload)
         if res.status_code == 200:
-            for k in keys:
-                ultima_telemetria_enviada[k] = cola_telemetria[k]
+            ultima_telemetria_enviada[k] = cola_telemetria[k]
         else:
             print("Error HTTP Patch:", res.status_code, res.text)
     except Exception as e:
         print("Error Patch Exception:", e)
     finally:
-        if res:
-            try: res.close()
-            except: pass
-        # Siempre borramos las llaves procesadas para no atascar la cola
-        for k in keys:
-            if k in cola_telemetria: del cola_telemetria[k]
+        # Siempre borramos la llave para no atascar la cola. Si falló, se reencolará en el próximo ciclo
+        if k in cola_telemetria: del cola_telemetria[k]
         if res:
             try: res.close()
             except: pass
