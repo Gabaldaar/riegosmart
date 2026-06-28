@@ -487,6 +487,9 @@ let estado_led_actual = {
     ultimo_cambio: Date.now()
 };
 
+let pwaEstadoAnterior = "";
+let pwaInicioEstado = Date.now();
+
 setInterval(() => {
     let base_patron = 'inactivo';
     if (globalEstadoDosificador === "dosificando" || globalEstadoDosificador === "manual") {
@@ -812,6 +815,12 @@ function updateUI(data) {
             }
         }
         
+        if (data.estado && data.estado !== pwaEstadoAnterior) {
+            pwaEstadoAnterior = data.estado;
+            pwaInicioEstado = Date.now();
+            currentDosisSec = 0;
+        }
+
         if (data.estado === "solo_bomba") {
             let realRemaining = (data.t_bomba_off_seg || 0) - ageSeconds;
             if (realRemaining < 0) realRemaining = 0;
@@ -822,6 +831,13 @@ function updateUI(data) {
             lblEstado.innerText = "Solo Bomba";
         } else {
             let realElapsed = (data.t_estado || 0) + ageSeconds;
+            let pwaElapsed = Math.floor((Date.now() - pwaInicioEstado) / 1000);
+            
+            // Fix para versiones viejas de la placa (v4.0) que no resetean t_estado al pasar de espera a dosis
+            if (Math.abs(realElapsed - pwaElapsed) > 8) {
+                realElapsed = pwaElapsed;
+            }
+            
             if (realElapsed < 0) realElapsed = 0;
             
             if (Math.abs(currentDosisSec - realElapsed) > 3 || !localTimer) {
