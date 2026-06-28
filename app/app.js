@@ -390,6 +390,11 @@ function setConexionModo(modo) {
         lblConnMode.classList.add("conn-offline");
         if(btnWifi) btnWifi.innerText = "Vincular a Wi-Fi";
     }
+    
+    const btnSyncRtcBLE = document.getElementById('btnSyncRtcBLE');
+    if (btnSyncRtcBLE) {
+        btnSyncRtcBLE.style.display = (modo === "BLE") ? "block" : "none";
+    }
 }
 
 function connectNube() {
@@ -459,12 +464,11 @@ let globalRefuerzo = 0;
 const LED_PATRONES = {
     'inactivo':             [[1, 200], [0, 5000]],
     'inactivo_refuerzo':    [[1, 200], [0, 200], [1, 200], [0, 5000]],
-    'esperando_dosis':      [[1, 200], [0, 200]],
-    'esperando_dosis_refuerzo': [[1, 200], [0, 200]],
     'dosificando':          [[1, 1000], [0, 1000]],
     'dosificando_refuerzo': [[1, 5000], [0, 200]],
     'solo_bomba':           [[1, 500], [0, 500]],
-    'solo_bomba_refuerzo':  [[1, 200], [0, 200], [1, 200], [0, 500]]
+    'solo_bomba_refuerzo':  [[1, 200], [0, 200], [1, 200], [0, 500]],
+    'esperando_manual':     [[1, 1000], [0, 200]]
 };
 
 let estado_led_actual = {
@@ -525,6 +529,14 @@ const connectStatus = document.getElementById('connectStatus');
 const connectOverlay = document.getElementById('connectOverlay');
 const btnCancelBLE = document.getElementById('btnCancelBLE');
 const btnForceBLE = document.getElementById('btnForceBLE');
+const btnSyncRtcBLE = document.getElementById('btnSyncRtcBLE');
+
+if (btnSyncRtcBLE) {
+    btnSyncRtcBLE.addEventListener('click', () => {
+        syncRTC();
+        customAlert("Se envió el comando para sincronizar la hora del equipo a través de Bluetooth.", "Sincronizando");
+    });
+}
 
 btnForceBLE.addEventListener('click', () => { 
     if (modoConexion === "NUBE") {
@@ -970,14 +982,8 @@ function updateUI(data) {
             const rtcDate = new Date(parts[0], parts[1]-1, parts[2], timeParts[0], timeParts[1], timeParts[2]);
             const diffMins = Math.abs((new Date() - rtcDate) / 60000);
             
-            if (typeof window.lastAutoSyncRTC === 'undefined') window.lastAutoSyncRTC = 0;
-            const nowMs = Date.now();
-            
-            if (diffMins > 2 && (nowMs - window.lastAutoSyncRTC > 120000)) {
-                console.log("Auto-sincronizando RTC (Desfasaje: " + diffMins.toFixed(1) + " min)");
-                window.lastAutoSyncRTC = nowMs;
-                syncRTC();
-            }
+            // La auto-sincronización RTC se eliminó porque el ESP32 usa NTP.
+            // Para modo BLE, existe el botón manual.
         }
     }
 }
