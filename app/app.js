@@ -348,23 +348,25 @@ async function loadUserProfile(uid) {
                 await setDoc(userRef, { nombre: currentUser.displayName }, { merge: true });
             }
 
-            if (data.id_equipo) {
+            if (isAdmin) {
+                document.getElementById('connectOverlay').style.display = 'none';
+                document.getElementById('headerTechMode').style.display = 'block';
+                document.getElementById('headerTechMode').style.background = 'var(--accent)';
+                document.getElementById('headerTechMode').innerHTML = `⚠ PORTAL TÉCNICO: Debe seleccionar un equipo`;
+                switchTab('admin');
+            } else if (data.id_equipo) {
                 currentMac = data.id_equipo;
                 document.getElementById('lblMac').innerText = currentMac;
                 connectNube();
             } else {
-                if (isAdmin) {
-                    document.getElementById('connectStatus').innerText = "Portal Técnico. Conéctate a un equipo usando el buscador.";
-                    switchTab('admin');
-                } else {
-                    document.getElementById('connectOverlay').style.display = 'flex';
-                    document.getElementById('connectStatus').innerText = "No tienes equipo asignado. Conéctate por BLE la primera vez.";
-                }
+                document.getElementById('connectOverlay').style.display = 'flex';
+                document.getElementById('connectStatus').innerText = "No tienes equipo asignado. Conéctate por BLE la primera vez.";
             }
         } else {
             // Usuario nuevo sin documento
             await setDoc(userRef, { email: currentUser.email, id_equipo: "" });
             if (isAdmin) {
+                document.getElementById('connectOverlay').style.display = 'none';
                 switchTab('admin');
             } else {
                 document.getElementById('connectOverlay').style.display = 'flex';
@@ -1252,8 +1254,13 @@ document.getElementById('btnConnectRemote').addEventListener('click', () => {
         if(unsubSnapshot) unsubSnapshot();
         currentMac = rmac;
         document.getElementById('lblMac').innerText = currentMac;
+        
+        // Restaurar el cartel a su estado "controlando"
         document.getElementById('headerTechMode').style.display = 'block';
-        document.getElementById('headerTechMac').innerText = currentMac;
+        document.getElementById('headerTechMode').style.background = 'var(--danger)';
+        document.getElementById('headerTechMode').innerHTML = `⚠ MODO TÉCNICO: Controlando equipo remoto <br>
+            <span id="headerTechMac" style="font-family: monospace; font-size: 1rem;">${currentMac}</span>`;
+            
         connectNube();
         switchTab('panel');
     } else {
