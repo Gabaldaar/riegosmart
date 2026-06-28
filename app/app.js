@@ -978,6 +978,12 @@ function updateUI(data) {
 }
 
 function renderHistorial(historialArray) {
+    const btn = document.getElementById('btnActualizarHistorial');
+    if (btn) {
+        btn.innerHTML = 'Actualizar Historial';
+        btn.disabled = false;
+    }
+
     const tbody = document.getElementById('historialBody');
     if (!tbody) return;
     tbody.innerHTML = "";
@@ -1180,10 +1186,16 @@ document.getElementById('btnGuardarCronograma').onclick = () => {
 document.getElementById('tab-prog').addEventListener('input', setUnsaved);
 document.getElementById('tab-prog').addEventListener('change', setUnsaved);
 
-document.getElementById('btnBorrarHistorial').onclick = async () => {
-    if(await customConfirm("¿Estás seguro de que deseas borrar todo el historial?")) {
-        sendCommand({comando: "borrar_historial"});
-    }
+document.getElementById('btnActualizarHistorial').onclick = () => {
+    const btn = document.getElementById('btnActualizarHistorial');
+    btn.innerHTML = '<span class="icon spin">sync</span> Actualizando...';
+    btn.disabled = true;
+    sendCommand({comando: "pedir_historial"});
+    
+    setTimeout(() => {
+        btn.innerHTML = 'Actualizar Historial';
+        btn.disabled = false;
+    }, 10000);
 };
 
 document.getElementById('btnCopyMac').onclick = () => {

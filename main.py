@@ -110,7 +110,6 @@ ultimo_minuto_disparado = ""
 mensaje_temporal = ""
 tiempo_mensaje = 0
 duracion_mensaje = 3
-historial_modificado = False
 redes_wifi = []
 ultimo_timestamp_dosis = 0
 tiempo_inicio_mantenimiento = 0
@@ -453,7 +452,7 @@ def calcular_delta_minutos(hora_desde, hora_hasta):
     return min_hasta - min_desde
 
 def registrar_dosificacion_exitosa(duracion_aplicada, tipo="Programada"):
-    global historial_modificado, ultimo_timestamp_dosis
+    global ultimo_timestamp_dosis
     try:
         ultimo_timestamp_dosis = time.time()
         try: guardar_en_eeprom(2600, {"ts": ultimo_timestamp_dosis}, 50)
@@ -471,7 +470,6 @@ def registrar_dosificacion_exitosa(duracion_aplicada, tipo="Programada"):
         historial.insert(0, nuevo_registro)
         historial = historial[:10]
         guardar_en_eeprom(600, historial, 2000)
-        historial_modificado = True
         print("Historial actualizado en EEPROM.")
     except Exception as e:
         print("Error al escribir historial:", e)
@@ -485,7 +483,7 @@ def verificar_dosificacion():
     global DosisNo, Refuerzo, man, bomba_rele
     global tiempo_estado, ultimo_minuto_disparado
     global bomba_encendida_manual, bomba_encendida_por_dosis
-    global ultimo_timestamp_dosis, tiempo_inicio_mantenimiento, historial_modificado
+    global ultimo_timestamp_dosis, tiempo_inicio_mantenimiento
     
     if estado_dosificador in ["inactivo", "solo_bomba"]:
         tiempo_estado = 0
@@ -618,7 +616,6 @@ def verificar_dosificacion():
                 historial.insert(0, nuevo_registro)
                 historial = historial[:10]
                 guardar_en_eeprom(600, historial, 2000)
-                historial_modificado = True
             except: pass
 
 # ======================================================================
@@ -628,7 +625,7 @@ def procesar_comando(data):
     global mensaje_temporal, tiempo_mensaje, duracion_mensaje, Refuerzo, Espera, EsperaMin
     global estado_dosificador, tiempo_inicio_dosis, tiempo_inicio_espera, Dosis, DosisNo, DosisMin
     global Finvierno, Fverano, cronograma, timestamp_bomba_off, redes_wifi
-    global bomba_encendida_manual, bomba_encendida_por_dosis, cronograma_modificado, historial_modificado
+    global bomba_encendida_manual, bomba_encendida_por_dosis, cronograma_modificado
     try:
         comando = data.get("comando", "")
         
@@ -734,10 +731,16 @@ def procesar_comando(data):
                 mensaje_temporal = "Cronograma guardado"
                 tiempo_mensaje = time.time()
                 cronograma_modificado = True
+        elif comando == "pedir_historial":
+            print("Encolando historial por pedido de App...")
+            global cola_telemetria
+            cola_telemetria["historial"] = cargar_historial()
+            mensaje_temporal = "Historial actualizado"
+            tiempo_mensaje = time.time()
+            duracion_mensaje = 4.0
         elif comando == "borrar_historial":
             historial_dosis = []
             guardar_en_eeprom(600, historial_dosis, 2000)
-            historial_modificado = True
             print("Historial borrado.")
             mensaje_temporal = "Historial borrado"
 
@@ -938,6 +941,8 @@ def run_main_loop():
             t_rtc = reloj.get_time()
             if t_rtc[3] == 0 and t_rtc[4] == 0 and ultimo_cambio_dia != t_rtc[2]:
                 ultimo_cambio_dia = t_rtc[2]
+                global cola_telemetria
+                cola_telemetria["historial"] = cargar_historial()
             
             # Recalcular tiempo_estado antes de enviarlo por si cambió internamente
             if estado_dosificador in ("esperando_dosis", "esperando_manual"):
@@ -989,11 +994,9 @@ def run_main_loop():
                         "temp_rtc": reloj.temperature()
                     }
                     if redes_wifi: telemetria["redes_wifi"] = redes_wifi
-                    if cronograma_modificado or historial_modificado or ultimo_envio_telemetria == 0:
+                    if cronograma_modificado or ultimo_envio_telemetria == 0:
                         telemetria["cronograma"] = cronograma
-                        telemetria["historial"] = cargar_historial()
                         cronograma_modificado = False
-                        historial_modificado = False
                     
                     encolar_telemetria(telemetria)
                     gc.collect()
