@@ -969,8 +969,13 @@ function updateUI(data) {
             const timeParts = data.rtc_hora.split(":");
             const rtcDate = new Date(parts[0], parts[1]-1, parts[2], timeParts[0], timeParts[1], timeParts[2]);
             const diffMins = Math.abs((new Date() - rtcDate) / 60000);
-            if (diffMins > 2) {
+            
+            if (typeof window.lastAutoSyncRTC === 'undefined') window.lastAutoSyncRTC = 0;
+            const nowMs = Date.now();
+            
+            if (diffMins > 2 && (nowMs - window.lastAutoSyncRTC > 120000)) {
                 console.log("Auto-sincronizando RTC (Desfasaje: " + diffMins.toFixed(1) + " min)");
+                window.lastAutoSyncRTC = nowMs;
                 syncRTC();
             }
         }
