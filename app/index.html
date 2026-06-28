@@ -483,15 +483,15 @@
         <p id="connectStatus" style="margin-top: 1rem; color: white;"></p>
     </div>
 
-    <!-- Tech Mode Header (hidden by default) -->
+    <!-- Header Técnico (Sólo visible en control remoto) -->
     <div id="headerTechMode" style="display: none; background: var(--danger); color: white; padding: 0.5rem; text-align: center; font-weight: bold; font-size: 0.9rem; position: sticky; top: 0; z-index: 100;">
-        MODO TÉCNICO: Controlando equipo <span id="headerTechMac"></span>
-        <button id="btnDisconnectTech" style="margin-left:1rem; padding:0.2rem 0.5rem; color:var(--text-main); font-size:0.8rem; cursor:pointer;">Cerrar Conexión</button>
+        MODO TÉCNICO: <span id="headerTechMac"></span>
+        <button id="btnDisconnectTech" style="margin-left:1rem; padding:0.2rem 0.5rem; color:var(--text-main); font-size:0.8rem; cursor:pointer; display:none;">Cerrar Conexión</button>
     </div>
 
     <header style="align-items: flex-start;">
         <div style="display: flex; flex-direction: column; gap: 0.3rem;">
-            <h1 style="font-size: 1.4rem; color: var(--accent); margin: 0;">Dosimat-IoT <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">v5.30</span></h1>
+            <h1 style="font-size: 1.4rem; color: var(--accent); margin: 0;">Dosimat-IoT <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">v5.31</span></h1>
             <div style="font-size: 0.95rem; color: var(--text-color);">Hola, <strong id="lblUserName"></strong></div>
             <div id="lblConnMode" class="conn-badge conn-offline" style="width: fit-content; margin-top: 0.2rem;">Cargando...</div>
         </div>

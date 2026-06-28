@@ -351,8 +351,8 @@ async function loadUserProfile(uid) {
             if (isAdmin) {
                 document.getElementById('connectOverlay').style.display = 'none';
                 document.getElementById('headerTechMode').style.display = 'block';
-                document.getElementById('headerTechMode').style.background = 'var(--accent)';
-                document.getElementById('headerTechMode').innerHTML = `⚠ PORTAL TÉCNICO: Debe seleccionar un equipo`;
+                document.getElementById('headerTechMac').innerText = "Debe seleccionar un equipo";
+                document.getElementById('btnDisconnectTech').style.display = 'none';
                 switchTab('admin');
             } else if (data.id_equipo) {
                 currentMac = data.id_equipo;
@@ -1257,9 +1257,8 @@ document.getElementById('btnConnectRemote').addEventListener('click', () => {
         
         // Restaurar el cartel a su estado "controlando"
         document.getElementById('headerTechMode').style.display = 'block';
-        document.getElementById('headerTechMode').style.background = 'var(--danger)';
-        document.getElementById('headerTechMode').innerHTML = `⚠ MODO TÉCNICO: Controlando equipo remoto <br>
-            <span id="headerTechMac" style="font-family: monospace; font-size: 1rem;">${currentMac}</span>`;
+        document.getElementById('headerTechMac').innerText = `Controlando equipo ${currentMac}`;
+        document.getElementById('btnDisconnectTech').style.display = 'inline-block';
             
         connectNube();
         switchTab('panel');
