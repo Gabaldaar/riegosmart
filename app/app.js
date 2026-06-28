@@ -395,7 +395,6 @@ function setConexionModo(modo) {
 function connectNube() {
     if (!currentMac) return;
     if(unsubSnapshot) unsubSnapshot();
-    if(unsubHistorial) unsubHistorial();
     if(unsubSysLog) unsubSysLog();
     
     unsubSnapshot = onSnapshot(doc(db, "equipos", currentMac), (docSnap) => {
@@ -428,19 +427,6 @@ function connectNube() {
     }, (error) => {
         console.error("Error en Firestore:", error);
         if (modoConexion !== "BLE") setConexionModo("OFFLINE");
-    });
-
-    unsubHistorial = onSnapshot(query(collection(db, `equipos/${currentMac}/historial`), orderBy("fecha", "desc"), limit(50)), (snapshot) => {
-        const historial = [];
-        snapshot.forEach(doc => {
-            historial.push(doc.data());
-        });
-        window.historialReciente = historial;
-        if (historial.length > 0 || !window.lastDocData?.historial) {
-            renderHistorial(historial);
-        } else {
-            renderHistorial(window.lastDocData.historial);
-        }
     });
 
     unsubSysLog = onSnapshot(query(collection(db, `equipos/${currentMac}/sys_log`), orderBy("fecha", "desc"), limit(100)), (snapshot) => {
@@ -941,7 +927,7 @@ function updateUI(data) {
         document.getElementById('lblProxDosis').innerText = calcularProximaDosis(data.cronograma, data.rtc_fecha, data.rtc_hora);
     }
     
-    if (data.historial && (!window.historialReciente || window.historialReciente.length === 0)) {
+    if (data.historial) {
         renderHistorial(data.historial);
     }
 

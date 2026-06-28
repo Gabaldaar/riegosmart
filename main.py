@@ -229,7 +229,7 @@ def cargar_de_eeprom(direccion, tamaño_maximo):
         if not raw_bytes:
             return []
         raw_str = raw_bytes.decode('utf-8', 'ignore').strip()
-        if raw_str.startswith('['):
+        if raw_str.startswith('[') or raw_str.startswith('{'):
             return json.loads(raw_str)
     except Exception as e:
         print(f"Error leyendo EEPROM dir {direccion}:", e)
