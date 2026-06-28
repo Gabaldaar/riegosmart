@@ -1269,10 +1269,15 @@ document.getElementById('btnConnectRemote').addEventListener('click', () => {
 
 document.getElementById('btnDisconnectTech').addEventListener('click', async () => {
     if(unsubSnapshot) unsubSnapshot();
-    document.getElementById('headerTechMode').style.display = 'none';
+    currentMac = null;
+    document.getElementById('lblMac').innerText = "Ninguno";
     setConexionModo("OFFLINE");
-    // Reload user's original device
-    await loadUserProfile(currentUser.uid);
+    
+    // Restaurar cartel a "Debe seleccionar"
+    document.getElementById('headerTechMode').style.display = 'block';
+    document.getElementById('headerTechMac').innerText = "Debe seleccionar un equipo";
+    document.getElementById('btnDisconnectTech').style.display = 'none';
+    
     switchTab('admin');
 });
 
