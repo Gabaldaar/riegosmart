@@ -245,11 +245,9 @@ if not cronograma:
 def cargar_historial():
     global historial_dosis
     try:
-        raw = eeprom.read(600, 1000)
-        data_str = raw.decode('utf-8', 'ignore').strip('\x00\xff').strip()
-        if data_str:
-            historial_dosis = json.loads(data_str)
-            if not isinstance(historial_dosis, list): historial_dosis = []
+        datos = cargar_de_eeprom(600, 1000)
+        if isinstance(datos, list):
+            historial_dosis = datos
         else:
             historial_dosis = []
     except Exception as e:
