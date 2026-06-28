@@ -238,14 +238,14 @@ def cargar_de_eeprom(direccion, tamaño_maximo):
         print(f"Error leyendo EEPROM dir {direccion}:", e)
     return []
 
-cronograma = cargar_de_eeprom(100, 500)
+cronograma = cargar_de_eeprom(100, 400)
 if not cronograma:
     cronograma = [{"on": "2100", "duracion": 60, "dosis": 1, "dias": "0123456"}]
 
 def cargar_historial():
     global historial_dosis
     try:
-        datos = cargar_de_eeprom(600, 1000)
+        datos = cargar_de_eeprom(600, 2000)
         if isinstance(datos, list):
             historial_dosis = datos
         else:
@@ -312,7 +312,7 @@ try:
                     historial.insert(0, registro_perdida)
                     
     historial = historial[:10]
-    guardar_en_eeprom(600, historial, 1000)
+    guardar_en_eeprom(600, historial, 2000)
     eeprom.write(39, b'0')
 except Exception as e:
     print("Error en chequeo inicial:", e)
@@ -368,12 +368,12 @@ def cargar_estado_recuperacion():
 def cargar_ultimo_timestamp_dosis():
     global ultimo_timestamp_dosis
     try:
-        datos = cargar_de_eeprom(700, 50)
+        datos = cargar_de_eeprom(2600, 50)
         if isinstance(datos, dict) and "ts" in datos:
             ultimo_timestamp_dosis = datos["ts"]
         else:
             ultimo_timestamp_dosis = time.time()
-            try: guardar_en_eeprom(700, {"ts": ultimo_timestamp_dosis}, 50)
+            try: guardar_en_eeprom(2600, {"ts": ultimo_timestamp_dosis}, 50)
             except: pass
     except:
         ultimo_timestamp_dosis = time.time()
@@ -456,7 +456,7 @@ def registrar_dosificacion_exitosa(duracion_aplicada, tipo="Programada"):
     global historial_modificado, ultimo_timestamp_dosis
     try:
         ultimo_timestamp_dosis = time.time()
-        try: guardar_en_eeprom(700, {"ts": ultimo_timestamp_dosis}, 50)
+        try: guardar_en_eeprom(2600, {"ts": ultimo_timestamp_dosis}, 50)
         except: pass
         
         historial = cargar_historial()
@@ -470,7 +470,7 @@ def registrar_dosificacion_exitosa(duracion_aplicada, tipo="Programada"):
         }
         historial.insert(0, nuevo_registro)
         historial = historial[:10]
-        guardar_en_eeprom(600, historial, 1000)
+        guardar_en_eeprom(600, historial, 2000)
         historial_modificado = True
         print("Historial actualizado en EEPROM.")
     except Exception as e:
@@ -603,7 +603,7 @@ def verificar_dosificacion():
             man.value(0)
             estado_dosificador = "inactivo"
             ultimo_timestamp_dosis = ahora
-            try: guardar_en_eeprom(700, {"ts": ultimo_timestamp_dosis}, 50)
+            try: guardar_en_eeprom(2600, {"ts": ultimo_timestamp_dosis}, 50)
             except: pass
             print("Mantenimiento: Fin de anti-atasco.")
             try:
@@ -617,7 +617,7 @@ def verificar_dosificacion():
                 }
                 historial.insert(0, nuevo_registro)
                 historial = historial[:10]
-                guardar_en_eeprom(600, historial, 1000)
+                guardar_en_eeprom(600, historial, 2000)
                 historial_modificado = True
             except: pass
 
@@ -729,14 +729,14 @@ def procesar_comando(data):
             nuevos_horarios = data.get("cronograma", [])
             if isinstance(nuevos_horarios, list) and len(nuevos_horarios) <= 10:
                 cronograma = nuevos_horarios
-                guardar_en_eeprom(100, cronograma, 500)
+                guardar_en_eeprom(100, cronograma, 400)
                 print("Nuevo cronograma guardado con éxito.")
                 mensaje_temporal = "Cronograma guardado"
                 tiempo_mensaje = time.time()
                 cronograma_modificado = True
         elif comando == "borrar_historial":
             historial_dosis = []
-            guardar_en_eeprom(600, historial_dosis, 1000)
+            guardar_en_eeprom(600, historial_dosis, 2000)
             historial_modificado = True
             print("Historial borrado.")
             mensaje_temporal = "Historial borrado"
@@ -753,7 +753,7 @@ def procesar_comando(data):
             
             # Limpiamos explícitamente el historial guardando una lista vacía
             historial_dosis = []
-            try: guardar_en_eeprom(600, historial_dosis, 1000)
+            try: guardar_en_eeprom(600, historial_dosis, 2000)
             except: pass
             
             print("Reseteo de fabrica completado. Reiniciando...")
