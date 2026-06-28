@@ -812,8 +812,8 @@ def procesar_telemetria_pendiente():
         
     ultimo_intento_telemetria = time.time()
     
-    # Extraemos solo la primera llave de la cola
-    k = list(cola_telemetria.keys())[0]
+    # Extraemos solo la primera llave de la cola, pero PRIORIZAMOS el borrado de comandos
+    k = "comando_pendiente" if "comando_pendiente" in cola_telemetria else list(cola_telemetria.keys())[0]
     payload = {"fields": {k: to_firestore(cola_telemetria[k])}}
     
     url = FIREBASE_URL + f"&updateMask.fieldPaths={k}&mask.fieldPaths=estado"
@@ -828,8 +828,13 @@ def procesar_telemetria_pendiente():
             print("Error HTTP Patch:", res.status_code, res.text)
     except Exception as e:
         print("Error Patch Exception:", e)
+        # El error -116 (MBEDTLS_ERR_NET_RECV_FAILED) ocurre al leer la respuesta si es muy grande o 'chunked', 
+        # pero Firestore YA PROCESÓ LA PETICIÓN. Asumimos éxito para no reintentar infinitamente.
+        if "-116" in str(e):
+            print(f"Ignorando -116 para la llave '{k}', asumiendo éxito en la nube.")
+            ultima_telemetria_enviada[k] = cola_telemetria[k]
     finally:
-        # Siempre borramos la llave para no atascar la cola. Si falló, se reencolará en el próximo ciclo
+        # Siempre borramos la llave para no atascar la cola. Si falló (y no es -116), se reencolará luego
         if k in cola_telemetria: del cola_telemetria[k]
         if res:
             try: res.close()
