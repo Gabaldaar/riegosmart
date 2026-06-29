@@ -5,6 +5,7 @@ import gc
 import sys
 import socket
 import struct
+import ntptime
 from machine import WDT, ADC, Pin, Timer
 
 class MockSocketModule:
@@ -158,8 +159,24 @@ def conectar_wifi():
     wifi_conectado = wlan.isconnected()
     return wifi_conectado
 
+def sincronizar_hora_ntp():
+    if not wifi_conectado: return
+    try:
+        print("Sincronizando reloj con NTP...")
+        ntptime.host = "pool.ntp.org"
+        ntptime.settime()
+        
+        # Ajustar a UTC-3 (Argentina)
+        # ntptime.settime() ajusta el RTC interno a UTC.
+        t = time.localtime(time.time() - 10800)
+        reloj.set_time(t[0], t[1], t[2], t[3], t[4], t[5], t[6])
+        print(f"Hora NTP ajustada (UTC-3): {t[0]:04d}-{t[1]:02d}-{t[2]:02d} {t[3]:02d}:{t[4]:02d}")
+    except Exception as e:
+        print("Error al sincronizar NTP:", e)
+
 if conectar_wifi():
     print("Red conectada. Arrancando en MODO NUBE (BLE apagado).")
+    sincronizar_hora_ntp()
     ble_server = None
 else:
     print("Sin red. Arrancando en MODO BLE OFFLINE.")
@@ -186,6 +203,10 @@ try:
     Fverano = eeprom.read(0, 4).decode('utf-8')
     Finvierno = eeprom.read(5, 4).decode('utf-8')
     Refuerzo = int(eeprom.read(13, 1))
+    try:
+        PausarProg = int(eeprom.read(35, 1))
+    except:
+        PausarProg = 0
     DosisNo = int(eeprom.read(32, 1))
     DosisMin = int(eeprom.read(9, 2).decode('ascii').strip('\x00'))
     Dosis = int(eeprom.read(11, 2).decode('ascii').strip('\x00'))
@@ -506,6 +527,9 @@ def verificar_dosificacion():
             man.value(1)
             print("Mantenimiento: Iniciando anti-atasco de valvula.")
             return
+            
+        if PausarProg == 1:
+            return # Bloquea los programas automaticos
 
         for idx, evento in enumerate(cronograma):
             dias_permitidos = str(evento.get("dias", "0123456"))
@@ -698,6 +722,18 @@ def procesar_comando(data):
             Refuerzo = 0
             eeprom.write(13, b"0")
             mensaje_temporal = "Refuerzo Desactivado"
+            tiempo_mensaje = time.time()
+        elif comando == "pausarprogsi":
+            global PausarProg
+            PausarProg = 1
+            eeprom.write(35, b"1")
+            mensaje_temporal = "Mantenimiento Activado"
+            tiempo_mensaje = time.time()
+        elif comando == "pausarprogno":
+            global PausarProg
+            PausarProg = 0
+            eeprom.write(35, b"0")
+            mensaje_temporal = "Mantenimiento Desactivado"
             tiempo_mensaje = time.time()
         elif comando == "config_general":
             if "Dosis" in data:
@@ -949,6 +985,7 @@ def run_main_loop():
             t_rtc = reloj.get_time()
             if t_rtc[3] == 0 and t_rtc[4] == 0 and ultimo_cambio_dia != t_rtc[2]:
                 ultimo_cambio_dia = t_rtc[2]
+                sincronizar_hora_ntp()
                 global cola_telemetria
                 cola_telemetria["historial"] = cargar_historial()
             
@@ -988,6 +1025,7 @@ def run_main_loop():
                         "bomba": bomba_rele.value() == 1, 
                         "temporada": "Verano" if esta_en_temporada_verano() else "Mantenimiento",
                         "Refuerzo": Refuerzo == 1,
+                        "PausarProg": PausarProg,
                         "DosisNo": DosisNo,
                         "Dosis": Dosis,
                         "DosisMin": DosisMin,

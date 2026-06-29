@@ -969,6 +969,14 @@ function updateUI(data) {
         document.getElementById('tglRefuerzo').checked = false;
     }
     
+    if (data.PausarProg == 1) {
+        document.getElementById('tglMantenimiento').checked = true;
+        document.getElementById('lblMantenimiento').style.display = 'block';
+    } else {
+        document.getElementById('tglMantenimiento').checked = false;
+        document.getElementById('lblMantenimiento').style.display = 'none';
+    }
+    
     document.getElementById('tglDosisManual').checked = (data.estado === "manual");
 
     document.getElementById('lblTemporada').innerText = data.temporada || "-";
@@ -1170,6 +1178,11 @@ document.getElementById('tglDosisManual').onchange = async (e) => {
 document.getElementById('tglRefuerzo').onchange = (e) => {
     if (e.target.checked) sendCommand({comando: "refuerzosi"});
     else sendCommand({comando: "refuerzono"});
+};
+
+document.getElementById('tglMantenimiento').onchange = (e) => {
+    if (e.target.checked) sendCommand({comando: "pausarprogsi"});
+    else sendCommand({comando: "pausarprogno"});
 };
 
 document.getElementById('btnGuardarConfig').onclick = () => {

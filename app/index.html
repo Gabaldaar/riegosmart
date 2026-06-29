@@ -501,7 +501,7 @@
 
     <header style="align-items: flex-start;">
         <div style="display: flex; flex-direction: column; gap: 0.3rem;">
-            <h1 style="font-size: 1.4rem; color: var(--accent); margin: 0;">Dosimat-IoT <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">v5.37</span></h1>
+            <h1 style="font-size: 1.4rem; color: var(--accent); margin: 0;">Dosimat-IoT <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">v5.38</span></h1>
             <div style="font-size: 0.95rem; color: var(--text-color);">Hola, <strong id="lblUserName"></strong></div>
             <div id="lblConnMode" class="conn-badge conn-offline" style="width: fit-content; margin-top: 0.2rem;">Cargando...</div>
         </div>
@@ -519,6 +519,9 @@
                 Telemetría
                 <span class="help-icon" id="helpTelemetria">❓</span>
             </h2>
+            <div id="lblMantenimiento" style="background: var(--danger); color: white; padding: 0.5rem; text-align: center; font-weight: bold; border-radius: 8px; margin-bottom: 1rem; display: none;">
+                ⚠️ MANTENIMIENTO ACTIVO: El filtrado y la dosificación automática están suspendidos.
+            </div>
             <div id="lblMensaje" style="color: var(--danger); font-weight: bold; margin-bottom: 1rem; text-align: center;"></div>
             <div id="lblDosisAnuladas" style="color: var(--danger); font-weight: bold; margin-bottom: 0.5rem; text-align: center; display: none;"></div>
             <div id="lblTempWarning" style="color: var(--danger); font-weight: bold; margin-bottom: 0.5rem; text-align: center; display: none;">Considere poner un Refuerzo de cloro, debido a las altas temperaturas</div>
@@ -585,6 +588,14 @@
                 <div style="font-weight:bold;">Refuerzo</div>
                 <label class="switch">
                     <input type="checkbox" id="tglRefuerzo">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="switch-container" style="border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem;">
+                <div style="font-weight:bold; color: var(--danger);">Modo Mantenimiento <div style="font-size:0.8rem; font-weight:normal; color:var(--text-muted);">Pausar automáticos</div></div>
+                <label class="switch" style="box-shadow: 0 0 5px var(--danger); border-radius: 34px;">
+                    <input type="checkbox" id="tglMantenimiento">
                     <span class="slider"></span>
                 </label>
             </div>
