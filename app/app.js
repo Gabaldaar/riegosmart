@@ -116,6 +116,7 @@ const authOverlay = document.getElementById('authOverlay');
 const txtEmail = document.getElementById('txtEmail');
 const txtPassword = document.getElementById('txtPassword');
 const btnLogin = document.getElementById('btnLogin');
+const btnRegister = document.getElementById('btnRegister');
 const btnGoogleLogin = document.getElementById('btnGoogleLogin');
 const lblAuthError = document.getElementById('lblAuthError');
 const btnLogout = document.getElementById('btnLogout');
