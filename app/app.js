@@ -256,8 +256,8 @@ const dateToStr = (mmdd) => {
     return `${year}-${mmdd.substring(0,2)}-${mmdd.substring(2,4)}`;
 };
 
-// === AUTHENTICATION LOGIC ===
-btnToggleLoginPwd.addEventListener('click', () => {
+const toggleLoginPwd = (e) => {
+    if (e && e.cancelable) e.preventDefault();
     if (txtPassword.type === "password") {
         txtPassword.type = "text";
         btnToggleLoginPwd.innerText = "🙈";
@@ -265,7 +265,9 @@ btnToggleLoginPwd.addEventListener('click', () => {
         txtPassword.type = "password";
         btnToggleLoginPwd.innerText = "👁️";
     }
-});
+};
+btnToggleLoginPwd.onclick = toggleLoginPwd;
+btnToggleLoginPwd.ontouchstart = toggleLoginPwd;
 
 btnLogin.addEventListener('click', async () => {
     try {
