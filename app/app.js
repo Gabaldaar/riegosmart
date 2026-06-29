@@ -1571,4 +1571,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.52 inicializada");
+console.log("Dosimat PWA v5.54 inicializada");
