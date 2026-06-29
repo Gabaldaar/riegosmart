@@ -651,7 +651,7 @@ def procesar_comando(data):
     global mensaje_temporal, tiempo_mensaje, duracion_mensaje, Refuerzo, Espera, EsperaMin
     global estado_dosificador, tiempo_inicio_dosis, tiempo_inicio_espera, Dosis, DosisNo, DosisMin
     global Finvierno, Fverano, cronograma, timestamp_bomba_off, redes_wifi
-    global bomba_encendida_manual, bomba_encendida_por_dosis, cronograma_modificado
+    global bomba_encendida_manual, bomba_encendida_por_dosis, cronograma_modificado, PausarProg
     try:
         comando = data.get("comando", "")
         
@@ -724,13 +724,11 @@ def procesar_comando(data):
             mensaje_temporal = "Refuerzo Desactivado"
             tiempo_mensaje = time.time()
         elif comando == "pausarprogsi":
-            global PausarProg
             PausarProg = 1
             eeprom.write(35, b"1")
             mensaje_temporal = "Mantenimiento Activado"
             tiempo_mensaje = time.time()
         elif comando == "pausarprogno":
-            global PausarProg
             PausarProg = 0
             eeprom.write(35, b"0")
             mensaje_temporal = "Mantenimiento Desactivado"

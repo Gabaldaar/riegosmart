@@ -991,7 +991,11 @@ function updateUI(data) {
     ultimoMensaje = data.mensaje || "";
 
     if (data.cronograma && data.rtc_hora && data.rtc_fecha) {
-        document.getElementById('lblProxDosis').innerText = calcularProximaDosis(data.cronograma, data.rtc_fecha, data.rtc_hora);
+        if (data.PausarProg == 1) {
+            document.getElementById('lblProxDosis').innerText = "Pausada (Mantenimiento)";
+        } else {
+            document.getElementById('lblProxDosis').innerText = calcularProximaDosis(data.cronograma, data.rtc_fecha, data.rtc_hora);
+        }
     }
     
     if (data.historial) {
