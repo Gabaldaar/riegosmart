@@ -819,12 +819,7 @@ function updateLocalTimerDisplay() {
         let displaySec = Math.max(0, currentTDosis - currentDosisSec);
         lblEstadoSubtexto.innerText = `Dosis ${currentTipo} - Dosificando: ${displaySec}s restantes`;
     } else if (currentEstado === "solo_bomba") {
-        if (currentDosisSec > 31000000) {
-            lblEstadoSubtexto.innerText = "Apagado de forma manual";
-        } else {
-            const mins = Math.ceil(currentDosisSec / 60);
-            lblEstadoSubtexto.innerText = `Apagado dentro de ${mins} minuto${mins !== 1 ? 's' : ''}`;
-        }
+        lblEstadoSubtexto.innerText = "Apagado manual";
     }
 }
 
@@ -998,9 +993,13 @@ function updateUI(data) {
 
     if (data.cronograma !== undefined && data.rtc_hora && data.rtc_fecha) {
         if (data.PausarProg == 1) {
-            document.getElementById('lblProxDosis').innerText = "(Modo Mantenimiento)";
+            document.getElementById('lblProxDosis').innerText = "Pausada";
+            document.getElementById('txtDosisTotalNormal').style.display = 'none';
+            document.getElementById('txtModoMantenimiento').style.display = 'inline';
         } else {
             document.getElementById('lblProxDosis').innerText = calcularProximaDosis(data.cronograma, data.rtc_fecha, data.rtc_hora);
+            document.getElementById('txtDosisTotalNormal').style.display = 'inline';
+            document.getElementById('txtModoMantenimiento').style.display = 'none';
         }
     }
     
@@ -1530,4 +1529,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.42 inicializada");
+console.log("Dosimat PWA v5.43 inicializada");
