@@ -507,6 +507,7 @@ let rxBuffer = "";
 // Variables para el LED replicado en UI
 let globalEstadoDosificador = "inactivo";
 let globalRefuerzo = 0;
+let globalPausarProg = 0;
 
 const LED_PATRONES = {
     'inactivo':             [[1, 200], [0, 5000]],
@@ -1537,4 +1538,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.45 inicializada");
+console.log("Dosimat PWA v5.46 inicializada");
