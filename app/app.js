@@ -830,10 +830,6 @@ function updateLocalTimerDisplay() {
     }
 }
 
-let globalEstadoDosificador = "inactivo";
-let globalRefuerzo = 0;
-let globalPausarProg = 0;
-
 function updateUI(data) {
     if (!data) return;
     globalEstadoDosificador = data.estado || "inactivo";
@@ -1541,4 +1537,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.44 inicializada");
+console.log("Dosimat PWA v5.45 inicializada");
