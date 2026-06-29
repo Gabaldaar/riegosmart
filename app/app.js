@@ -44,7 +44,11 @@ document.getElementById('btnGuardarWifi').onclick = async () => {
 };
 
 document.getElementById('inpWifiSsid').addEventListener('input', () => unsavedWifiChanges = true);
+document.getElementById('inpWifiSsid').addEventListener('change', () => unsavedWifiChanges = true);
+document.getElementById('inpWifiSsid').addEventListener('focus', () => unsavedWifiChanges = true);
 document.getElementById('inpWifiPwd').addEventListener('input', () => unsavedWifiChanges = true);
+document.getElementById('inpWifiPwd').addEventListener('change', () => unsavedWifiChanges = true);
+document.getElementById('inpWifiPwd').addEventListener('focus', () => unsavedWifiChanges = true);
 
 // Toggle Password Visibility
 const btnToggleWifiPwd = document.getElementById('btnToggleWifiPwd');
@@ -1564,4 +1568,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.50 inicializada");
+console.log("Dosimat PWA v5.51 inicializada");
