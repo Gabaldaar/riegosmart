@@ -1051,10 +1051,13 @@ function updateUI(data) {
             }
         }
         
-        if (data.wifi_ssid !== undefined && !unsavedWifiChanges) {
+        if (data.wifi_ssid !== undefined) {
             const inpWifiSsid = document.getElementById('inpWifiSsid');
             if (inpWifiSsid && !document.activeElement.isEqualNode(inpWifiSsid)) {
-                inpWifiSsid.value = data.wifi_ssid;
+                if (inpWifiSsid.value === "" || inpWifiSsid.dataset.old === inpWifiSsid.value) {
+                    inpWifiSsid.value = data.wifi_ssid;
+                    inpWifiSsid.dataset.old = data.wifi_ssid;
+                }
             }
         }
         
@@ -1568,4 +1571,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.51 inicializada");
+console.log("Dosimat PWA v5.52 inicializada");
