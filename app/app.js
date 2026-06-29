@@ -515,7 +515,8 @@ const LED_PATRONES = {
     'dosificando_refuerzo': [[1, 5000], [0, 200]],
     'solo_bomba':           [[1, 500], [0, 500]],
     'solo_bomba_refuerzo':  [[1, 200], [0, 200], [1, 200], [0, 500]],
-    'esperando_manual':     [[1, 1000], [0, 1000]]
+    'esperando_manual':     [[1, 1000], [0, 1000]],
+    'mantenimiento':        [[1, 100], [0, 100]]
 };
 
 let estado_led_actual = {
@@ -528,16 +529,22 @@ let pwaEstadoAnterior = "";
 let pwaInicioEstado = Date.now();
 
 setInterval(() => {
-    let base_patron = 'inactivo';
-    if (globalEstadoDosificador === "dosificando" || globalEstadoDosificador === "manual") {
-        base_patron = 'dosificando';
-    } else if (globalEstadoDosificador === "esperando_dosis" || globalEstadoDosificador === "esperando_manual") {
-        base_patron = 'esperando_dosis';
-    } else if (globalEstadoDosificador === "solo_bomba") {
-        base_patron = 'solo_bomba';
+    let patron_sel = 'inactivo';
+    
+    if (globalPausarProg == 1) {
+        patron_sel = 'mantenimiento';
+    } else {
+        let base_patron = 'inactivo';
+        if (globalEstadoDosificador === "dosificando" || globalEstadoDosificador === "manual") {
+            base_patron = 'dosificando';
+        } else if (globalEstadoDosificador === "esperando_dosis" || globalEstadoDosificador === "esperando_manual") {
+            base_patron = 'esperando_manual';
+        } else if (globalEstadoDosificador === "solo_bomba") {
+            base_patron = 'solo_bomba';
+        }
+        patron_sel = (globalRefuerzo == 1) ? `${base_patron}_refuerzo` : base_patron;
     }
     
-    let patron_sel = (globalRefuerzo == 1) ? `${base_patron}_refuerzo` : base_patron;
     let patron_esperado = LED_PATRONES[patron_sel] || LED_PATRONES['inactivo'];
     
     if (estado_led_actual.patron !== patron_esperado) {
@@ -823,10 +830,15 @@ function updateLocalTimerDisplay() {
     }
 }
 
+let globalEstadoDosificador = "inactivo";
+let globalRefuerzo = 0;
+let globalPausarProg = 0;
+
 function updateUI(data) {
     if (!data) return;
     globalEstadoDosificador = data.estado || "inactivo";
     globalRefuerzo = data.Refuerzo || 0;
+    globalPausarProg = data.PausarProg || 0;
     
     const panelEstado = document.getElementById('panelEstado');
     const lblEstado = document.getElementById('lblEstado');
@@ -1529,4 +1541,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.43 inicializada");
+console.log("Dosimat PWA v5.44 inicializada");

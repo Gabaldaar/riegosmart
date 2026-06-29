@@ -411,7 +411,8 @@ LED_PATRONES = {
     'dosificando_refuerzo': [(1, 5000), (0, 200)],
     'solo_bomba':           [(1, 500), (0, 500)],
     'solo_bomba_refuerzo':  [(1, 200), (0, 200), (1, 200), (0, 500)],
-    'esperando_manual':     [(1, 1000), (0, 200)]
+    'esperando_manual':     [(1, 1000), (0, 200)],
+    'mantenimiento':        [(1, 100), (0, 100)]
 }
 
 estado_led_actual = {
@@ -421,10 +422,12 @@ estado_led_actual = {
 }
 
 def actualizar_led(t=None):
-    global estado_led_actual, Refuerzo, estado_dosificador
+    global estado_led_actual, Refuerzo, estado_dosificador, PausarProg
     
     patron_sel = 'inactivo'
-    if estado_dosificador == "dosificando" or estado_dosificador == "manual":
+    if PausarProg == 1:
+        patron_sel = 'mantenimiento'
+    elif estado_dosificador == "dosificando" or estado_dosificador == "manual":
         patron_sel = 'dosificando_refuerzo' if Refuerzo == 1 else 'dosificando'
     elif estado_dosificador == "solo_bomba":
         patron_sel = 'solo_bomba_refuerzo' if Refuerzo == 1 else 'solo_bomba'
