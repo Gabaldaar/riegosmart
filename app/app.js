@@ -675,24 +675,30 @@ async function handleNotifications(event) {
     const chunk = decoder.decode(value);
     
     rxBuffer += chunk;
-    try {
-        const data = JSON.parse(rxBuffer);
-        rxBuffer = ""; 
+    
+    let boundary = rxBuffer.indexOf('\n');
+    while (boundary !== -1) {
+        const line = rxBuffer.substring(0, boundary).trim();
+        rxBuffer = rxBuffer.substring(boundary + 1);
         
-        // Multi-user pairing: If no mac assigned to user, get it from telemetry
-        if (!currentMac && data.id_equipo && currentUser) {
-            currentMac = data.id_equipo;
-            document.getElementById('lblMac').innerText = currentMac;
-            await setDoc(doc(db, "usuarios", currentUser.uid), { id_equipo: currentMac }, { merge: true });
-            connectNube();
+        if (line) {
+            try {
+                const data = JSON.parse(line);
+                
+                // Multi-user pairing: If no mac assigned to user, get it from telemetry
+                if (!currentMac && data.id_equipo && currentUser) {
+                    currentMac = data.id_equipo;
+                    document.getElementById('lblMac').innerText = currentMac;
+                    await setDoc(doc(db, "usuarios", currentUser.uid), { id_equipo: currentMac }, { merge: true });
+                    connectNube();
+                }
+                
+                updateUI(data);
+            } catch (e) {
+                console.error("Error procesando telemetría BLE (paquete corrupto descartado):", e);
+            }
         }
-        
-        updateUI(data);
-    } catch (e) {
-        if (!(e instanceof SyntaxError)) {
-            console.error("Error parseando telemetría:", e);
-            rxBuffer = ""; 
-        }
+        boundary = rxBuffer.indexOf('\n');
     }
 }
 

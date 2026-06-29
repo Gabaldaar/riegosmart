@@ -106,7 +106,7 @@ class BLEService:
             return
         
         try:
-            json_str = json.dumps(data_dict)
+            json_str = json.dumps(data_dict) + "\n"
             self._send(json_str)
         except Exception as e:
             print("BLE: Error al formatear JSON", e)

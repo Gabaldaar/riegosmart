@@ -959,6 +959,7 @@ def run_main_loop():
     print("Servidor Iniciado:", version)
 
     ultimo_envio_telemetria = 0 # Forzamos envio inmediato
+    ciclos_ble = 0
     ultima_consulta_comandos = 0
     ultimo_cambio_dia = 0
     estado_anterior = "" # Para forzar envío en Nube si cambia el estado
@@ -1059,9 +1060,10 @@ def run_main_loop():
                         "estado": estado_dosificador,
                         "t_estado": tiempo_estado,
                         "mensaje": mensaje_temporal,
-                        "bomba": bomba_rele.value(), 
+                        "bomba": bomba_rele.value() == 1, 
                         "temporada": "Verano" if esta_en_temporada_verano() else "Mantenimiento",
                         "Refuerzo": Refuerzo,
+                        "PausarProg": PausarProg,
                         "DosisNo": DosisNo,
                         "Dosis": Dosis,
                         "DosisMin": DosisMin,
@@ -1070,15 +1072,19 @@ def run_main_loop():
                         "Fverano": Fverano,
                         "Finvierno": Finvierno,
                         "wifi_ssid": ssid_configurado,
-                        "dosis_total_seg": calcular_dosis_total(),
-                        "cronograma": cronograma,
-                        "redes_wifi": redes_wifi,
-                        "historial": cargar_historial(),
                         "rtc_fecha": fecha_str,
                         "rtc_hora": hora_str,
                         "dosis_total_seg": calcular_dosis_total(),
                         "temp_rtc": reloj.temperature()
                     }
+                    
+                    if ciclos_ble % 5 == 0:
+                        telemetria["cronograma"] = cronograma
+                        telemetria["redes_wifi"] = redes_wifi
+                        telemetria["historial"] = cargar_historial()
+                    
+                    ciclos_ble += 1
+
                     if ble_server:
                         ble_server.send_json(telemetria)
                     gc.collect()
