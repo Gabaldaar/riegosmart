@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dosimat-iot-v5.33';
+const CACHE_NAME = 'dosimat-iot-v5.34';
 const ASSETS = [
   "./",
   "./index.html",

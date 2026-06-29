@@ -113,8 +113,10 @@ if ('serviceWorker' in navigator) {
 
 // === UI ELEMENTS ===
 const authOverlay = document.getElementById('authOverlay');
+const txtNombre = document.getElementById('txtNombre');
 const txtEmail = document.getElementById('txtEmail');
 const txtPassword = document.getElementById('txtPassword');
+const chkShowPwd = document.getElementById('chkShowPwd');
 const btnLogin = document.getElementById('btnLogin');
 const btnRegister = document.getElementById('btnRegister');
 const btnGoogleLogin = document.getElementById('btnGoogleLogin');
@@ -255,12 +257,42 @@ const dateToStr = (mmdd) => {
 };
 
 // === AUTHENTICATION LOGIC ===
+chkShowPwd.addEventListener('change', (e) => {
+    txtPassword.type = e.target.checked ? 'text' : 'password';
+});
+
 btnLogin.addEventListener('click', async () => {
     try {
         lblAuthError.innerText = "Iniciando sesión...";
         await signInWithEmailAndPassword(auth, txtEmail.value, txtPassword.value);
     } catch (error) {
-        lblAuthError.innerText = "Error: " + error.message;
+        if (error.code === 'auth/invalid-login-credentials' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+            lblAuthError.innerText = "Error: Correo o contraseña incorrectos.";
+        } else {
+            lblAuthError.innerText = "Error: " + error.message;
+        }
+    }
+});
+
+btnRegister.addEventListener('click', async () => {
+    try {
+        if (!txtNombre.value.trim()) {
+            lblAuthError.innerText = "Por favor, ingresa tu nombre.";
+            return;
+        }
+        lblAuthError.innerText = "Creando cuenta...";
+        const { createUserWithEmailAndPassword, updateProfile } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js");
+        const userCredential = await createUserWithEmailAndPassword(auth, txtEmail.value, txtPassword.value);
+        await updateProfile(userCredential.user, { displayName: txtNombre.value.trim() });
+        lblAuthError.innerText = "Cuenta creada con éxito.";
+    } catch (error) {
+        if (error.code === 'auth/email-already-in-use') {
+            lblAuthError.innerText = "Error: Este correo ya está registrado. Intenta iniciar sesión.";
+        } else if (error.code === 'auth/weak-password') {
+            lblAuthError.innerText = "Error: La contraseña debe tener al menos 6 caracteres.";
+        } else {
+            lblAuthError.innerText = "Error: " + error.message;
+        }
     }
 });
 
