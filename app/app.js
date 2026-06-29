@@ -1532,3 +1532,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
+console.log("Dosimat PWA v5.41 inicializada");
