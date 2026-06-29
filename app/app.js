@@ -827,7 +827,12 @@ function updateLocalTimerDisplay() {
         let displaySec = Math.max(0, currentTDosis - currentDosisSec);
         lblEstadoSubtexto.innerText = `Dosis ${currentTipo} - Dosificando: ${displaySec}s restantes`;
     } else if (currentEstado === "solo_bomba") {
-        lblEstadoSubtexto.innerText = "Apagado manual";
+        if (currentDosisSec > 31000000 || currentDosisSec === 0) {
+            lblEstadoSubtexto.innerText = "Apagado manual";
+        } else {
+            const mins = Math.ceil(currentDosisSec / 60);
+            lblEstadoSubtexto.innerText = `Apagado dentro de ${mins} minuto${mins !== 1 ? 's' : ''}`;
+        }
     }
 }
 
@@ -1023,6 +1028,19 @@ function updateUI(data) {
         if(document.getElementById('inpDosisMin')) document.getElementById('inpDosisMin').value = data.DosisMin;
         if(document.getElementById('inpEspera')) document.getElementById('inpEspera').value = data.Espera;
         if(document.getElementById('inpEsperaMin')) document.getElementById('inpEsperaMin').value = data.EsperaMin;
+        
+        if (document.getElementById('lblTemporada')) {
+            let temporadaStr = data.temporada || "-";
+            if (temporadaStr === "Verano") temporadaStr = "Alta";
+            if (temporadaStr === "Mantenimiento") temporadaStr = "Baja";
+            document.getElementById('lblTemporada').innerText = temporadaStr;
+            const sub = document.getElementById('lblTemporadaSubtexto');
+            if (sub) {
+                if (temporadaStr === "Alta") sub.innerText = "(Dosis doble)";
+                else if (temporadaStr === "Baja") sub.innerText = "(Dosis simple)";
+                else sub.innerText = "";
+            }
+        }
         
         if (data.wifi_ssid !== undefined) {
             const inpWifiSsid = document.getElementById('inpWifiSsid');
@@ -1538,4 +1556,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.46 inicializada");
+console.log("Dosimat PWA v5.48 inicializada");
