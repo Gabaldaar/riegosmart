@@ -214,12 +214,13 @@ try:
     Espera = int(eeprom.read(30, 2).decode('ascii').strip('\x00'))
 except Exception as e:
     print("Error leyendo variables fijas, aplicando defaults de emergencia", e)
-    Fverano, Finvierno, Refuerzo, DosisNo = '1030', '0330', 0, 0
+    Fverano, Finvierno, Refuerzo, DosisNo, PausarProg = '1030', '0330', 0, 0, 0
     DosisMin, Dosis, EsperaMin, Espera = 1, 30, 1, 30
     try:
         eeprom.write(0, b'1030')
         eeprom.write(5, b'0330')
         eeprom.write(13, b'0')
+        eeprom.write(35, b'0')
         eeprom.write(32, b'0')
         eeprom.write(9, b'01')
         eeprom.write(11, b'30')
@@ -1025,7 +1026,7 @@ def run_main_loop():
                         "t_bomba_off_seg": t_bomba_off_seg,
                         "mensaje": mensaje_temporal,
                         "bomba": bomba_rele.value() == 1, 
-                        "temporada": "Verano" if esta_en_temporada_verano() else "Mantenimiento",
+                        "temporada": "Alta" if esta_en_temporada_verano() else "Baja",
                         "Refuerzo": Refuerzo == 1,
                         "PausarProg": PausarProg,
                         "DosisNo": DosisNo,
@@ -1057,14 +1058,16 @@ def run_main_loop():
                 if ahora - ultimo_envio_telemetria >= 2.0:
                     fecha_str = f"{t_rtc[0]:04d}-{t_rtc[1]:02d}-{t_rtc[2]:02d}"
                     hora_str = f"{t_rtc[3]:02d}:{t_rtc[4]:02d}:{t_rtc[5]:02d}"
+                    t_bomba_off_seg = max(0, int(timestamp_bomba_off - ahora)) if estado_dosificador == "solo_bomba" else 0
                     telemetria = {
                         "id_equipo": id_equipo,
                         "version": version,
                         "estado": estado_dosificador,
                         "t_estado": tiempo_estado,
+                        "t_bomba_off_seg": t_bomba_off_seg,
                         "mensaje": mensaje_temporal,
                         "bomba": bomba_rele.value() == 1, 
-                        "temporada": "Verano" if esta_en_temporada_verano() else "Mantenimiento",
+                        "temporada": "Alta" if esta_en_temporada_verano() else "Baja",
                         "Refuerzo": Refuerzo,
                         "PausarProg": PausarProg,
                         "DosisNo": DosisNo,

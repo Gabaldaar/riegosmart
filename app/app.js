@@ -39,8 +39,12 @@ document.getElementById('btnGuardarWifi').onclick = async () => {
         sendCommand({comando: "config_wifi", ssid: ssid, pass: pwd});
         document.getElementById('inpWifiSsid').value = "";
         document.getElementById('inpWifiPwd').value = "";
+        unsavedWifiChanges = false;
     }
 };
+
+document.getElementById('inpWifiSsid').addEventListener('input', () => unsavedWifiChanges = true);
+document.getElementById('inpWifiPwd').addEventListener('input', () => unsavedWifiChanges = true);
 
 // Toggle Password Visibility
 const btnToggleWifiPwd = document.getElementById('btnToggleWifiPwd');
@@ -103,6 +107,8 @@ let superAdminEmail = "gab.aldazabal@gmail.com";
 let firstSync = true;
 let soporteConfig = { whatsapp: "+5491138571681", email: "soporte@dosimat.com.ar", web: "https://www.dosimat.com.ar" };
 let modoConexion = "OFFLINE"; // "OFFLINE", "NUBE", "BLE"
+let unsavedChanges = false;
+let unsavedWifiChanges = false;
 let unsubSnapshot = null;
 let unsubHistorial = null;
 let unsubSysLog = null;
@@ -150,7 +156,6 @@ let currentTEspera = 0;
 let currentTDosis = 0;
 let isDosisActive = false;
 
-let unsavedChanges = false;
 function setUnsaved() { unsavedChanges = true; }
 function clearUnsaved() {
     unsavedChanges = false;
@@ -1042,7 +1047,7 @@ function updateUI(data) {
             }
         }
         
-        if (data.wifi_ssid !== undefined) {
+        if (data.wifi_ssid !== undefined && !unsavedWifiChanges) {
             const inpWifiSsid = document.getElementById('inpWifiSsid');
             if (inpWifiSsid && !document.activeElement.isEqualNode(inpWifiSsid)) {
                 inpWifiSsid.value = data.wifi_ssid;
@@ -1559,4 +1564,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.49 inicializada");
+console.log("Dosimat PWA v5.50 inicializada");
