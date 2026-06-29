@@ -83,7 +83,7 @@ class BLEService:
                                 print("BLE: Ignorando comando corrupto:", line)
                                 
                     # Limpieza de seguridad si el buffer crece demasiado sin saltos de línea
-                    if len(self._rx_buffer) > 512:
+                    if len(self._rx_buffer) > 2048:
                         print("BLE: Vaciando buffer RX por exceso de tamaño")
                         self._rx_buffer = ""
                         
