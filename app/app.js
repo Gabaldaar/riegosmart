@@ -257,8 +257,8 @@ const dateToStr = (mmdd) => {
 };
 
 // === AUTHENTICATION LOGIC ===
-chkShowPwd.addEventListener('change', (e) => {
-    txtPassword.type = e.target.checked ? 'text' : 'password';
+chkShowPwd.addEventListener('click', () => {
+    txtPassword.type = chkShowPwd.checked ? 'text' : 'password';
 });
 
 btnLogin.addEventListener('click', async () => {
