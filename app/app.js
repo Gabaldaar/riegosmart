@@ -1482,14 +1482,17 @@ window.adminResetEquipo = async function(mac) {
     try {
         // 1. Enviar comando a la placa
         const cmdObj = { comando: "reset_fabrica" };
-        // 2. Limpiar datos en la nube (dejando comando_pendiente)
-        await setDoc(doc(db, "equipos", mac), { 
-            comando_pendiente: JSON.stringify(cmdObj),
-            estado: "Fábrica (Reseteado)",
-            cronograma: [],
-            historial: []
-        }, { merge: true });
-        
+        if (modoConexion === "BLE" && mac === currentMac) {
+            sendCommand(cmdObj);
+        } else {
+            // 2. Limpiar datos en la nube (dejando comando_pendiente)
+            await setDoc(doc(db, "equipos", mac), { 
+                comando_pendiente: JSON.stringify(cmdObj),
+                estado: "Fábrica (Reseteado)",
+                cronograma: [],
+                historial: []
+            }, { merge: true });
+        }
     } catch(e) {
         console.error("Error reseteando", e);
         showToast("Error al resetear", true);
@@ -1556,4 +1559,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.48 inicializada");
+console.log("Dosimat PWA v5.49 inicializada");
