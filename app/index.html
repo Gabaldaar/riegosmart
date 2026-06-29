@@ -468,9 +468,9 @@
             </div>
             <div class="form-group">
                 <label>Contraseña</label>
-                <input type="password" id="txtPassword" placeholder="********">
-                <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                    <input type="checkbox" id="chkShowPwd"> <label for="chkShowPwd" style="font-size: 0.85rem; margin:0; font-weight: normal;">Mostrar contraseña</label>
+                <div style="position: relative; display: flex; align-items: center;">
+                    <input type="password" id="txtPassword" placeholder="********" style="width: 100%; padding-right: 40px; box-sizing: border-box;">
+                    <span id="btnToggleLoginPwd" style="position: absolute; right: 10px; cursor: pointer; font-size: 1.2rem; user-select: none; z-index: 2;">👁️</span>
                 </div>
             </div>
             <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
@@ -501,7 +501,7 @@
 
     <header style="align-items: flex-start;">
         <div style="display: flex; flex-direction: column; gap: 0.3rem;">
-            <h1 style="font-size: 1.4rem; color: var(--accent); margin: 0;">Dosimat-IoT <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">v5.35</span></h1>
+            <h1 style="font-size: 1.4rem; color: var(--accent); margin: 0;">Dosimat-IoT <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">v5.36</span></h1>
             <div style="font-size: 0.95rem; color: var(--text-color);">Hola, <strong id="lblUserName"></strong></div>
             <div id="lblConnMode" class="conn-badge conn-offline" style="width: fit-content; margin-top: 0.2rem;">Cargando...</div>
         </div>

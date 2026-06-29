@@ -116,7 +116,7 @@ const authOverlay = document.getElementById('authOverlay');
 const txtNombre = document.getElementById('txtNombre');
 const txtEmail = document.getElementById('txtEmail');
 const txtPassword = document.getElementById('txtPassword');
-const chkShowPwd = document.getElementById('chkShowPwd');
+const btnToggleLoginPwd = document.getElementById('btnToggleLoginPwd');
 const btnLogin = document.getElementById('btnLogin');
 const btnRegister = document.getElementById('btnRegister');
 const btnGoogleLogin = document.getElementById('btnGoogleLogin');
@@ -257,8 +257,14 @@ const dateToStr = (mmdd) => {
 };
 
 // === AUTHENTICATION LOGIC ===
-chkShowPwd.addEventListener('click', () => {
-    txtPassword.type = chkShowPwd.checked ? 'text' : 'password';
+btnToggleLoginPwd.addEventListener('click', () => {
+    if (txtPassword.type === "password") {
+        txtPassword.type = "text";
+        btnToggleLoginPwd.innerText = "🙈";
+    } else {
+        txtPassword.type = "password";
+        btnToggleLoginPwd.innerText = "👁️";
+    }
 });
 
 btnLogin.addEventListener('click', async () => {
