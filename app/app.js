@@ -996,9 +996,9 @@ function updateUI(data) {
     }
     ultimoMensaje = data.mensaje || "";
 
-    if (data.cronograma && data.rtc_hora && data.rtc_fecha) {
+    if (data.cronograma !== undefined && data.rtc_hora && data.rtc_fecha) {
         if (data.PausarProg == 1) {
-            document.getElementById('lblProxDosis').innerText = "Pausada (Mantenimiento)";
+            document.getElementById('lblProxDosis').innerText = "(Modo Mantenimiento)";
         } else {
             document.getElementById('lblProxDosis').innerText = calcularProximaDosis(data.cronograma, data.rtc_fecha, data.rtc_hora);
         }
@@ -1024,10 +1024,9 @@ function updateUI(data) {
         }
         
         let container = document.getElementById('cronogramaContainer');
-        if (container) {
+        if (container && data.cronograma !== undefined) {
             container.innerHTML = "";
-            if (data.cronograma) {
-                let cronData = data.cronograma;
+            let cronData = data.cronograma;
                 if (typeof cronData === 'string') {
                     try { cronData = JSON.parse(cronData); } catch(e) { cronData = []; }
                 }
@@ -1036,7 +1035,6 @@ function updateUI(data) {
                         agregarFilaCronograma(timeToStr(c.on || c.hora), c.duracion, (c.dosis !== undefined ? c.dosis : (c.dosificar ? 1 : 0)), c.dias || "0123456");
                     });
                 }
-            }
         }
         
         if (document.getElementById('inpDosisNo')) document.getElementById('inpDosisNo').value = data.DosisNo;
@@ -1532,4 +1530,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.41 inicializada");
+console.log("Dosimat PWA v5.42 inicializada");
