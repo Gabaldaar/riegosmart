@@ -17,13 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
       - name: Deploy to Firebase Preview
         env:
           FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DOSIMAT_IOT }}
         run: |
           echo "$FIREBASE_SA" > firebase-sa.json
           export GOOGLE_APPLICATION_CREDENTIALS="${GITHUB_WORKSPACE}/firebase-sa.json"
-          firebase hosting:channel:deploy pr-${{ github.event.number }} --project dosimat-iot
+          npx firebase-tools hosting:channel:deploy pr-${{ github.event.number }} --project dosimat-iot
           rm firebase-sa.json
