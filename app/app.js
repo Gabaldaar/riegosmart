@@ -503,7 +503,7 @@ function connectNube() {
                         const timeParts = data.rtc_hora.split(":");
                         const rtcDate = new Date(parts[0], parts[1]-1, parts[2], timeParts[0], timeParts[1], timeParts[2]);
                         const diffMins = (new Date() - rtcDate) / 60000;
-                        if (diffMins > 20) isOffline = true;
+                        if (rtcDate.getFullYear() > 2023 && diffMins > 20) isOffline = true;
                     }
                     
                     if (window.cmdTimeout) {
@@ -1674,5 +1674,13 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
         customAlert("Error guardando configuración.");
     }
 });
+// Reconectar automáticamente al despertar el celular
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && modoConexion !== "BLE" && currentMac) {
+        console.log("App en primer plano, forzando reconexión a la nube...");
+        connectNube();
+    }
+});
+
 // Force deploy
-console.log("Dosimat PWA v5.55 inicializada");
+console.log("Dosimat PWA v5.56 inicializada");

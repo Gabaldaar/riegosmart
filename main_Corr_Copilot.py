@@ -164,6 +164,34 @@ def conectar_mqtt():
         return False
 
 
+async def escuchar_comandos_mqtt():
+    global mqtt_client
+
+    while True:
+        if wifi_conectado and mqtt_client:
+            try:
+                mqtt_client.check_msg()
+
+            except OSError as e:
+                err_code = e.args[0] if e.args else None
+
+                # Errores benignos: no hay datos disponibles
+                if err_code in (-1, 11, 110, 115, 116):
+                    pass
+                else:
+                    print("MQTT OSError:", e)
+                    mqtt_client = None
+                    await asyncio.sleep(5)
+
+            except Exception as e:
+                print("MQTT Error general:", e)
+                mqtt_client = None
+                await asyncio.sleep(5)
+
+        await asyncio.sleep(0.5)
+
+
+
 # ======================================================================
 # TAREA B: CONECTIVIDAD HÍBRIDA INTELIGENTE (WI-FI + BLE) — VERSIÓN ROBUSTA
 # ======================================================================
@@ -244,9 +272,6 @@ async def mantener_conexion_wifi():
 
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    
-    from ble_service import start_ble_service, stop_ble_service
-    ble_activo = True # Viene activo del arranque
 
     while True:
         if wifi_conectado and not wlan.isconnected():
@@ -255,26 +280,13 @@ async def mantener_conexion_wifi():
             mqtt_client = None
 
         if not wifi_conectado:
-            if not ble_activo:
-                print("Wi-Fi desconectado. Activando BLE...")
-                await start_ble_service(id_equipo[:15])
-                ble_activo = True
-
             print("Intentando reconectar Wi-Fi...")
             if await conectar_wifi():
                 asyncio.create_task(sincronizar_hora_ntp_async())
                 conectar_mqtt()
-                if ble_activo:
-                    print("Wi-Fi conectado. Desactivando BLE...")
-                    await stop_ble_service()
-                    ble_activo = False
         else:
             if mqtt_client is None:
                 conectar_mqtt()
-            if ble_activo:
-                print("Wi-Fi conectado. Desactivando BLE...")
-                await stop_ble_service()
-                ble_activo = False
 
         await asyncio.sleep(10)
 
@@ -307,15 +319,10 @@ async def sincronizacion_ntp_diaria():
 
 async def escuchar_comandos_mqtt():
     global mqtt_client
-    last_ping = time.time()
     while True:
         if wifi_conectado and mqtt_client:
             try:
                 mqtt_client.check_msg()
-                
-                if time.time() - last_ping >= 30:
-                    mqtt_client.ping()
-                    last_ping = time.time()
             except OSError as e:
                 err_code = e.args[0] if e.args else None
                 if err_code not in (-1, 11, 110, 115, 116):
@@ -786,75 +793,70 @@ async def enviar_log_nube(evento):
 
 async def enviar_telemetria():
     global wifi_conectado, mqtt_client, historial_pedido, cronograma_modificado, telemetria_en_progreso
+    global cronograma_modificado, telemetria_en_progreso, historial_pedido
 
+    # Evitar telemetría paralela
     if telemetria_en_progreso:
-        print("telemetria_en_progreso TRABADO! Ignorando este ciclo.")
         return
-    
     telemetria_en_progreso = True
-    try:
-        t_rtc = reloj.get_time()
-        ahora = time.time()
+
+    t_rtc = reloj.get_time()
+    ahora = time.time()
+    
+    t_bomba_off_seg = max(0, int(timestamp_bomba_off - ahora)) if estado_dosificador == "solo_bomba" else 0
+    telemetria = {
+        "id_equipo": id_equipo,
+        "version": version,
+        "estado": estado_dosificador,
+        "t_estado": tiempo_estado,
+        "t_bomba_off_seg": t_bomba_off_seg,
+        "mensaje": mensaje_temporal if (ahora - tiempo_mensaje <= duracion_mensaje) else "",
+        "bomba": bomba_rele.value() == 1, 
+        "temporada": "Alta" if esta_en_temporada_verano() else "Baja",
+        "Refuerzo": config_data['Refuerzo'] == 1,
+        "PausarProg": config_data['PausarProg'],
+        "DosisNo": config_data['DosisNo'],
+        "Dosis": config_data['Dosis'],
+        "DosisMin": config_data['DosisMin'],
+        "Espera": config_data['Espera'],
+        "EsperaMin": config_data['EsperaMin'],
+        "Fverano": config_data['Fverano'],
+        "Finvierno": config_data['Finvierno'],
+        "wifi_ssid": ssid_configurado,
+        "rtc_fecha": f"{t_rtc[0]:04d}-{t_rtc[1]:02d}-{t_rtc[2]:02d}",
+        "rtc_hora": f"{t_rtc[3]:02d}:{t_rtc[4]:02d}:{t_rtc[5]:02d}",
+        "dosis_total_seg": calcular_dosis_total(),
+        "temp_rtc": reloj.temperature()
+    }
+    
+    if historial_pedido:
+        telemetria["historial"] = config_data['historial_dosis']
+        historial_pedido = False
+
+    if redes_wifi:
+        telemetria["redes_wifi"] = redes_wifi
+
+    if cronograma_modificado:
+        telemetria["cronograma"] = config_data['Cronograma']
+        cronograma_modificado = False
         
-        t_bomba_off_seg = max(0, int(timestamp_bomba_off - ahora)) if estado_dosificador == "solo_bomba" else 0
-        telemetria = {
-            "id_equipo": id_equipo,
-            "version": version,
-            "estado": estado_dosificador,
-            "t_estado": tiempo_estado,
-            "t_bomba_off_seg": t_bomba_off_seg,
-            "mensaje": mensaje_temporal if (ahora - tiempo_mensaje <= duracion_mensaje) else "",
-            "bomba": bomba_rele.value() == 1, 
-            "temporada": "Alta" if esta_en_temporada_verano() else "Baja",
-            "Refuerzo": config_data['Refuerzo'] == 1,
-            "PausarProg": config_data['PausarProg'],
-            "DosisNo": config_data['DosisNo'],
-            "Dosis": config_data['Dosis'],
-            "DosisMin": config_data['DosisMin'],
-            "Espera": config_data['Espera'],
-            "EsperaMin": config_data['EsperaMin'],
-            "Fverano": config_data['Fverano'],
-            "Finvierno": config_data['Finvierno'],
-            "wifi_ssid": ssid_configurado,
-            "rtc_fecha": f"{t_rtc[0]:04d}-{t_rtc[1]:02d}-{t_rtc[2]:02d}",
-            "rtc_hora": f"{t_rtc[3]:02d}:{t_rtc[4]:02d}:{t_rtc[5]:02d}",
-            "dosis_total_seg": calcular_dosis_total()
-        }
-        
+    if wifi_conectado and mqtt_client:
+        topic = f"dosimat/{id_equipo}/telemetria"
         try:
-            telemetria["temp_rtc"] = reloj.temperature()
+            mqtt_client.publish(topic, json.dumps(telemetria))
         except Exception as e:
-            print("Error leyendo temperatura RTC:", e)
-            telemetria["temp_rtc"] = 0
-        
-        if historial_pedido:
-            telemetria["historial"] = config_data['historial_dosis']
-            historial_pedido = False
+            print("MQTT Publish Telemetria Error:", e)
+            mqtt_client = None      # ← MARCA MQTT COMO MUERTO
+            wifi_conectado = False  # ← EVITA MÁS PUBLICACIONES
+            return                  # ← CORTA TELEMETRÍA INMEDIATAMENTE
 
-        if redes_wifi:
-            telemetria["redes_wifi"] = redes_wifi
-
-        if cronograma_modificado:
-            telemetria["cronograma"] = config_data['Cronograma']
-            cronograma_modificado = False
             
-        if wifi_conectado and mqtt_client:
-            topic = f"dosimat/{id_equipo}/telemetria"
-            try:
-                mqtt_client.publish(topic, json.dumps(telemetria))
-                print("Telemetría enviada a MQTT.")
-            except Exception as e:
-                print("MQTT Publish Telemetria Error:", e)
-                mqtt_client = None
+    # Siempre enviamos por BLE también en paralelo (Multicanal real)
+    from ble_service import send_json_async
+    await send_json_async(telemetria)
+    gc.collect()
 
-        from ble_service import send_json_async
-        await send_json_async(telemetria)
-        gc.collect()
-
-    except Exception as e:
-        print("Error crítico en enviar_telemetria:", e)
-    finally:
-        telemetria_en_progreso = False
+    telemetria_en_progreso = False
 
 
     
@@ -905,18 +907,17 @@ async def tarea_parpadeo_led():
 # ARRANQUE ASÍNCRONO DEL SISTEMA (ENTRY POINT)
 # ======================================================================
 async def main():
-    await asyncio.sleep(1) # Pequeña pausa para estabilizar hardware (I2C) tras corte de luz
     print("Iniciando Dosimat Async...")
     cargar_configuracion()
     cargar_estado_recuperacion()
     
-    # 1. Inicializar BLE INMEDIATAMENTE (Para que esté disponible de inmediato si no hay WiFi)
-    from ble_service import start_ble_service, rx_queue
-    await start_ble_service(id_equipo[:15]) # Nombre máximo 15 chars
-    
-    # 2. Intentar conexión Wi-Fi Inicial (Toma hasta 40 segundos si no hay red)
+    # 1. Intentar conexión Wi-Fi Inicial
     conectado = await conectar_wifi()
     if conectado: conectar_mqtt()
+    
+    # 2. Inicializar BLE (Corriendo siempre en paralelo sin consumir mucha RAM gracias a MQTT)
+    from ble_service import start_ble_service, rx_queue
+    await start_ble_service(id_equipo[:15]) # Nombre máximo 15 chars
     
     # 3. Lanzar Tareas Asíncronas en Background
     asyncio.create_task(mantener_conexion_wifi())

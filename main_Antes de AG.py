@@ -1,4 +1,4 @@
-#ESTE ES EL CORREGIDO POR COPILOT
+import uasyncio as asyncio
 import machine
 import time
 import os
@@ -8,13 +8,6 @@ import network
 import ntptime
 import binascii
 from boot import global_vars
-import uasyncio as asyncio
-# ======================================================================
-# COLAS COMPATIBLES CON MICROPYTHON (SIN uasyncio.Queue)
-# ======================================================================
-
-
-
 
 # ======================================================================
 # INICIALIZACIÓN DE HARDWARE Y VARIABLES GLOBALES
@@ -24,12 +17,6 @@ bomba_rele = global_vars['bomba_rele']
 led1 = global_vars['led1']
 ref = global_vars['ref']
 reloj = global_vars['reloj']
-telemetria_en_progreso = False
-# Variables globales
-wifi_conectado = False
-cronograma_modificado = False
-historial_pedido = False
-
 
 version = "V4.0_ASYNC"
 id_equipo = "DOSIMAT_" + binascii.hexlify(machine.unique_id()).decode('utf-8').upper()
@@ -95,11 +82,9 @@ async def guardar_configuracion_async():
     guardar_configuracion_sync()
     await asyncio.sleep_ms(0)
 
-
 # ======================================================================
-# UTILIDADES MQTT — VERSIÓN ROBUSTA
+# UTILIDADES MQTT
 # ======================================================================
-
 try:
     from umqtt.simple import MQTTClient
 except ImportError:
@@ -109,191 +94,109 @@ MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
 mqtt_client = None
 
-
 def mqtt_callback(topic, msg):
     try:
         topic_str = topic.decode('utf-8')
         payload = json.loads(msg.decode('utf-8'))
-
         if topic_str.endswith("/comandos"):
             cmd = payload.get("comando")
             if cmd and cmd != "ninguna":
+                # Lanza el comando de forma asíncrona segura
                 asyncio.create_task(procesar_comando(payload))
-
     except Exception as e:
         print("MQTT Callback Error:", e)
 
-
 def conectar_mqtt():
     global mqtt_client
-
-    if not wifi_conectado:
-        print("MQTT: Wi-Fi no disponible")
-        return False
-
-    # Cerrar cliente previo si existe
+    if not wifi_conectado: return False
     try:
         if mqtt_client:
             mqtt_client.disconnect()
-    except:
-        pass
-
+    except: pass
+    
     try:
         print(f"Conectando a MQTT Broker: {MQTT_BROKER}...")
-
         import urandom
+        # Evitar colisión de ID agregando un número aleatorio
         client_id = f"dosimat_{id_equipo}_{urandom.getrandbits(16)}"
-
-        mqtt_client = MQTTClient(
-            client_id,
-            MQTT_BROKER,
-            port=MQTT_PORT,
-            keepalive=60
-        )
-
+        mqtt_client = MQTTClient(client_id, MQTT_BROKER, port=MQTT_PORT, keepalive=60)
         mqtt_client.set_callback(mqtt_callback)
         mqtt_client.connect(clean_session=True)
         mqtt_client.subscribe(f"dosimat/{id_equipo}/comandos")
-
         print("MQTT Conectado y Suscrito.")
         return True
-
     except Exception as e:
         print("Error conectando MQTT:", e)
         mqtt_client = None
         return False
 
-
 # ======================================================================
-# TAREA B: CONECTIVIDAD HÍBRIDA INTELIGENTE (WI-FI + BLE) — VERSIÓN ROBUSTA
+# TAREA B: CONECTIVIDAD HÍBRIDA INTELIGENTE (WI-FI + BLE)
 # ======================================================================
-
-# ======================================================================
-# CONTROL DE BLE PARA EVITAR CONFLICTO CON WIFI
-# ======================================================================
-
-def ble_stop_advertising():
-    try:
-        import bluetooth
-        bt = bluetooth.BLE()
-        bt.active(False)
-        print("BLE: Advertising detenido temporalmente.")
-    except Exception as e:
-        print("BLE stop error:", e)
-
-
-def ble_start_advertising():
-    try:
-        import bluetooth
-        bt = bluetooth.BLE()
-        bt.active(True)
-        # Tu advertising original:
-        nombre = id_equipo
-        bt.gap_advertise(100, b'\x02\x01\x06' + bytes([len(nombre)+1, 0x09]) + nombre.encode())
-        print("BLE: Advertising reactivado.")
-    except Exception as e:
-        print("BLE start error:", e)
-#------------------------------------------------------------
-
 async def conectar_wifi():
     global wifi_conectado, ssid_configurado
-
     try:
         with open("wifi_config.json", "r") as f:
             cred = json.load(f)
             ssid = cred.get("ssid", "")
             password = cred.get("pass", "")
     except:
-        print("Sin archivo wifi_config.json")
         return False
-
-    if not ssid:
-        print("SSID vacío, no se puede conectar")
-        return False
-
+        
+    if not ssid: return False
     ssid_configurado = ssid
+    
     print(f"Conectando a Wi-Fi: {ssid}...")
-
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-
-    # Limpieza previa mínima
-    try:
-        wlan.disconnect()
-    except:
-        pass
-
-    await asyncio.sleep(0.2)
-
     wlan.connect(ssid, password)
-
-    # Timeout extendido: 40 segundos
-    for _ in range(80):
+    
+    for _ in range(30):
         if wlan.isconnected():
             wifi_conectado = True
-            print("Wi-Fi Conectado.", wlan.ifconfig())
+            print("Wi-Fi Conectado.")
             return True
         await asyncio.sleep(0.5)
-
+        
+    wlan.active(False)
     print("Timeout de Wi-Fi.")
     return False
 
-
 async def mantener_conexion_wifi():
     global wifi_conectado, mqtt_client
-
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    
-    from ble_service import start_ble_service, stop_ble_service
-    ble_activo = True # Viene activo del arranque
-
     while True:
+        wlan = network.WLAN(network.STA_IF)
+        
+        # Detectar caída de red repentina
         if wifi_conectado and not wlan.isconnected():
-            print("Wi-Fi se perdió, marcando desconectado.")
+            print("¡Wi-Fi desconectado repentinamente!")
             wifi_conectado = False
             mqtt_client = None
-
+            
         if not wifi_conectado:
-            if not ble_activo:
-                print("Wi-Fi desconectado. Activando BLE...")
-                await start_ble_service(id_equipo[:15])
-                ble_activo = True
-
-            print("Intentando reconectar Wi-Fi...")
-            if await conectar_wifi():
-                asyncio.create_task(sincronizar_hora_ntp_async())
-                conectar_mqtt()
-                if ble_activo:
-                    print("Wi-Fi conectado. Desactivando BLE...")
-                    await stop_ble_service()
-                    ble_activo = False
+            if not wlan.isconnected():
+                print("Intentando reconectar Wi-Fi en background...")
+                if await conectar_wifi():
+                    asyncio.create_task(sincronizar_hora_ntp_async())
+                    conectar_mqtt()
         else:
+            # Reconectar MQTT si se cayó pero Wi-Fi sigue vivo
             if mqtt_client is None:
                 conectar_mqtt()
-            if ble_activo:
-                print("Wi-Fi conectado. Desactivando BLE...")
-                await stop_ble_service()
-                ble_activo = False
-
+                
         await asyncio.sleep(10)
 
-
-
 async def sincronizar_hora_ntp_async():
-    if not wifi_conectado:
-        return
-
+    if not wifi_conectado: return
     try:
         print("Sincronizando reloj con NTP...")
         ntptime.host = "pool.ntp.org"
         ntptime.settime()
-        t = time.localtime(time.time() - 10800)  # UTC-3
+        t = time.localtime(time.time() - 10800) # UTC-3
         reloj.set_time(t)
         print("Hora NTP ajustada.")
     except Exception as e:
         print("Error NTP:", e)
-
 
 async def sincronizacion_ntp_diaria():
     ultimo_dia = reloj.get_time()[2]
@@ -304,32 +207,25 @@ async def sincronizacion_ntp_diaria():
             await sincronizar_hora_ntp_async()
         await asyncio.sleep(30)
 
-
 async def escuchar_comandos_mqtt():
     global mqtt_client
-    last_ping = time.time()
     while True:
         if wifi_conectado and mqtt_client:
             try:
                 mqtt_client.check_msg()
-                
-                if time.time() - last_ping >= 30:
-                    mqtt_client.ping()
-                    last_ping = time.time()
             except OSError as e:
                 err_code = e.args[0] if e.args else None
-                if err_code not in (-1, 11, 110, 115, 116):
+                if err_code in (-1, 11, 110, 115, 116):
+                    pass # Solo significa 'No hay datos disponibles' en modo asíncrono
+                else:
                     print("Error MQTT check_msg OSError:", e)
-                    mqtt_client = None
+                    mqtt_client = None # Forzar reconexión
                     await asyncio.sleep(5)
             except Exception as e:
                 print("Error General MQTT check_msg:", e)
-                mqtt_client = None
+                mqtt_client = None # Forzar reconexión
                 await asyncio.sleep(5)
-
         await asyncio.sleep(0.5)
-
-
 
 # ======================================================================
 # TAREA C: MÁQUINA DE ESTADOS NO BLOQUEANTE Y STATE RECOVERY
@@ -752,24 +648,8 @@ async def procesar_comando(data):
 
 async def procesar_cola_ble(rx_queue):
     while True:
-        try:
-            cmd_dict = await rx_queue.get()
-
-            if not isinstance(cmd_dict, dict):
-                print("Comando BLE inválido:", cmd_dict)
-                continue
-
-            try:
-                await procesar_comando(cmd_dict)
-            except Exception as e:
-                print("Error procesando comando BLE:", e)
-
-        except Exception as e:
-            print("Error en tarea BLE:", e)
-            await asyncio.sleep(0.1)
-
-
-
+        cmd_dict = await rx_queue.get()
+        await procesar_comando(cmd_dict)
 
 # ======================================================================
 # TAREA E: TELEMETRÍA UNIFICADA Y LOGS
@@ -785,79 +665,62 @@ async def enviar_log_nube(evento):
         print("MQTT Publish Log Error:", e)
 
 async def enviar_telemetria():
-    global wifi_conectado, mqtt_client, historial_pedido, cronograma_modificado, telemetria_en_progreso
-
-    if telemetria_en_progreso:
-        print("telemetria_en_progreso TRABADO! Ignorando este ciclo.")
-        return
+    global cronograma_modificado
     
-    telemetria_en_progreso = True
-    try:
-        t_rtc = reloj.get_time()
-        ahora = time.time()
+    t_rtc = reloj.get_time()
+    ahora = time.time()
+    
+    t_bomba_off_seg = max(0, int(timestamp_bomba_off - ahora)) if estado_dosificador == "solo_bomba" else 0
+    telemetria = {
+        "id_equipo": id_equipo,
+        "version": version,
+        "estado": estado_dosificador,
+        "t_estado": tiempo_estado,
+        "t_bomba_off_seg": t_bomba_off_seg,
+        "mensaje": mensaje_temporal if (ahora - tiempo_mensaje <= duracion_mensaje) else "",
+        "bomba": bomba_rele.value() == 1, 
+        "temporada": "Alta" if esta_en_temporada_verano() else "Baja",
+        "Refuerzo": config_data['Refuerzo'] == 1,
+        "PausarProg": config_data['PausarProg'],
+        "DosisNo": config_data['DosisNo'],
+        "Dosis": config_data['Dosis'],
+        "DosisMin": config_data['DosisMin'],
+        "Espera": config_data['Espera'],
+        "EsperaMin": config_data['EsperaMin'],
+        "Fverano": config_data['Fverano'],
+        "Finvierno": config_data['Finvierno'],
+        "wifi_ssid": ssid_configurado,
+        "rtc_fecha": f"{t_rtc[0]:04d}-{t_rtc[1]:02d}-{t_rtc[2]:02d}",
+        "rtc_hora": f"{t_rtc[3]:02d}:{t_rtc[4]:02d}:{t_rtc[5]:02d}",
+        "dosis_total_seg": calcular_dosis_total(),
+        "temp_rtc": reloj.temperature()
+    }
+    
+    global historial_pedido
+    if 'historial_pedido' not in globals():
+        historial_pedido = False
+
+    if historial_pedido:
+        telemetria["historial"] = config_data['historial_dosis']
+        historial_pedido = False
+
+    if redes_wifi: telemetria["redes_wifi"] = redes_wifi
+    if cronograma_modificado:
+        telemetria["cronograma"] = config_data['Cronograma']
+        cronograma_modificado = False
         
-        t_bomba_off_seg = max(0, int(timestamp_bomba_off - ahora)) if estado_dosificador == "solo_bomba" else 0
-        telemetria = {
-            "id_equipo": id_equipo,
-            "version": version,
-            "estado": estado_dosificador,
-            "t_estado": tiempo_estado,
-            "t_bomba_off_seg": t_bomba_off_seg,
-            "mensaje": mensaje_temporal if (ahora - tiempo_mensaje <= duracion_mensaje) else "",
-            "bomba": bomba_rele.value() == 1, 
-            "temporada": "Alta" if esta_en_temporada_verano() else "Baja",
-            "Refuerzo": config_data['Refuerzo'] == 1,
-            "PausarProg": config_data['PausarProg'],
-            "DosisNo": config_data['DosisNo'],
-            "Dosis": config_data['Dosis'],
-            "DosisMin": config_data['DosisMin'],
-            "Espera": config_data['Espera'],
-            "EsperaMin": config_data['EsperaMin'],
-            "Fverano": config_data['Fverano'],
-            "Finvierno": config_data['Finvierno'],
-            "wifi_ssid": ssid_configurado,
-            "rtc_fecha": f"{t_rtc[0]:04d}-{t_rtc[1]:02d}-{t_rtc[2]:02d}",
-            "rtc_hora": f"{t_rtc[3]:02d}:{t_rtc[4]:02d}:{t_rtc[5]:02d}",
-            "dosis_total_seg": calcular_dosis_total()
-        }
-        
+    if wifi_conectado and mqtt_client:
+        topic = f"dosimat/{id_equipo}/telemetria"
         try:
-            telemetria["temp_rtc"] = reloj.temperature()
+            mqtt_client.publish(topic, json.dumps(telemetria))
         except Exception as e:
-            print("Error leyendo temperatura RTC:", e)
-            telemetria["temp_rtc"] = 0
-        
-        if historial_pedido:
-            telemetria["historial"] = config_data['historial_dosis']
-            historial_pedido = False
-
-        if redes_wifi:
-            telemetria["redes_wifi"] = redes_wifi
-
-        if cronograma_modificado:
-            telemetria["cronograma"] = config_data['Cronograma']
-            cronograma_modificado = False
+            print("MQTT Publish Telemetria Error:", e)
             
-        if wifi_conectado and mqtt_client:
-            topic = f"dosimat/{id_equipo}/telemetria"
-            try:
-                mqtt_client.publish(topic, json.dumps(telemetria))
-                print("Telemetría enviada a MQTT.")
-            except Exception as e:
-                print("MQTT Publish Telemetria Error:", e)
-                mqtt_client = None
+    # Siempre enviamos por BLE también en paralelo (Multicanal real)
+    from ble_service import send_json_async
+    await send_json_async(telemetria)
+    gc.collect()
 
-        from ble_service import send_json_async
-        await send_json_async(telemetria)
-        gc.collect()
-
-    except Exception as e:
-        print("Error crítico en enviar_telemetria:", e)
-    finally:
-        telemetria_en_progreso = False
-
-
-    
 async def tarea_telemetria_periodica():
     while True:
         # Frecuencia: 2s en modos activos, 900s en reposo (como en VERS_OK para máxima estabilidad)
@@ -905,18 +768,17 @@ async def tarea_parpadeo_led():
 # ARRANQUE ASÍNCRONO DEL SISTEMA (ENTRY POINT)
 # ======================================================================
 async def main():
-    await asyncio.sleep(1) # Pequeña pausa para estabilizar hardware (I2C) tras corte de luz
     print("Iniciando Dosimat Async...")
     cargar_configuracion()
     cargar_estado_recuperacion()
     
-    # 1. Inicializar BLE INMEDIATAMENTE (Para que esté disponible de inmediato si no hay WiFi)
-    from ble_service import start_ble_service, rx_queue
-    await start_ble_service(id_equipo[:15]) # Nombre máximo 15 chars
-    
-    # 2. Intentar conexión Wi-Fi Inicial (Toma hasta 40 segundos si no hay red)
+    # 1. Intentar conexión Wi-Fi Inicial
     conectado = await conectar_wifi()
     if conectado: conectar_mqtt()
+    
+    # 2. Inicializar BLE (Corriendo siempre en paralelo sin consumir mucha RAM gracias a MQTT)
+    from ble_service import start_ble_service, rx_queue
+    await start_ble_service(id_equipo[:15]) # Nombre máximo 15 chars
     
     # 3. Lanzar Tareas Asíncronas en Background
     asyncio.create_task(mantener_conexion_wifi())
@@ -927,9 +789,6 @@ async def main():
     asyncio.create_task(tarea_telemetria_periodica())
     asyncio.create_task(tarea_parpadeo_led())
     
- 
-
-
     # Registrar Inicio
     if conectado:
         await sincronizar_hora_ntp_async()

@@ -2,6 +2,7 @@ import uasyncio as asyncio
 import aioble
 import bluetooth
 import json
+import gc
 
 # UUIDs de Nordic UART Service
 _UART_SERVICE_UUID = bluetooth.UUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -37,11 +38,13 @@ rx_queue = AsyncQueue()
 _current_connection = None
 # Flag para serializar envíos BLE y evitar interleaving de chunks JSON
 _ble_sending = False
+# Flag para controlar las tareas
+_ble_running = False
 
 async def ble_rx_task():
     """ Tarea asíncrona para recibir e interpretar comandos RX """
     buffer = b""
-    while True:
+    while _ble_running:
         try:
             conn = await _uart_rx.written()
             data = _uart_rx.read()
@@ -110,7 +113,7 @@ async def send_json_async(datos_dict):
 async def ble_advertise_task(name="DosimatBLE"):
     """ Tarea asíncrona para anunciar el servicio """
     global _current_connection
-    while True:
+    while _ble_running:
         try:
             print(f"BLE: Iniciando Advertising ({name})...")
             connection = await aioble.advertise(
@@ -119,12 +122,13 @@ async def ble_advertise_task(name="DosimatBLE"):
                 services=[_UART_SERVICE_UUID], 
                 appearance=0x00
             )
-            print(f"BLE: Conectado a {connection.device}")
-            _current_connection = connection
-            
-            # Esperar a la desconexión
-            await connection.disconnected(timeout_ms=None)
-            print("BLE: Dispositivo desconectado.")
+            if connection:
+                print(f"BLE: Conectado a {connection.device}")
+                _current_connection = connection
+                
+                # Esperar a la desconexión
+                await connection.disconnected(timeout_ms=None)
+                print("BLE: Dispositivo desconectado.")
             _current_connection = None
         except asyncio.CancelledError:
             print("BLE Advertising cancelado.")
@@ -139,16 +143,18 @@ ble_tasks = []
 
 async def start_ble_service(name="DosimatBLE"):
     """ Lanza las tareas BLE concurrentemente """
-    global ble_tasks
+    global ble_tasks, _ble_running
     if ble_tasks:
         return
+    _ble_running = True
     t1 = asyncio.create_task(ble_advertise_task(name))
     t2 = asyncio.create_task(ble_rx_task())
     ble_tasks = [t1, t2]
 
 async def stop_ble_service():
     """ Detiene las tareas BLE para liberar memoria """
-    global ble_tasks
+    global ble_tasks, _ble_running
+    _ble_running = False
     for t in ble_tasks:
         t.cancel()
     ble_tasks = []

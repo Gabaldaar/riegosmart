@@ -195,7 +195,9 @@ class MQTTClient:
         except OSError as e:
             # EAGAIN
             if e.args[0] == 11:
+                self.sock.setblocking(True)
                 return
+            self.sock.setblocking(True)
             raise
         self.sock.setblocking(True)
         if res is None or len(res) == 0:
