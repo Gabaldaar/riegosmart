@@ -472,7 +472,9 @@ function connectNube() {
     }
 
     const clientId = "web_client_" + currentMac + "_" + Math.floor(Math.random() * 10000);
-    mqttClient = new Paho.MQTT.Client("broker.hivemq.com", 8000, "/mqtt", clientId);
+    const isHttps = window.location.protocol === "https:";
+    const port = isHttps ? 8884 : 8000;
+    mqttClient = new Paho.MQTT.Client("broker.hivemq.com", port, "/mqtt", clientId);
 
     mqttClient.onConnectionLost = (responseObject) => {
         if (responseObject.errorCode !== 0) {
