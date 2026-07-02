@@ -1,142 +1,156 @@
+import uasyncio as asyncio
+import aioble
 import bluetooth
-import struct
 import json
-from ble_advertising import advertising_payload
-from micropython import const
 
-_IRQ_CENTRAL_CONNECT = const(1)
-_IRQ_CENTRAL_DISCONNECT = const(2)
-_IRQ_GATTS_WRITE = const(3)
+# UUIDs de Nordic UART Service
+_UART_SERVICE_UUID = bluetooth.UUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+_UART_RX_CHAR_UUID = bluetooth.UUID("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+_UART_TX_CHAR_UUID = bluetooth.UUID("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
 
-_FLAG_READ = const(0x0002)
-_FLAG_WRITE_NO_RESPONSE = const(0x0004)
-_FLAG_WRITE = const(0x0008)
-_FLAG_NOTIFY = const(0x0010)
+# Configuración del servicio y características
+_uart_service = aioble.Service(_UART_SERVICE_UUID)
+_uart_rx = aioble.Characteristic(_uart_service, _UART_RX_CHAR_UUID, write=True, write_no_response=True)
+_uart_tx = aioble.Characteristic(_uart_service, _UART_TX_CHAR_UUID, read=True, notify=True)
 
-# UUIDs genéricos estilo UART (Nordic UART Service) 
-# Muy utilizados para envío de comandos y datos en texto/JSON
-_UART_UUID = bluetooth.UUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
-_UART_TX = (
-    bluetooth.UUID("6E400003-B5A3-F393-E0A9-E50E24DCCA9E"),
-    _FLAG_READ | _FLAG_NOTIFY,
-)
-_UART_RX = (
-    bluetooth.UUID("6E400002-B5A3-F393-E0A9-E50E24DCCA9E"),
-    _FLAG_WRITE | _FLAG_WRITE_NO_RESPONSE,
-)
-_UART_SERVICE = (
-    _UART_UUID,
-    (_UART_TX, _UART_RX),
-)
+aioble.register_services(_uart_service)
 
-class BLEService:
-    def __init__(self, name="DosimatBLE"):
-        self._ble = bluetooth.BLE()
-        self._ble.active(True)
-        self._ble.irq(self._irq)
-        
-        # Registrar el servicio
-        ((self._handle_tx, self._handle_rx),) = self._ble.gatts_register_services((_UART_SERVICE,))
-        
-        self._connections = set()
-        self._write_callback = None
-        self._rx_buffer = ""
-        # Para no exceder el límite de 31 bytes, el nombre va en el payload principal
-        # y el UUID de 128-bits va en la respuesta de escaneo (Scan Response)
-        self._payload = advertising_payload(name=name)
-        self._scan_resp = advertising_payload(services=[_UART_UUID])
-        
-        self._advertise()
+class AsyncQueue:
+    def __init__(self):
+        self._queue = []
+        self._event = asyncio.Event()
 
-    def _irq(self, event, data):
-        if event == _IRQ_CENTRAL_CONNECT:
-            conn_handle, _, _ = data
-            self._connections.add(conn_handle)
-            print("BLE: Dispositivo conectado (conn_handle:", conn_handle, ")")
-            
-        elif event == _IRQ_CENTRAL_DISCONNECT:
-            conn_handle, _, _ = data
-            if conn_handle in self._connections:
-                self._connections.remove(conn_handle)
-            print("BLE: Dispositivo desconectado")
-            self._advertise()
-            
-        elif event == _IRQ_GATTS_WRITE:
-            conn_handle, value_handle = data
-            print("BLE: Evento de escritura recibido (handle:", value_handle, ")")
-            value = self._ble.gatts_read(value_handle)
-            if value_handle == self._handle_rx and self._write_callback:
-                try:
-                    data_str = value.decode('utf-8')
-                    self._rx_buffer += data_str
-                    
-                    # Procesar cada línea completa en el buffer
-                    while '\n' in self._rx_buffer:
-                        line, self._rx_buffer = self._rx_buffer.split('\n', 1)
-                        line = line.strip()
-                        if line:
-                            print("BLE: Comando extraido del buffer:", line)
-                            try:
-                                json.loads(line)
-                                self._write_callback(line)
-                            except ValueError:
-                                print("BLE: Ignorando comando corrupto:", line)
-                                
-                    # Limpieza de seguridad si el buffer crece demasiado sin saltos de línea
-                    if len(self._rx_buffer) > 2048:
-                        print("BLE: Vaciando buffer RX por exceso de tamaño")
-                        self._rx_buffer = ""
-                        
-                except Exception as e:
-                    print("BLE: Error RX", e)
-                    self._rx_buffer = ""
+    async def put(self, item):
+        self._queue.append(item)
+        self._event.set()
 
-    def on_write(self, callback):
-        """
-        Establece una función callback que se ejecutará cuando se reciba 
-        un comando a través de la característica RX (escritura).
-        """
-        self._write_callback = callback
+    async def get(self):
+        while not self._queue:
+            self._event.clear()
+            await self._event.wait()
+        return self._queue.pop(0)
 
-    def send_json(self, data_dict):
-        """
-        Envía un diccionario en formato JSON a través de la característica TX (notificaciones).
-        """
-        if not self._connections:
-            return
-        
+# Cola asíncrona para comandos entrantes
+rx_queue = AsyncQueue()
+
+# Conexión actual BLE
+_current_connection = None
+# Flag para serializar envíos BLE y evitar interleaving de chunks JSON
+_ble_sending = False
+
+async def ble_rx_task():
+    """ Tarea asíncrona para recibir e interpretar comandos RX """
+    buffer = b""
+    while True:
         try:
-            json_str = json.dumps(data_dict) + "\n"
-            self._send(json_str)
-        except Exception as e:
-            print("BLE: Error al formatear JSON", e)
-
-    def _send(self, data_str):
-        """
-        Segmenta el mensaje en paquetes de 20 bytes para compatibilidad BLE estándar
-        y los envía por notificación con un delay para evitar agotar la memoria.
-        """
-        import time
-        data_bytes = data_str.encode('utf-8')
-        for i in range(0, len(data_bytes), 20):
-            chunk = data_bytes[i:i+20]
-            for conn_handle in self._connections:
-                retries = 3
-                while retries > 0:
+            conn = await _uart_rx.written()
+            data = _uart_rx.read()
+            if data:
+                buffer += data
+                while b"\n" in buffer:
+                    line, buffer = buffer.split(b"\n", 1)
                     try:
-                        self._ble.gatts_notify(conn_handle, self._handle_tx, chunk)
-                        break
+                        payload = line.decode("utf-8").strip()
+                        if payload:
+                            cmd_dict = json.loads(payload)
+                            await rx_queue.put(cmd_dict)
                     except Exception as e:
-                        print("BLE: Error al notificar fragmento, reintentando...", e)
-                        time.sleep_ms(100) # delay largo si hay ENOMEM
-                        retries -= 1
-            time.sleep_ms(40) # delay entre paquetes normal aumentado
+                        print(f"BLE RX JSON Parse Error: {e} -> Raw len: {len(line)} bytes")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"BLE RX Exception: {e}")
+            buffer = b""  # Limpiar buffer ante errores
+            await asyncio.sleep_ms(1000)
 
-    def _advertise(self, interval_us=500000):
-        """
-        Inicia la publicación del servicio BLE (Advertising) para que pueda
-        ser descubierto por otros dispositivos.
-        """
-        print("BLE: Iniciando advertising...")
-        self._ble.gap_advertise(interval_us, adv_data=self._payload, resp_data=self._scan_resp)
+async def send_json_async(datos_dict):
+    """ Envía datos JSON a la característica TX en fragmentos.
+    
+    Usa _ble_sending para serializar envíos y evitar que dos tareas
+    concurrentes intercalen sus chunks, corrompiendo el stream JSON en la app.
+    """
+    global _current_connection, _ble_sending
+    if _current_connection is None:
+        return
 
+    # Esperar a que el envío anterior termine (máx ~2s)
+    for _ in range(50):
+        if not _ble_sending:
+            break
+        await asyncio.sleep_ms(40)
+    else:
+        return  # Timeout: descartar para no acumular indefinidamente
+
+    _ble_sending = True
+    try:
+        json_str = json.dumps(datos_dict) + "\n"
+        max_len = 20  # MTU conservador
+
+        for i in range(0, len(json_str), max_len):
+            if _current_connection is None:
+                break
+            chunk = json_str[i:i + max_len].encode('utf-8')
+            try:
+                _uart_tx.write(chunk)
+                _uart_tx.notify(_current_connection, chunk)
+            except asyncio.TimeoutError:
+                pass
+            except Exception as e:
+                print("BLE TX Notify Error:", e)
+                break
+            # 15ms en lugar de 40ms: más ciclos de event loop disponibles
+            # para que ble_rx_task procese los chunks entrantes del RX.
+            await asyncio.sleep_ms(15)
+
+    except Exception as e:
+        print(f"BLE TX Error General: {e}")
+    finally:
+        _ble_sending = False
+
+async def ble_advertise_task(name="DosimatBLE"):
+    """ Tarea asíncrona para anunciar el servicio """
+    global _current_connection
+    while True:
+        try:
+            print(f"BLE: Iniciando Advertising ({name})...")
+            connection = await aioble.advertise(
+                250_000, 
+                name=name, 
+                services=[_UART_SERVICE_UUID], 
+                appearance=0x00
+            )
+            print(f"BLE: Conectado a {connection.device}")
+            _current_connection = connection
+            
+            # Esperar a la desconexión
+            await connection.disconnected(timeout_ms=None)
+            print("BLE: Dispositivo desconectado.")
+            _current_connection = None
+        except asyncio.CancelledError:
+            print("BLE Advertising cancelado.")
+            _current_connection = None
+            raise
+        except Exception as e:
+            print(f"BLE Adv Error: {e}")
+            _current_connection = None
+            await asyncio.sleep_ms(2000)
+
+ble_tasks = []
+
+async def start_ble_service(name="DosimatBLE"):
+    """ Lanza las tareas BLE concurrentemente """
+    global ble_tasks
+    if ble_tasks:
+        return
+    t1 = asyncio.create_task(ble_advertise_task(name))
+    t2 = asyncio.create_task(ble_rx_task())
+    ble_tasks = [t1, t2]
+
+async def stop_ble_service():
+    """ Detiene las tareas BLE para liberar memoria """
+    global ble_tasks
+    for t in ble_tasks:
+        t.cancel()
+    ble_tasks = []
+    # Limpiamos el buffer de BLE si es posible
+    gc.collect()

@@ -496,7 +496,16 @@
     <!-- Header Técnico (Sólo visible en control remoto) -->
     <div id="headerTechMode" style="display: none; background: var(--danger); color: white; padding: 0.5rem; text-align: center; font-weight: bold; font-size: 0.9rem; position: sticky; top: 0; z-index: 100;">
         MODO TÉCNICO: <span id="headerTechMac"></span>
-        <button id="btnDisconnectTech" style="margin-left:1rem; padding:0.2rem 0.5rem; color:var(--text-main); font-size:0.8rem; cursor:pointer; display:none;">Cerrar Conexión</button>
+        <button id="btnDisconnectTech" style="margin-left:0.5rem; padding:0.2rem 0.5rem; color:var(--text-main); font-size:0.8rem; cursor:pointer; display:none;">Cerrar Conexión</button>
+    </div>
+
+    <!-- SysLog Modal -->
+    <div id="sysLogOverlay" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index: 999; flex-direction:column; justify-content:center; align-items:center;">
+        <div style="background:var(--surface-color); padding: 1.5rem; border-radius: var(--radius); text-align: center; max-width: 90%; width: 500px;">
+            <h2 style="color: var(--accent); margin-bottom: 1rem;">Caja Negra (SysLog)</h2>
+            <div id="terminalLog" style="background:#000; color:#0f0; text-align:left; font-family:monospace; font-size:0.8rem; padding:1rem; border-radius:4px; height:300px; overflow-y:auto; margin-bottom:1rem; white-space:pre-wrap;">Esperando logs...</div>
+            <button id="btnCloseSysLog" class="btn" style="width:100%;">Cerrar</button>
+        </div>
     </div>
 
     <header style="align-items: flex-start;">

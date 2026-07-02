@@ -402,7 +402,6 @@ async function loadUserProfile(uid) {
                 document.getElementById('connectOverlay').style.display = 'none';
                 document.getElementById('headerTechMode').style.display = 'block';
                 document.getElementById('headerTechMac').innerText = "Debe seleccionar un equipo";
-                document.getElementById('btnDisconnectTech').style.display = 'none';
                 switchTab('admin');
             } else if (data.id_equipo) {
                 currentMac = data.id_equipo;
@@ -508,10 +507,8 @@ function connectNube() {
                     setConexionModo(isOffline ? "OFFLINE" : "NUBE");
                     updateUI(data);
                 }
-            } else if (topic === `dosimat/${currentMac}/sys_log`) {
-                sysLogsArr.unshift(`${data.fecha || ""} - ${data.evento || ""}`);
-                if (sysLogsArr.length > 100) sysLogsArr.pop();
-                renderSysLog(sysLogsArr);
+            } else if (topic === `dosimat/${currentMac}/sys_log` || topic === `dosimat/${currentMac}/soporte`) {
+                // Ignore sys_log parsing
             }
         } catch (e) {
             console.error("Error parseando MQTT:", e);
@@ -525,7 +522,7 @@ function connectNube() {
             console.log("MQTT Conectado a HiveMQ");
             mqttClient.subscribe(`dosimat/${currentMac}/telemetria`);
             mqttClient.subscribe(`dosimat/${currentMac}/sys_log`);
-            sysLogsArr = []; 
+            mqttClient.subscribe(`dosimat/${currentMac}/soporte`);
             if (modoConexion !== "BLE") {
                 setConexionModo("NUBE");
                 // Enviar ping silencioso para forzar al ESP32 a responder con telemetría
@@ -775,24 +772,14 @@ async function sendCommand(obj, silent = false) {
         const jsonStr = JSON.stringify(obj) + "\n";
         const encoder = new TextEncoder();
         const data = encoder.encode(jsonStr);
-        let retries = 3;
-        while (retries > 0) {
-            try {
-                for (let i = 0; i < data.length; i += 20) {
-                    const chunk = data.slice(i, i + 20);
-                    await rxCharacteristic.writeValue(chunk);
-                    await new Promise(r => setTimeout(r, 60)); // Reducido levemente
-                }
-                return true; // Éxito
-            } catch (error) {
-                console.error(`BLE Send Error (Retries left: ${retries-1}):`, error);
-                retries--;
-                if (retries === 0) {
-                    if (!silent) showToast("Error al enviar comando por BLE", true);
-                    return false;
-                }
-                await new Promise(r => setTimeout(r, 500)); // Esperar a que el radio Wi-Fi se libere
+        try {
+            for (let i = 0; i < data.length; i += 20) {
+                const chunk = data.slice(i, i + 20);
+                await rxCharacteristic.writeValueWithoutResponse(chunk);
+                await new Promise(r => setTimeout(r, 30));
             }
+        } catch (error) {
+            console.error("Error enviando comando BLE:", error);
         }
     } else if ((modoConexion === "NUBE" || modoConexion === "OFFLINE") && currentMac) {
         try {
@@ -1130,7 +1117,12 @@ function updateUI(data) {
                 }
                 if (Array.isArray(cronData)) {
                     cronData.forEach(c => {
-                        agregarFilaCronograma(timeToStr(c.on || c.hora), c.duracion, (c.dosis !== undefined ? c.dosis : (c.dosificar ? 1 : 0)), c.dias || "0123456");
+                        agregarFilaCronograma(
+                            timeToStr(c.h || c.on || c.hora), 
+                            c.d !== undefined ? c.d : c.duracion, 
+                            (c.s !== undefined ? c.s : (c.dosis !== undefined ? c.dosis : (c.dosificar ? 1 : 0))), 
+                            c.w || c.dias || "0123456"
+                        );
                     });
                 }
         }
@@ -1165,10 +1157,9 @@ function renderHistorial(historialArray) {
         historialArray.forEach(h => {
             const tr = document.createElement('tr');
             const isPerdida = h.tipo === "Perdida";
-            const isAtasco = h.tipo === "Anti-atasco";
             const isFalla = h.segundos === 0 || (h.temp && h.temp.includes("Fallo"));
             tr.style.borderBottom = "1px solid var(--border)";
-            if (isPerdida || isAtasco) tr.className = "fila-perdida";
+            if (isPerdida) tr.className = "fila-perdida";
             else if (isFalla) tr.className = "falla";
             
             const tipoText = h.tipo ? `(${h.tipo})` : '';
@@ -1177,16 +1168,6 @@ function renderHistorial(historialArray) {
         });
     }
 }
-
-function renderSysLog(sysLogArray) {
-    const term = document.getElementById('terminalLog');
-    if (term) {
-        if (!sysLogArray || sysLogArray.length === 0) {
-            term.innerText = "Esperando eventos de diagnóstico (Nueva arquitectura)...";
-        }
-    }
-}
-
 
 function calcularProximaDosis(cronograma, rtc_fecha, rtc_hora) {
     let cronData = cronograma;
@@ -1204,18 +1185,15 @@ function calcularProximaDosis(cronograma, rtc_fecha, rtc_hora) {
 
     for (let d = 0; d < 7; d++) {
         const checkDay = (currentWeekday + d) % 7;
-        let eventosDelDia = cronData.filter(c => ((c.dosis == 1) || (c.dosificar == true)) && (c.dias || "0123456").includes(checkDay.toString()));
+        let eventosDelDia = cronData.filter(c => ((c.s == 1) || (c.dosis == 1) || (c.dosificar == true)) && (c.w || c.dias || "0123456").includes(checkDay.toString()));
         
         if (d === 0) {
-            eventosDelDia = eventosDelDia.filter(c => (c.on || c.hora) > horaActual);
+            eventosDelDia = eventosDelDia.filter(c => (c.h || c.on || c.hora) > horaActual);
         }
         
         if (eventosDelDia.length > 0) {
-            eventosDelDia.sort((a,b) => (a.on || a.hora).localeCompare(b.on || b.hora));
-            const nextOn = timeToStr(eventosDelDia[0].on || eventosDelDia[0].hora);
-            if (d === 0) return `Hoy ${nextOn}`;
-            if (d === 1) return `Mañana ${nextOn}`;
-            return `${nombres[checkDay]} ${nextOn}`;
+            eventosDelDia.sort((a, b) => (a.h || a.on || a.hora).localeCompare(b.h || b.on || b.hora));
+            return (d === 0 ? "Hoy " : nombres[checkDay] + " ") + timeToStr(eventosDelDia[0].h || eventosDelDia[0].on || eventosDelDia[0].hora);
         }
     }
     return "Ningún día";
@@ -1342,57 +1320,21 @@ document.getElementById('btnAgregarHorario').onclick = () => {
     setUnsaved();
 };
 
-document.getElementById('btnGuardarCronograma').onclick = async () => {
+document.getElementById('btnGuardarCronograma').onclick = () => {
     const cronograma = [];
-    let filasIncompletas = false;
-    
     document.querySelectorAll('.crono-row').forEach(fila => {
         const timeInput = fila.querySelector('.inp-time').value.replace(":", "");
         const durInput = parseInt(fila.querySelector('.inp-dur').value);
         let diasStr = "";
         fila.querySelectorAll('.day-btn.active').forEach(b => diasStr += b.dataset.day);
-        
-        if(timeInput && !isNaN(durInput) && durInput > 0) {
-            cronograma.push({
-                on: timeInput, 
-                duracion: durInput, 
-                dosis: fila.querySelector('.inp-dosis').checked ? 1 : 0, 
-                dias: diasStr
-            });
-        } else {
-            filasIncompletas = true;
-        }
+        if(timeInput && !isNaN(durInput)) cronograma.push({
+            h: timeInput, 
+            d: durInput, 
+            s: fila.querySelector('.inp-dosis').checked ? 1 : 0, 
+            w: diasStr
+        });
     });
-
-    if (filasIncompletas) {
-        if (!await customConfirm("Hay filas en el cronograma con la Hora o los Minutos en blanco/cero. Éstas serán ignoradas al guardar. ¿Deseas continuar?", "Atención")) {
-            return;
-        }
-    }
-
-    if (modoConexion === "BLE") {
-        // Protocolo chunked: enviamos el cronograma entrada por entrada para
-        // evitar que un JSON grande (~600 bytes) se pierda en la fragmentación BLE.
-        // cron_start → N × cron_add → cron_commit
-        showToast(`Enviando ${cronograma.length} programas por BLE...`);
-        await sendCommand({comando: "cron_start", total: cronograma.length}, true);
-        await new Promise(r => setTimeout(r, 300));
-        for (let i = 0; i < cronograma.length; i++) {
-            await sendCommand({
-                comando:  "cron_add",
-                idx:      i,
-                on:       cronograma[i].on,
-                duracion: cronograma[i].duracion,
-                dosis:    cronograma[i].dosis,
-                dias:     cronograma[i].dias
-            }, true);
-            await new Promise(r => setTimeout(r, 300));
-        }
-        await sendCommand({comando: "cron_commit"});
-    } else {
-        // WiFi/NUBE: JSON completo — simple.py garantiza lectura correcta del payload TCP
-        sendCommand({comando: "config_cronograma", cronograma: cronograma});
-    }
+    sendCommand({comando: "config_cronograma", cronograma: cronograma});
     clearUnsaved();
 };
 
@@ -1454,8 +1396,7 @@ document.getElementById('btnConnectRemote').addEventListener('click', () => {
         
         // Restaurar el cartel a su estado "controlando"
         document.getElementById('headerTechMode').style.display = 'block';
-        document.getElementById('headerTechMac').innerText = `Controlando equipo ${currentMac}`;
-        document.getElementById('btnDisconnectTech').style.display = 'inline-block';
+        document.getElementById('headerTechMac').innerText = currentMac || "Desconocida";
             
         connectNube();
         switchTab('panel');
@@ -1473,7 +1414,6 @@ document.getElementById('btnDisconnectTech').addEventListener('click', async () 
     // Restaurar cartel a "Debe seleccionar"
     document.getElementById('headerTechMode').style.display = 'block';
     document.getElementById('headerTechMac').innerText = "Debe seleccionar un equipo";
-    document.getElementById('btnDisconnectTech').style.display = 'none';
     
     switchTab('admin');
 });
@@ -1668,4 +1608,4 @@ document.getElementById('btnSaveAdminContact').addEventListener('click', async (
     }
 });
 // Force deploy
-console.log("Dosimat PWA v5.55 inicializada");
+console.log("Dosimat PWA v5.54 inicializada");
