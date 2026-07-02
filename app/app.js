@@ -429,12 +429,17 @@ async function loadUserProfile(uid) {
 }
 
 // === HYBRID NETWORK LOGIC ===
-function setConexionModo(modo) {
+function setConexionModo(modo, ssid = "") {
     modoConexion = modo;
     lblConnMode.className = "conn-badge";
     const btnWifi = document.getElementById('btnGuardarWifi');
     if (modo === "NUBE") {
-        lblConnMode.innerText = "NUBE (WiFi)";
+        let text = "NUBE (WiFi)";
+        if (ssid) {
+            let shortSsid = ssid.length > 10 ? ssid.substring(0, 10) + "..." : ssid;
+            text = `NUBE (${shortSsid})`;
+        }
+        lblConnMode.innerText = text;
         lblConnMode.classList.add("conn-nube");
         if(btnWifi) btnWifi.innerText = "Cambiar de Red Wi-Fi";
     } else if (modo === "BLE") {
@@ -507,7 +512,7 @@ function connectNube() {
                         isOffline = false;
                     }
 
-                    setConexionModo(isOffline ? "OFFLINE" : "NUBE");
+                    setConexionModo(isOffline ? "OFFLINE" : "NUBE", data.wifi_ssid);
                     updateUI(data);
                 }
             } else if (topic === `dosimat/${currentMac}/sys_log`) {

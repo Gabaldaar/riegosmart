@@ -723,8 +723,8 @@ async def enviar_telemetria():
 
 async def tarea_telemetria_periodica():
     while True:
-        # Frecuencia: 2s en modos activos, 10s en reposo para evitar Timeout en PWA
-        intervalo = 2 if estado_dosificador != "inactivo" else 10
+        # Frecuencia: 2s en modos activos, 900s en reposo (como en VERS_OK para máxima estabilidad)
+        intervalo = 2 if estado_dosificador != "inactivo" else 900
         await asyncio.sleep(intervalo)
         await enviar_telemetria()
 
