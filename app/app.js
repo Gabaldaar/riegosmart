@@ -1169,7 +1169,16 @@ function renderHistorial(historialArray) {
     if (!historialArray || historialArray.length === 0) {
         tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:1rem; color:var(--text-muted);">Sin registros</td></tr>';
     } else {
-        historialArray.forEach(h => {
+        // Aseguramos que siempre esté ordenado de más reciente a más viejo
+        const sortedHistorial = [...historialArray].sort((a, b) => {
+            const dateA = a.fecha || "";
+            const dateB = b.fecha || "";
+            if (dateA > dateB) return -1;
+            if (dateA < dateB) return 1;
+            return 0;
+        });
+
+        sortedHistorial.forEach(h => {
             const tr = document.createElement('tr');
             const isPerdida = h.tipo === "Perdida";
             const isAtasco = h.tipo === "Anti-atasco";

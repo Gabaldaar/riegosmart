@@ -41,6 +41,9 @@ _ble_sending = False
 # Flag para controlar las tareas
 _ble_running = False
 
+def is_ble_connected():
+    return _current_connection is not None
+
 async def ble_rx_task():
     """ Tarea asíncrona para recibir e interpretar comandos RX """
     buffer = b""
@@ -101,9 +104,9 @@ async def send_json_async(datos_dict):
             except Exception as e:
                 print("BLE TX Notify Error:", e)
                 break
-            # 15ms en lugar de 40ms: más ciclos de event loop disponibles
-            # para que ble_rx_task procese los chunks entrantes del RX.
-            await asyncio.sleep_ms(15)
+            # 40ms para dar tiempo al teléfono a procesar las notificaciones
+            # sin perder paquetes (vital para JSON grandes como el historial).
+            await asyncio.sleep_ms(40)
 
     except Exception as e:
         print(f"BLE TX Error General: {e}")

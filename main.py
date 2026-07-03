@@ -24,11 +24,32 @@ bomba_rele = global_vars['bomba_rele']
 led1 = global_vars['led1']
 ref = global_vars['ref']
 reloj = global_vars['reloj']
+eeprom = global_vars['eeprom']
 telemetria_en_progreso = False
+telemetria_pendiente = False
 # Variables globales
 wifi_conectado = False
 cronograma_modificado = False
 historial_pedido = False
+
+# Locks para protección de recursos compartidos
+flash_lock = asyncio.Lock()
+i2c_lock = asyncio.Lock()
+
+async def get_time_async():
+    async with i2c_lock:
+        try:
+            return reloj.get_time()
+        except Exception as e:
+            print("Error I2C al leer RTC:", e)
+            return (2000, 1, 1, 0, 0, 0, 0)
+
+async def set_time_async(t):
+    async with i2c_lock:
+        try:
+            reloj.set_time(t)
+        except Exception as e:
+            print("Error I2C al guardar RTC:", e)
 
 
 version = "V4.0_ASYNC"
@@ -92,8 +113,17 @@ def guardar_configuracion_sync():
         print("Error guardando config:", e)
 
 async def guardar_configuracion_async():
-    guardar_configuracion_sync()
-    await asyncio.sleep_ms(0)
+    async with flash_lock:
+        try:
+            with open("config_cloro.tmp", "w") as f:
+                json.dump(config_data, f)
+            try:
+                os.remove("config_cloro.json")
+            except OSError:
+                pass
+            os.rename("config_cloro.tmp", "config_cloro.json")
+        except Exception as e:
+            print("Error atómico guardando config:", e)
 
 
 # ======================================================================
@@ -216,26 +246,28 @@ async def conectar_wifi():
 
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-
-    # Limpieza previa mínima
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    
+    # Limpieza profunda del módem según Propuesta II para evitar bloqueos del ESP32
     try:
         wlan.disconnect()
     except:
         pass
-
     await asyncio.sleep(0.2)
-
+    
+    print(f"Conectando a Wi-Fi: {ssid}...")
     wlan.connect(ssid, password)
 
-    # Timeout extendido: 40 segundos
-    for _ in range(80):
+    # Timeout de 15 segundos (30 * 0.5) para no mantener apagado el BLE demasiado tiempo
+    for _ in range(30):
         if wlan.isconnected():
             wifi_conectado = True
             print("Wi-Fi Conectado.", wlan.ifconfig())
             return True
         await asyncio.sleep(0.5)
-
-    print("Timeout de Wi-Fi.")
+        
+    print("Timeout Wi-Fi.")
     return False
 
 
@@ -245,7 +277,7 @@ async def mantener_conexion_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     
-    from ble_service import start_ble_service, stop_ble_service
+    from ble_service import start_ble_service, stop_ble_service, is_ble_connected
     ble_activo = True # Viene activo del arranque
 
     while True:
@@ -255,19 +287,27 @@ async def mantener_conexion_wifi():
             mqtt_client = None
 
         if not wifi_conectado:
-            if not ble_activo:
-                print("Wi-Fi desconectado. Activando BLE...")
-                await start_ble_service(id_equipo[:15])
-                ble_activo = True
+            # Si el usuario está usando el BLE (ej. configurando), no lo desconectamos para buscar Wi-Fi
+            if ble_activo and is_ble_connected():
+                print("BLE en uso activo, posponiendo reconexión Wi-Fi...")
+                await asyncio.sleep(10)
+                continue
 
+            # Apagamos BLE ANTES de intentar conectar al Wi-Fi (Evita contención de radio/cuelgues)
+            if ble_activo:
+                print("Pausando BLE para reconexión Wi-Fi limpia...")
+                await stop_ble_service()
+                ble_activo = False
+                
             print("Intentando reconectar Wi-Fi...")
             if await conectar_wifi():
                 asyncio.create_task(sincronizar_hora_ntp_async())
                 conectar_mqtt()
-                if ble_activo:
-                    print("Wi-Fi conectado. Desactivando BLE...")
-                    await stop_ble_service()
-                    ble_activo = False
+            else:
+                # Si falló, reactivamos el BLE para que el usuario pueda configurarlo
+                print("Wi-Fi desconectado. Activando BLE...")
+                await start_ble_service(id_equipo[:15])
+                ble_activo = True
         else:
             if mqtt_client is None:
                 conectar_mqtt()
@@ -276,7 +316,8 @@ async def mantener_conexion_wifi():
                 await stop_ble_service()
                 ble_activo = False
 
-        await asyncio.sleep(10)
+        # Si no hay wifi, esperamos más para dar tiempo al BLE de ser útil (ej 15 seg)
+        await asyncio.sleep(15 if not wifi_conectado else 10)
 
 
 
@@ -288,17 +329,19 @@ async def sincronizar_hora_ntp_async():
         print("Sincronizando reloj con NTP...")
         ntptime.host = "pool.ntp.org"
         ntptime.settime()
-        t = time.localtime(time.time() - 10800)  # UTC-3
-        reloj.set_time(t)
+        tm = time.time() - 10800
+        t = time.localtime(tm)
+        await set_time_async(t)
         print("Hora NTP ajustada.")
     except Exception as e:
         print("Error NTP:", e)
 
 
 async def sincronizacion_ntp_diaria():
-    ultimo_dia = reloj.get_time()[2]
+    t_init = await get_time_async()
+    ultimo_dia = t_init[2]
     while True:
-        t = reloj.get_time()
+        t = await get_time_async()
         if t[3] == 0 and t[4] == 0 and ultimo_dia != t[2]:
             ultimo_dia = t[2]
             await sincronizar_hora_ntp_async()
@@ -334,8 +377,7 @@ async def escuchar_comandos_mqtt():
 # ======================================================================
 # TAREA C: MÁQUINA DE ESTADOS NO BLOQUEANTE Y STATE RECOVERY
 # ======================================================================
-def esta_en_temporada_verano():
-    t = reloj.get_time()
+def esta_en_temporada_verano(t):
     fecha_actual = f"{t[1]:02d}{t[2]:02d}" 
     f_inv = config_data['Finvierno']
     f_ver = config_data['Fverano']
@@ -345,65 +387,132 @@ def esta_en_temporada_verano():
         en_invierno = fecha_actual >= f_inv or fecha_actual < f_ver
     return not en_invierno
 
-def calcular_dosis_total():
-    m_ver = 2 if esta_en_temporada_verano() else 1
+def calcular_dosis_total(t):
+    m_ver = 2 if esta_en_temporada_verano(t) else 1
     m_ref = 2 if config_data['Refuerzo'] == 1 else 1
     return (config_data['DosisMin'] * 60 + config_data['Dosis']) * m_ver * m_ref
 
+ESTADOS_EEPROM = {"inactivo": 0, "solo_bomba": 1, "esperando_dosis": 2, "esperando_manual": 3, "dosificando": 4, "manual": 5, "mantenimiento_valvula": 6}
+ESTADOS_INV = {v: k for k, v in ESTADOS_EEPROM.items()}
+
 async def guardar_estado_recuperacion(estado_dict):
-    try:
-        with open("state_recovery.json", "w") as f:
-            json.dump(estado_dict, f)
-    except: pass
-    await asyncio.sleep_ms(0)
+    estado_str = estado_dict.get("e", "inactivo")
+    
+    # Filtro: NO guardar estados manuales que no tengan fin (bomba manual infinita)
+    if estado_str == "solo_bomba" and not estado_dict.get("bpd", False):
+        estado_str = "inactivo"
+        
+    cod = ESTADOS_EEPROM.get(estado_str, 0)
+    
+    ahora = int(time.time())
+    if estado_str != "inactivo":
+        tb = int(estado_dict.get("tb", ahora))
+        ti = int(estado_dict.get("ti", ahora))
+        bpd = 1 if estado_dict.get("bpd", False) else 0
+        
+        if "esperando" in estado_str:
+            es_min = config_data['EsperaMin'] * 60 + config_data['Espera']
+            t_restante = max(0, int(es_min - (ahora - ti)))
+        elif estado_str == "solo_bomba":
+            t_restante = max(0, int(tb - ahora))
+        elif estado_str in ["dosificando", "manual"]:
+            if "tr" in estado_dict:
+                t_restante = estado_dict["tr"]
+            else:
+                try:
+                    t_rtc = await get_time_async()
+                    d_tot = calcular_dosis_total(t_rtc)
+                    t_restante = max(0, int(d_tot - (ahora - ti)))
+                except:
+                    t_restante = 0
+        else:
+            t_restante = 0
+    else:
+        t_restante = 0
+        bpd = 0
+        
+    b_arr = bytearray(7)
+    b_arr[0] = cod
+    b_arr[1] = (t_restante >> 24) & 0xFF
+    b_arr[2] = (t_restante >> 16) & 0xFF
+    b_arr[3] = (t_restante >> 8) & 0xFF
+    b_arr[4] = t_restante & 0xFF
+    b_arr[5] = bpd
+    b_arr[6] = sum(b_arr[0:6]) % 256
+    
+    async with i2c_lock:
+        try:
+            eeprom.write(0, b_arr)
+            await asyncio.sleep_ms(10) # 10ms ciclo escritura EEPROM
+        except Exception as e:
+            print("Error EEPROM write:", e)
 
 def cargar_estado_recuperacion():
     global estado_dosificador, timestamp_bomba_off, tiempo_inicio_espera, tiempo_inicio_dosis, bomba_encendida_por_dosis
     try:
-        with open("state_recovery.json", "r") as f:
-            datos = json.load(f)
-            e = datos.get("e", "inactivo")
-            if e != "inactivo":
-                ahora = time.time()
-                tb = datos.get("tb", ahora)
-                ti = datos.get("ti", ahora)
-                bpd = datos.get("bpd", False)
-                
-                # Si solo_bomba con timer mayor a 30 min desde ahora → fue bomba manual indefinida
-                # No restaurar: el usuario no sabe que quedó encendida tras el corte
-                if e == "solo_bomba" and ahora >= tb: return
-                if e == "solo_bomba" and (tb - ahora) > 1800:
-                    print("⚠️  Bomba manual detectada tras reinicio. Forzando estado inactivo.")
-                    return  # Arrancar como inactivo sin encender bomba
-                
-                if e in ["dosificando", "manual"] and ahora - ti >= calcular_dosis_total(): return
-                
-                es_min = config_data['EsperaMin'] * 60 + config_data['Espera']
-                if e in ["esperando_dosis", "esperando_manual"] and ahora - ti >= es_min:
-                    ti = ahora 
-                    e = "dosificando" if e == "esperando_dosis" else "manual"
-                
-                print("🔥 RECUPERANDO ESTADO TRAS REINICIO:", e)
-                estado_dosificador = e
-                timestamp_bomba_off = tb
-                bomba_encendida_por_dosis = bpd
-                if "esperando" in e: tiempo_inicio_espera = ti
-                else: tiempo_inicio_dosis = ti
-                    
-                if e in ["dosificando", "manual"]:
-                    bomba_rele.value(1)
-                    man.value(1)
-                elif e == "solo_bomba":
-                    bomba_rele.value(1)
-    except: pass
+        try:
+            t_rtc = reloj.get_time()
+        except:
+            t_rtc = (2000, 1, 1, 0, 0, 0, 0)
+            
+        b_arr = eeprom.read(0, 7)
+        if b_arr is None or len(b_arr) < 7: return
+        chk = sum(b_arr[0:6]) % 256
+        if b_arr[6] != chk: return
+            
+        cod = b_arr[0]
+        if cod == 0 or cod not in ESTADOS_INV: return
+            
+        e = ESTADOS_INV[cod]
+        t_restante = (b_arr[1] << 24) | (b_arr[2] << 16) | (b_arr[3] << 8) | b_arr[4]
+        bpd = True if b_arr[5] == 1 else False
+        
+        ahora = time.time()
+        
+        if "esperando" in e:
+            es_min = config_data['EsperaMin'] * 60 + config_data['Espera']
+            ti = ahora - (es_min - t_restante)
+            tb = ahora 
+        elif e == "solo_bomba":
+            tb = ahora + t_restante
+            ti = ahora 
+        elif e in ["dosificando", "manual"]:
+            d_tot = calcular_dosis_total(t_rtc)
+            ti = ahora - (d_tot - t_restante)
+            tb = ahora 
+        else:
+            return
+            
+        if e == "solo_bomba" and ahora >= tb: return
+        if e in ["dosificando", "manual"] and ahora - ti >= calcular_dosis_total(t_rtc): return
+        
+        es_min = config_data['EsperaMin'] * 60 + config_data['Espera']
+        if e in ["esperando_dosis", "esperando_manual"] and ahora - ti >= es_min:
+            ti = ahora 
+            e = "dosificando" if e == "esperando_dosis" else "manual"
+            
+        print("🔥 RECUPERANDO ESTADO DESDE EEPROM:", e)
+        estado_dosificador = e
+        timestamp_bomba_off = tb
+        bomba_encendida_por_dosis = bpd
+        if "esperando" in e: tiempo_inicio_espera = ti
+        else: tiempo_inicio_dosis = ti
+            
+        if e in ["dosificando", "manual"]:
+            bomba_rele.value(1)
+            man.value(1)
+        elif e == "solo_bomba":
+            bomba_rele.value(1)
+    except Exception as ex:
+        print("Error leyendo EEPROM:", ex)
 
 async def registrar_dosificacion_exitosa(duracion_aplicada, tipo="Programada"):
-    t = reloj.get_time()
+    t = await get_time_async()
     config_data['ultimo_timestamp_dosis'] = time.time()
     nuevo_registro = {
         "fecha": f"{t[0]:04d}-{t[1]:02d}-{t[2]:02d} {t[3]:02d}:{t[4]:02d}",
         "segundos": duracion_aplicada,
-        "temp": "T.Alta" if esta_en_temporada_verano() else "T.Baja",
+        "temp": "T.Alta" if esta_en_temporada_verano(t) else "T.Baja",
         "ref": config_data['Refuerzo'],
         "tipo": tipo
     }
@@ -413,7 +522,7 @@ async def registrar_dosificacion_exitosa(duracion_aplicada, tipo="Programada"):
 
 async def chequear_dosis_perdidas():
     try:
-        t = reloj.get_time()
+        t = await get_time_async()
         hoy_str = f"{t[0]:04d}-{t[1]:02d}-{t[2]:02d}"
         dosis_hoy = [h for h in config_data['historial_dosis'] if h["fecha"].startswith(hoy_str) and h.get("tipo", "") == "Programada"]
         horas_dosis_hoy = [int(h["fecha"][11:13])*60 + int(h["fecha"][14:16]) for h in dosis_hoy]
@@ -433,7 +542,7 @@ async def chequear_dosis_perdidas():
                         registro_perdida = {
                             "fecha": f"{t[0]:04d}-{t[1]:02d}-{t[2]:02d} {ev['on'][:2]}:{ev['on'][2:]}",
                             "segundos": 0,
-                            "temp": "T.Alta" if esta_en_temporada_verano() else "T.Baja",
+                            "temp": "T.Alta" if esta_en_temporada_verano(t) else "T.Baja",
                             "ref": 0,
                             "tipo": "Perdida"
                         }
@@ -455,7 +564,7 @@ async def maquina_de_estados_cloro():
     
     while True:
         ahora = time.time()
-        t_rtc = reloj.get_time()
+        t_rtc = await get_time_async()
         hora_actual_str = f"{t_rtc[3]:02d}{t_rtc[4]:02d}"
         minuto_actual_str = f"{t_rtc[2]:02d}-{t_rtc[3]:02d}:{t_rtc[4]:02d}" 
         dia_actual_str = str(t_rtc[6])
@@ -483,7 +592,7 @@ async def maquina_de_estados_cloro():
                         
                         if evento.get("dosis") == 1:
                             if config_data['DosisNo'] == 0:
-                                t_req = (config_data['EsperaMin'] * 60 + config_data['Espera']) + calcular_dosis_total()
+                                t_req = (config_data['EsperaMin'] * 60 + config_data['Espera']) + calcular_dosis_total(t_rtc)
                                 if (dur_min * 60) < t_req: timestamp_bomba_off = ahora + t_req
                                 estado_dosificador = "esperando_dosis"
                                 tiempo_inicio_espera = ahora
@@ -522,7 +631,7 @@ async def maquina_de_estados_cloro():
 
         elif estado_dosificador == "dosificando":
             tiempo_estado = int(ahora - tiempo_inicio_dosis) 
-            dosis_total = calcular_dosis_total()
+            dosis_total = calcular_dosis_total(t_rtc)
             if ahora - tiempo_inicio_dosis >= dosis_total:
                 man.value(0) 
                 await registrar_dosificacion_exitosa(dosis_total)
@@ -537,7 +646,7 @@ async def maquina_de_estados_cloro():
 
         elif estado_dosificador == "manual":
             tiempo_estado = int(ahora - tiempo_inicio_dosis) 
-            dosis_total = calcular_dosis_total()
+            dosis_total = calcular_dosis_total(t_rtc)
             if ahora - tiempo_inicio_dosis >= dosis_total:
                 man.value(0)
                 estado_dosificador = "solo_bomba"
@@ -556,20 +665,30 @@ async def maquina_de_estados_cloro():
                 await registrar_dosificacion_exitosa(3, tipo="Anti-atasco")
                 print("Mantenimiento: Fin de anti-atasco.")
 
-        # Guardar estado de recuperación si cambia
+        # Guardar estado de recuperación si cambia o continuo cada 10s
+        ti = tiempo_inicio_espera if "esperando" in estado_dosificador else tiempo_inicio_dosis
+        datos_recup = {"e": estado_dosificador, "tb": timestamp_bomba_off, "ti": ti, "bpd": bomba_encendida_por_dosis}
+        
+        if estado_dosificador in ["dosificando", "manual"]:
+            try:
+                d_tot = calcular_dosis_total(t_rtc)
+                datos_recup["tr"] = max(0, int(d_tot - (ahora - ti)))
+            except: pass
+            
         if estado_dosificador != estado_anterior:
-            datos_recup = {"e": estado_dosificador}
             if estado_dosificador != "inactivo":
-                ti = tiempo_inicio_espera if "esperando" in estado_dosificador else tiempo_inicio_dosis
-                datos_recup = {"e": estado_dosificador, "tb": timestamp_bomba_off, "ti": ti, "bpd": bomba_encendida_por_dosis}
-            await guardar_estado_recuperacion(datos_recup)
+                await guardar_estado_recuperacion(datos_recup)
             
             # Enviar log inmediato
             asyncio.create_task(enviar_log_nube({"evento": f"Cambio estado: {estado_dosificador}"}))
             # Forzar telemetría
             asyncio.create_task(enviar_telemetria())
             estado_anterior = estado_dosificador
-
+        else:
+            # Guardado continuo cada 10 segundos
+            if estado_dosificador != "inactivo":
+                asyncio.create_task(guardar_estado_recuperacion(datos_recup))
+                
         await asyncio.sleep(10) # Evaluar cada 10s
 
 # ======================================================================
@@ -700,7 +819,7 @@ async def procesar_comando(data):
             if m_t < 3: m_t += 12; y_t -= 1
             q = day; K = y_t % 100; J = y_t // 100
             weekday = (((q + 13*(m_t + 1)//5 + K + K//4 + J//4 + 5*J) % 7) + 5) % 7
-            reloj.set_time((year, month, day, hour, minute, 0, weekday, 0))
+            asyncio.create_task(set_time_async((year, month, day, hour, minute, 0, weekday, 0)))
             mensaje_temporal = "Reloj sincronizado"; tiempo_mensaje = time.time()
             cronograma_modificado = True # Forzar envío del cronograma al conectar
 
@@ -748,7 +867,8 @@ async def procesar_comando(data):
         # Cae al enviar_telemetría de abajo → la app recibe confirmación con el nuevo cronograma
 
     # Forzar envío de telemetría por cambio tras comando
-    asyncio.create_task(enviar_telemetria())
+    global telemetria_pendiente
+    telemetria_pendiente = True
 
 async def procesar_cola_ble(rx_queue):
     while True:
@@ -774,13 +894,51 @@ async def procesar_cola_ble(rx_queue):
 # ======================================================================
 # TAREA E: TELEMETRÍA UNIFICADA Y LOGS
 # ======================================================================
+async def publish_async(client, topic, msg):
+    # Constructor manual del paquete MQTT Publish (QoS 0) para evitar usar el método bloqueante
+    pkt = bytearray()
+    pkt.append(0x30)
+    topic_b = topic.encode("utf-8")
+    msg_b = msg.encode("utf-8")
+    sz = len(topic_b) + 2 + len(msg_b)
+    while sz > 0x7F:
+        pkt.append((sz & 0x7F) | 0x80)
+        sz >>= 7
+    pkt.append(sz)
+    pkt.append(len(topic_b) >> 8)
+    pkt.append(len(topic_b) & 0xFF)
+    pkt.extend(topic_b)
+    pkt.extend(msg_b)
+    
+    # Escritura NO bloqueante para no colgar el ESP32
+    client.sock.setblocking(False)
+    bytes_escritos = 0
+    timeout = 0
+    try:
+        while bytes_escritos < len(pkt):
+            try:
+                res = client.sock.write(pkt[bytes_escritos:])
+                if res is not None and res > 0:
+                    bytes_escritos += res
+            except OSError as e:
+                if e.args[0] == 11: # EAGAIN (Buffer lleno, esperar)
+                    pass
+                else:
+                    raise
+            await asyncio.sleep(0.05)
+            timeout += 0.05
+            if timeout > 15.0: # Timeout largo de 15s antes de rendirnos
+                raise OSError("Timeout TCP en Publish_Async")
+    finally:
+        client.sock.setblocking(True)
+
 async def enviar_log_nube(evento):
     if not wifi_conectado or not mqtt_client: return
-    t = reloj.get_time()
+    t = await get_time_async()
     evento["fecha"] = f"{t[0]:04d}-{t[1]:02d}-{t[2]:02d} {t[3]:02d}:{t[4]:02d}:{t[5]:02d}"
     topic = f"dosimat/{id_equipo}/sys_log"
     try:
-        mqtt_client.publish(topic, json.dumps(evento))
+        await publish_async(mqtt_client, topic, json.dumps(evento))
     except Exception as e:
         print("MQTT Publish Log Error:", e)
 
@@ -791,9 +949,11 @@ async def enviar_telemetria():
         print("telemetria_en_progreso TRABADO! Ignorando este ciclo.")
         return
     
+    gc.collect() # Limpieza agresiva de memoria antes de armar el paquete JSON pesado
     telemetria_en_progreso = True
     try:
-        t_rtc = reloj.get_time()
+        t_rtc = await get_time_async()
+            
         ahora = time.time()
         
         t_bomba_off_seg = max(0, int(timestamp_bomba_off - ahora)) if estado_dosificador == "solo_bomba" else 0
@@ -805,7 +965,7 @@ async def enviar_telemetria():
             "t_bomba_off_seg": t_bomba_off_seg,
             "mensaje": mensaje_temporal if (ahora - tiempo_mensaje <= duracion_mensaje) else "",
             "bomba": bomba_rele.value() == 1, 
-            "temporada": "Alta" if esta_en_temporada_verano() else "Baja",
+            "temporada": "Alta" if esta_en_temporada_verano(t_rtc) else "Baja",
             "Refuerzo": config_data['Refuerzo'] == 1,
             "PausarProg": config_data['PausarProg'],
             "DosisNo": config_data['DosisNo'],
@@ -818,7 +978,7 @@ async def enviar_telemetria():
             "wifi_ssid": ssid_configurado,
             "rtc_fecha": f"{t_rtc[0]:04d}-{t_rtc[1]:02d}-{t_rtc[2]:02d}",
             "rtc_hora": f"{t_rtc[3]:02d}:{t_rtc[4]:02d}:{t_rtc[5]:02d}",
-            "dosis_total_seg": calcular_dosis_total()
+            "dosis_total_seg": calcular_dosis_total(t_rtc)
         }
         
         try:
@@ -841,7 +1001,7 @@ async def enviar_telemetria():
         if wifi_conectado and mqtt_client:
             topic = f"dosimat/{id_equipo}/telemetria"
             try:
-                mqtt_client.publish(topic, json.dumps(telemetria))
+                await publish_async(mqtt_client, topic, json.dumps(telemetria))
                 print("Telemetría enviada a MQTT.")
             except Exception as e:
                 print("MQTT Publish Telemetria Error:", e)
@@ -859,11 +1019,21 @@ async def enviar_telemetria():
 
     
 async def tarea_telemetria_periodica():
+    global telemetria_pendiente
+    contador = 0
     while True:
+        await asyncio.sleep(1)
+        contador += 1
         # Frecuencia: 2s en modos activos, 900s en reposo (como en VERS_OK para máxima estabilidad)
         intervalo = 2 if estado_dosificador != "inactivo" else 900
-        await asyncio.sleep(intervalo)
-        await enviar_telemetria()
+        
+        if telemetria_pendiente or contador >= intervalo:
+            if not telemetria_en_progreso:
+                telemetria_pendiente = False
+                contador = 0
+                await enviar_telemetria()
+            else:
+                pass # Retener telemetria_pendiente para el próximo segundo
 
 # ======================================================================
 # TAREA F: DESTELLOS DEL LED DE ESTADO
@@ -907,16 +1077,25 @@ async def tarea_parpadeo_led():
 async def main():
     await asyncio.sleep(1) # Pequeña pausa para estabilizar hardware (I2C) tras corte de luz
     print("Iniciando Dosimat Async...")
+    
+    # Restablecer el Watchdog Timer (Timeout 60 segundos)
+    # Si el bucle asyncio se cuelga (ej. buffer TCP lleno), la placa se reiniciará automáticamente.
+    wdt = machine.WDT(timeout=60000)
+    
     cargar_configuracion()
     cargar_estado_recuperacion()
     
-    # 1. Inicializar BLE INMEDIATAMENTE (Para que esté disponible de inmediato si no hay WiFi)
+    # Importar servicios BLE
     from ble_service import start_ble_service, rx_queue
-    await start_ble_service(id_equipo[:15]) # Nombre máximo 15 chars
     
-    # 2. Intentar conexión Wi-Fi Inicial (Toma hasta 40 segundos si no hay red)
+    # Intentar conexión Wi-Fi Inicial
+    # (Ya no arrancamos BLE primero para evitar contención de la antena)
     conectado = await conectar_wifi()
-    if conectado: conectar_mqtt()
+    if conectado: 
+        conectar_mqtt()
+    else:
+        # Si falló el Wi-Fi inicial, arrancamos BLE para permitir configuración
+        await start_ble_service(id_equipo[:15])
     
     # 3. Lanzar Tareas Asíncronas en Background
     asyncio.create_task(mantener_conexion_wifi())
@@ -942,9 +1121,19 @@ async def main():
         
     await chequear_dosis_perdidas()
     
-    # Mantener el loop principal vivo
+    # Mantener el loop principal vivo y alimentar el Watchdog
     while True:
-        await asyncio.sleep(3600)
+        wdt.feed()
+        await asyncio.sleep(5)
+
+# ======================================================================
+# VENTANA DE SEGURIDAD (Permite Ctrl+C antes del Watchdog)
+# ======================================================================
+print("Esperando 3s (Ventana de seguridad para Thonny/Ctrl+C)...")
+ref.value(1) # Prendo el led AZUL indicador del tablero
+time.sleep(3)
+ref.value(0)
+print("Iniciando ejecución...")
 
 # Lanzar Event Loop
 try:
@@ -953,4 +1142,13 @@ except KeyboardInterrupt:
     print("Interrumpido por el usuario")
 except Exception as e:
     print("Error Fatal Loop Async:", e)
+    try:
+        import sys
+        with open("crash.log", "w") as f:
+            sys.print_exception(e, f)
+        print("Crash log guardado en Flash.")
+    except Exception as ex:
+        print("No se pudo escribir crash.log:", ex)
+    import time
+    time.sleep(2)
     machine.reset()
