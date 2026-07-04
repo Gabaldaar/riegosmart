@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smart Riego</title>
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#151e2e',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Lucide Icons -->
+    <script>
+        // Force SW update check
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then(registration => {
+                registration.update();
+            });
+            // Also notify user that they are on the latest version
+            window.APP_VERSION = "v5";
+        }
+    </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-950 text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30">
+    <!-- Top Header -->
+    <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-20 flex justify-between items-center shadow-md">
+        <!-- Izquierda: Logo -->
+        <div class="flex items-center gap-3 w-1/3">
+            <h1 class="font-bold text-xl tracking-wide bg-gradient-to-r from-teal-400 to-blue-500 bg-clip-text text-transparent">Smart Riego</h1>
+        </div>
+        
+        <!-- Centro: Reloj y Temperatura -->
+        <div class="flex items-center justify-center gap-4 w-1/3 text-slate-400 font-mono text-sm">
+            <div class="flex items-center space-x-1">
+                <i data-lucide="clock" class="w-4 h-4 text-slate-500"></i>
+                <span id="header-time" class="font-medium text-slate-300">--:--</span>
+            </div>
+            <div class="flex items-center space-x-1">
+                <i data-lucide="thermometer" class="w-4 h-4 text-slate-500"></i>
+                <span id="header-temp" class="font-medium text-slate-300">--°C</span>
+            </div>
+        </div>
+        
+        <!-- Derecha: Conexión -->
+        <div class="flex items-center justify-end gap-2 w-1/3">
+            <span id="conn-status" class="text-[10px] font-medium px-2 py-1 bg-slate-800 rounded-full text-slate-400 truncate max-w-[100px]">Desconectado</span>
+            <div id="conn-icon" class="text-slate-500">
+                <i data-lucide="wifi-off" class="w-5 h-5"></i>
+            </div>
+            <button id="btn-reconnect" class="p-2 rounded-full bg-slate-800 hover:bg-slate-700 transition hidden">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto pb-24 relative" id="main-container">
+        
+        <!-- DASHBOARD VIEW -->
+        <section id="view-dashboard" class="p-4 space-y-4 tab-view">
+            <!-- Active Status Widget -->
+            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Estado Actual</h2>
+                        <div id="simulated-led" class="w-2 h-2 rounded-full bg-blue-500 opacity-20 transition-opacity duration-100"></div>
+                    </div>
+                    <span id="status-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-700 text-slate-300">IDLE</span>
+                </div>
+                
+                <div id="active-watering-info" class="hidden flex-col items-center justify-center py-4">
+                    <div class="relative w-24 h-24 mb-4">
+                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                            <path class="text-slate-700" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="2.5" />
+                            <path id="progress-circle" class="text-teal-500 transition-all duration-1000 ease-linear" stroke-dasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="2.5" />
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span id="time-remaining" class="text-xl font-bold">--:--</span>
+                            <span class="text-[10px] text-slate-400 uppercase">min</span>
+                        </div>
+                    </div>
+                    <p id="active-zone-name" class="text-lg font-medium text-teal-400">Zona Activa</p>
+                </div>
+            </div>
+
+            <!-- Manual Control Widget -->
+            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <i data-lucide="droplet" class="w-4 h-4"></i> Riego Manual
+                </h2>
+                
+                <div class="mb-5">
+                    <label class="block text-xs text-slate-400 mb-2">Seleccionar Zona</label>
+                    <div id="manual-zone-selector" class="grid grid-cols-2 gap-2">
+                        <!-- Botones renderizados dinámicamente -->
+                    </div>
+                </div>
+                
+                <div class="mb-5">
+                    <div class="flex justify-between mb-2 text-xs">
+                        <span class="text-slate-400">Duración</span>
+                        <span id="manual-time-val" class="font-bold text-teal-400">10 min</span>
+                    </div>
+                    <input type="range" id="manual-time-slider" min="1" max="60" value="10" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500">
+                </div>
+                
+                <button id="btn-manual-start" class="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-medium transition-colors shadow-lg shadow-teal-500/20">
+                    Iniciar Riego
+                </button>
+                <button id="btn-manual-stop" class="w-full py-3 mt-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-xl font-medium transition-colors hidden">
+                    Detener Todo
+                </button>
+            </div>
+
+            <!-- Global Adjustments -->
+            <div class="grid grid-cols-1 gap-4">
+                <!-- Retraso por Lluvia -->
+                <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="cloud-rain" class="w-4 h-4"></i> Retraso por Lluvia
+                        </h2>
+                        <button class="text-slate-500 hover:text-blue-400 transition-colors btn-help" data-help="rain">
+                            <i data-lucide="help-circle" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button class="btn-rain-delay py-2 bg-slate-700 rounded-lg text-sm font-medium hover:bg-blue-600/50 transition-colors" data-days="1">24h</button>
+                        <button class="btn-rain-delay py-2 bg-slate-700 rounded-lg text-sm font-medium hover:bg-blue-600/50 transition-colors" data-days="2">48h</button>
+                        <button class="btn-rain-delay py-2 bg-slate-700 rounded-lg text-sm font-medium hover:bg-blue-600/50 transition-colors" data-days="3">72h</button>
+                    </div>
+                    <p id="rain-delay-status" class="text-xs text-blue-400 mt-3 text-center hidden flex flex-col items-center gap-2">
+                        <span>Retraso activo hasta: <strong>--</strong></span>
+                        <button id="btn-cancel-rain" class="px-3 py-1 bg-red-900/50 hover:bg-red-900 text-red-400 rounded transition-colors border border-red-900/50">Cancelar Retraso</button>
+                    </p>
+                </div>
+
+                <!-- Ajustes por Temporada (Collapsible) -->
+                <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+                    <div class="flex items-center justify-between cursor-pointer group" id="btn-toggle-seasons">
+                        <h2 class="text-sm font-semibold text-slate-400 group-hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
+                            <i data-lucide="sun" class="w-4 h-4"></i> Ajustes por Temporada
+                        </h2>
+                        <div class="flex items-center gap-2">
+                            <button class="text-slate-500 hover:text-teal-400 transition-colors btn-help" data-help="seasonal" onclick="event.stopPropagation();">
+                                <i data-lucide="help-circle" class="w-5 h-5"></i>
+                            </button>
+                            <i data-lucide="chevron-down" id="icon-seasons-collapse" class="w-5 h-5 text-slate-500 group-hover:text-white transition-transform duration-300"></i>
+                        </div>
+                    </div>
+                    
+                    <div id="seasons-collapsible-content" class="hidden overflow-hidden mt-4">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-xs text-slate-400">Preestablecer Fechas:</span>
+                            <div class="flex gap-2">
+                                <button id="btn-hemi-sur" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-400 transition-colors border border-transparent">Sur</button>
+                                <button id="btn-hemi-norte" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-400 transition-colors border border-transparent">Norte</button>
+                            </div>
+                        </div>
+                        
+                        <div id="seasons-container" class="space-y-3">
+                            <!-- Tarjetas generadas dinamicamente -->
+                            <div class="text-center text-slate-500 text-xs py-4">Cargando temporadas...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCHEDULER VIEW -->
+        <section id="view-scheduler" class="p-4 space-y-4 tab-view hidden">
+            <!-- Tabs Programas -->
+            <div class="flex p-1 bg-slate-800 rounded-xl space-x-1 mb-4" id="program-tabs">
+                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg bg-slate-700 text-white shadow" data-prog="A">Prog A</button>
+                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white transition" data-prog="B">Prog B</button>
+                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white transition" data-prog="C">Prog C</button>
+                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white transition" data-prog="D">Prog D</button>
+            </div>
+
+            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+                <div class="flex justify-between items-center mb-5">
+                    <input type="text" id="prog-name" class="bg-transparent border-b border-slate-600 text-lg font-bold focus:outline-none focus:border-teal-500 w-2/3" value="Riego Césped" maxlength="20">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="prog-active" class="sr-only peer" checked>
+                        <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
+                    </label>
+                </div>
+
+                <!-- Dias -->
+                <div class="mb-5">
+                    <label class="block text-xs text-slate-400 mb-2 uppercase tracking-wider">Días de la semana</label>
+                    <div class="flex justify-between" id="prog-days">
+                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="1">L</button>
+                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="2">M</button>
+                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="3">M</button>
+                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="4">J</button>
+                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="5">V</button>
+                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="6">S</button>
+                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="7">D</button>
+                    </div>
+                </div>
+
+                <!-- Horarios -->
+                <div class="mb-5">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-xs text-slate-400 uppercase tracking-wider">Horas de Arranque</label>
+                        <button id="add-time-btn" class="text-teal-400 text-xs flex items-center"><i data-lucide="plus" class="w-3 h-3 mr-1"></i>Añadir</button>
+                    </div>
+                    <div id="prog-times" class="space-y-2">
+                        <!-- Dinamico -->
+                    </div>
+                </div>
+
+                <!-- Zonas -->
+                <div>
+                    <label class="block text-xs text-slate-400 mb-2 uppercase tracking-wider">Tiempos por Zona</label>
+                    <div id="prog-zones" class="space-y-3">
+                        <!-- Dinamico -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Boton Sincronizar Flotante Local -->
+            <button id="btn-sync-prog" class="w-full py-3 mt-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors shadow-lg shadow-blue-500/20 flex justify-center items-center gap-2">
+                <i data-lucide="upload-cloud" class="w-5 h-5"></i>
+                Aplicar Cambios al Equipo
+            </button>
+        </section>
+
+        <!-- HISTORY VIEW -->
+        <section id="view-history" class="p-4 space-y-4 tab-view hidden h-full">
+            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50 flex flex-col h-full min-h-[400px]">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="scroll-text" class="w-4 h-4"></i> Caja Negra
+                    </h2>
+                    <div class="flex gap-2">
+                        <button id="btn-clear-logs" class="p-2 bg-slate-700 rounded-lg hover:bg-red-900/50 transition border border-transparent hover:border-red-900/50 text-slate-300 hover:text-red-400" title="Limpiar Historial">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                        <button id="btn-refresh-logs" class="p-2 bg-slate-700 rounded-lg hover:bg-slate-600 transition" title="Actualizar">
+                            <i data-lucide="refresh-cw" class="w-4 h-4 text-slate-300"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="logs-container" class="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                    <div class="text-center text-slate-500 text-sm mt-10">
+                        Presiona actualizar para leer el historial del equipo.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SETTINGS VIEW -->
+        <section id="view-settings" class="p-4 space-y-4 tab-view hidden">
+            <!-- Asistente BLE -->
+            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <i data-lucide="bluetooth" class="w-4 h-4"></i> Vinculación
+                </h2>
+                <button id="btn-ble-pair" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors mb-3">
+                    Buscar Equipo (Bluetooth)
+                </button>
+                <div id="ble-info" class="text-xs text-slate-400 hidden">
+                    Conectado a: <span id="ble-device-name" class="font-bold text-slate-200"></span><br>
+                    Chip ID: <span id="ble-chip-id" class="font-bold text-slate-200"></span>
+                </div>
+            </div>
+
+            <!-- Hardware Config -->
+            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <i data-lucide="cpu" class="w-4 h-4"></i> Hardware
+                </h2>
+                
+                <div class="mb-4">
+                    <label class="block text-xs text-slate-400 mb-2">Capacidad del Equipo</label>
+                    <div class="flex bg-slate-900 p-1 rounded-lg">
+                        <button class="hw-zones-btn flex-1 py-1.5 rounded-md text-sm font-medium bg-slate-700 text-white" data-val="4">4 Zonas</button>
+                        <button class="hw-zones-btn flex-1 py-1.5 rounded-md text-sm font-medium text-slate-400" data-val="8">8 Zonas</button>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-xs text-slate-400 mb-2">Modo Hidráulico (Transición)</label>
+                    <div class="flex bg-slate-900 p-1 rounded-lg">
+                        <button class="hw-pump-btn flex-1 py-1.5 rounded-md text-sm font-medium bg-slate-700 text-white" data-val="true">Bomba (Overlap)</button>
+                        <button class="hw-pump-btn flex-1 py-1.5 rounded-md text-sm font-medium text-slate-400" data-val="false">Red (Pausa)</button>
+                    </div>
+                </div>
+                
+                <button id="btn-save-hw" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-colors">
+                    Guardar Hardware
+                </button>
+                <button id="btn-sync-rtc" class="w-full py-2 bg-blue-600/80 hover:bg-blue-600 text-white rounded-xl text-sm font-medium transition-colors mt-3">
+                    Sincronizar Reloj (RTC) con Celular
+                </button>
+            </div>
+
+            <!-- WiFi Config -->
+            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="wifi" class="w-4 h-4"></i> Red Wi-Fi
+                    </h2>
+                    <span id="current-ssid-display" class="text-xs text-teal-400 font-medium">No configurada</span>
+                </div>
+                <div class="space-y-3">
+                    <input type="text" id="wifi-ssid" placeholder="Nombre de red (SSID)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-teal-500">
+                    <input type="password" id="wifi-pass" placeholder="Contraseña" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-teal-500">
+                    <button id="btn-send-wifi" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-colors">
+                        Enviar Credenciales
+                    </button>
+                </div>
+            </div>
+
+            <!-- Peligro -->
+            <div class="bg-red-950/30 rounded-2xl p-5 shadow-lg border border-red-900/50">
+                <h2 class="text-sm font-semibold text-red-400 uppercase tracking-wider mb-2">Zona de Peligro</h2>
+                <p class="text-xs text-slate-400 mb-4">Estas acciones borrarán configuraciones de forma permanente.</p>
+                
+                <button id="btn-clear-local" class="w-full py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors mb-2">
+                    Cerrar Sesión (Borrar Token Local)
+                </button>
+                <button id="btn-factory-reset" class="w-full py-2 bg-red-900/80 hover:bg-red-800 text-white rounded-xl text-sm font-medium transition-colors">
+                    Restablecer Hardware a Fábrica
+                </button>
+            </div>
+        </section>
+        
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bg-slate-900/90 backdrop-blur-md border-t border-slate-800 fixed bottom-0 w-full z-20 pb-safe">
+        <div class="flex justify-around items-center p-2">
+            <button class="nav-btn flex flex-col items-center p-2 text-teal-400" data-target="view-dashboard">
+                <i data-lucide="layout-dashboard" class="w-6 h-6 mb-1"></i>
+                <span class="text-[10px] font-medium">Panel</span>
+            </button>
+            <button class="nav-btn flex flex-col items-center p-2 text-slate-500 hover:text-slate-300 transition" data-target="view-scheduler">
+                <i data-lucide="calendar-clock" class="w-6 h-6 mb-1"></i>
+                <span class="text-[10px] font-medium">Programas</span>
+            </button>
+            <button class="nav-btn flex flex-col items-center p-2 text-slate-500 hover:text-slate-300 transition" data-target="view-history">
+                <i data-lucide="list" class="w-6 h-6 mb-1"></i>
+                <span class="text-[10px] font-medium">Historial</span>
+            </button>
+            <button class="nav-btn flex flex-col items-center p-2 text-slate-500 hover:text-slate-300 transition" data-target="view-settings">
+                <i data-lucide="settings" class="w-6 h-6 mb-1"></i>
+                <span class="text-[10px] font-medium">Ajustes</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Modals -->
+    <!-- Setup Modal (First Run / Auth) -->
+    <div id="modal-auth" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-center items-center p-4">
+        <div class="bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-700">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-teal-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="lock" class="w-8 h-8 text-teal-400"></i>
+                </div>
+                <h2 class="text-xl font-bold text-white mb-1" id="auth-title">Vincular Equipo</h2>
+                <p class="text-xs text-slate-400" id="auth-desc">El equipo detectado es nuevo. Crea una contraseña de acceso.</p>
+            </div>
+            
+            <input type="password" id="auth-password" placeholder="Contraseña segura" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-4 text-sm focus:outline-none focus:border-teal-500">
+            
+            <button id="btn-auth-submit" class="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-medium transition-colors">
+                Autorizar
+            </button>
+        </div>
+    </div>
+    <!-- Generic Alert/Confirm/Prompt Modal -->
+    <div id="modal-generic" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-center items-center p-4">
+        <div class="bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-700">
+            <h2 class="text-lg font-bold text-white mb-2" id="generic-title">Alerta</h2>
+            <p class="text-sm text-slate-300 mb-4" id="generic-msg">Mensaje</p>
+            <input type="text" id="generic-input" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-4 text-sm focus:outline-none focus:border-teal-500 hidden">
+            <div class="flex justify-end gap-3">
+                <button id="btn-generic-cancel" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition-colors">Cancelar</button>
+                <button id="btn-generic-ok" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm font-medium transition-colors">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Season Modal -->
+    <div id="modal-season-edit" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-center items-center p-4">
+        <div class="bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-700">
+            <h2 class="text-lg font-bold text-white mb-4" id="season-edit-title">Editar Temporada</h2>
+            
+            <label class="block text-xs text-slate-400 mb-1">Fecha de Inicio</label>
+            <input type="date" id="season-input-ini" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-4 text-sm focus:outline-none focus:border-teal-500 text-slate-300 [color-scheme:dark]">
+            
+            <label class="block text-xs text-slate-400 mb-1">Fecha de Fin</label>
+            <input type="date" id="season-input-fin" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-6 text-sm focus:outline-none focus:border-teal-500 text-slate-300 [color-scheme:dark]">
+            
+            <div class="flex justify-end gap-3">
+                <button id="btn-season-cancel" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition-colors">Cancelar</button>
+                <button id="btn-season-ok" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm font-medium transition-colors">Guardar</button>
+            </div>
+        </div>
+    </div>
+    <!-- Scripts -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script>
+        // Init Lucide
+        lucide.createIcons();
+        
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').then(reg => {
+                    console.log('SW registrado', reg.scope);
+                }).catch(err => {
+                    console.log('SW registro fallo', err);
+                });
+            });
+        }
+    </script>
+    
+    <!-- Modal de Ayuda Genérico -->
+    <div id="help-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 relative">
+            <button id="btn-close-help" class="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+            <div class="flex items-center gap-3 mb-4 text-teal-400">
+                <i data-lucide="info" class="w-6 h-6"></i>
+                <h2 id="help-title" class="text-lg font-bold text-white">Ayuda</h2>
+            </div>
+            <p id="help-body" class="text-sm text-slate-300 leading-relaxed">...</p>
+        </div>
+    </div>
+
+    <!-- PWA y App Scripts con versión forzada -->
+    <script src="comms.js?v=16"></script>
+    <script src="app.js?v=16"></script>
+</body>
+</html>

@@ -11,7 +11,7 @@ _UART_TX_CHAR_UUID = bluetooth.UUID("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
 
 # Configuración del servicio y características
 _uart_service = aioble.Service(_UART_SERVICE_UUID)
-_uart_rx = aioble.Characteristic(_uart_service, _UART_RX_CHAR_UUID, write=True, write_no_response=True)
+_uart_rx = aioble.Characteristic(_uart_service, _UART_RX_CHAR_UUID, write=True, write_no_response=True, capture=True)
 _uart_tx = aioble.Characteristic(_uart_service, _UART_TX_CHAR_UUID, read=True, notify=True)
 
 aioble.register_services(_uart_service)
@@ -49,19 +49,21 @@ async def ble_rx_task():
     buffer = b""
     while _ble_running:
         try:
-            conn = await _uart_rx.written()
-            data = _uart_rx.read()
+            conn, data = await _uart_rx.written()
             if data:
+                print(f"[BLE_RX] Data cruda: {data}")
                 buffer += data
                 while b"\n" in buffer:
                     line, buffer = buffer.split(b"\n", 1)
+                    print(f"[BLE_RX] Linea completa: {line}")
                     try:
                         payload = line.decode("utf-8").strip()
                         if payload:
                             cmd_dict = json.loads(payload)
+                            print(f"[BLE_RX] JSON Válido. Encolando comando: {cmd_dict.get('comando')}")
                             await rx_queue.put(cmd_dict)
                     except Exception as e:
-                        print(f"BLE RX JSON Parse Error: {e} -> Raw len: {len(line)} bytes")
+                        print(f"[BLE_RX] Error parseando JSON: {e}")
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -77,6 +79,7 @@ async def send_json_async(datos_dict):
     """
     global _current_connection, _ble_sending
     if _current_connection is None:
+        print("[BLE_TX] Error: No hay conexion activa para enviar")
         return
 
     # Esperar a que el envío anterior termine (máx ~2s)
@@ -85,35 +88,38 @@ async def send_json_async(datos_dict):
             break
         await asyncio.sleep_ms(40)
     else:
+        print("[BLE_TX] Error: Timeout esperando que se libere el TX")
         return  # Timeout: descartar para no acumular indefinidamente
 
     _ble_sending = True
     try:
         json_str = json.dumps(datos_dict) + "\n"
         max_len = 20  # MTU conservador
+        print(f"[BLE_TX] Enviando {len(json_str)} bytes en trozos de {max_len}...")
 
         for i in range(0, len(json_str), max_len):
             if _current_connection is None:
+                print("[BLE_TX] Error: Desconectado en medio del envío")
                 break
             chunk = json_str[i:i + max_len].encode('utf-8')
             try:
-                _uart_tx.write(chunk)
                 _uart_tx.notify(_current_connection, chunk)
             except asyncio.TimeoutError:
-                pass
+                print("[BLE_TX] Timeout enviando chunk")
             except Exception as e:
-                print("BLE TX Notify Error:", e)
+                print("[BLE_TX] Notify Error:", e)
                 break
             # 40ms para dar tiempo al teléfono a procesar las notificaciones
             # sin perder paquetes (vital para JSON grandes como el historial).
             await asyncio.sleep_ms(40)
+        print("[BLE_TX] Envío completado.")
 
     except Exception as e:
-        print(f"BLE TX Error General: {e}")
+        print(f"[BLE_TX] Error General: {e}")
     finally:
         _ble_sending = False
 
-async def ble_advertise_task(name="DosimatBLE"):
+async def ble_advertise_task(name="RiegoBLE"):
     """ Tarea asíncrona para anunciar el servicio """
     global _current_connection
     while _ble_running:
@@ -144,7 +150,7 @@ async def ble_advertise_task(name="DosimatBLE"):
 
 ble_tasks = []
 
-async def start_ble_service(name="DosimatBLE"):
+async def start_ble_service(name="RiegoBLE"):
     """ Lanza las tareas BLE concurrentemente """
     global ble_tasks, _ble_running
     if ble_tasks:

@@ -1,31 +1,18 @@
-# boot.py - Configuraciones iniciales de hardware y red
+# boot.py - Configuraciones iniciales de hardware seguras
 import gc
-from machine import I2C, Pin
-import ds3231
+from machine import Pin
 
-# Puesta a cero segura e inmediata para evitar transitorios al energizar
-man = Pin(25, Pin.OUT, value=0)      # Rele de dosificación (Válvula)
-bomba_rele = Pin(23, Pin.OUT, value=0) # Rele de la bomba
-led1 = Pin(4, Pin.OUT, value=0)      # LED Azul (interno)
-ref = Pin(2, Pin.OUT, value=0)       # LED Azul Tablero
+# Puesta a cero segura e inmediata para evitar ráfagas transitorias al energizar
+# Lógica inversa (1 = Apagado, 0 = Encendido)
+MV_PIN = 19
+ZONAS_PINS = [18, 23, 26, 27, 25, 32, 33, 14]
 
-# Inicialización I2C (Usamos SoftI2C para evitar cuelgues de hardware por interferencia electromagnética de los relés)
-from machine import SoftI2C
-i2c = SoftI2C(scl=Pin(22), sda=Pin(21), freq=100000)
-reloj = ds3231.DS3231(i2c)
-
-import at24c32n
-eeprom = at24c32n.AT24C32N(i2c, i2c_addr=0x57)
+try:
+    mv = Pin(MV_PIN, Pin.OUT, value=1)
+    for p in ZONAS_PINS:
+        Pin(p, Pin.OUT, value=1)
+except Exception as e:
+    print("Error init pines en boot:", e)
 
 # Limpieza exhaustiva de RAM en el arranque
 gc.collect()
-
-# Exportar variables para main.py
-global_vars = {
-    'man': man,
-    'bomba_rele': bomba_rele,
-    'led1': led1,
-    'ref': ref,
-    'reloj': reloj,
-    'eeprom': eeprom
-}

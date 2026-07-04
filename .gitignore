@@ -5,7 +5,5 @@ firebase-debug.log
 .env
 __pycache__/
 *.pyc
-Anterior/
-OLD/
-VERS_OK/
 Backups/
+Docus/

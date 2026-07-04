@@ -1,0 +1,52 @@
+/* Custom Styles for Smart Riego PWA */
+html, body {
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom Scrollbar for Logs */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(30, 41, 59, 0.5); 
+    border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(71, 85, 105, 0.8); 
+    border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 1); 
+}
+
+/* Day Button active state */
+.day-btn.active {
+    background-color: #0d9488; /* teal-600 */
+    color: #ffffff;
+}
+
+/* Prog tab active state */
+.prog-tab.active {
+    background-color: #334155; /* slate-700 */
+    color: #ffffff;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Animations */
+@keyframes spin-slow {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+.animate-spin-slow {
+    animation: spin-slow 3s linear infinite;
+}
+
+/* Safe area for iOS bottom bar */
+.pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+}
