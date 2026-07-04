@@ -66,11 +66,11 @@ class CommsManager {
             this.mqttTopic = `riego/${hash}/cmd`;
             const clientId = 'pwa_' + Math.random().toString(16).substr(2, 8);
             
-            // Timeout ampliado a 10 segundos para MQTT (HiveMQ por WSS suele tardar en redes móviles)
+            // Timeout ampliado a 15 segundos para MQTT (HiveMQ por WSS suele tardar en redes móviles)
             const timeout = setTimeout(() => {
                 if (this.mqttClient) this.mqttClient.end();
                 reject(new Error("MQTT Timeout"));
-            }, 10000);
+            }, 15000);
 
             // Conectar via WebSockets
             this.mqttClient = mqtt.connect('wss://broker.hivemq.com:8884/mqtt', {

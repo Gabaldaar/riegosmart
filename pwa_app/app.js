@@ -898,6 +898,8 @@ function initSettingsUI() {
             else {
                 // Si ya teníamos token, lo mandamos para validar e intentar update
                 sendCmd({comando: "GET_CONFIG"});
+                sendCmd({comando: "GET_STATE"});
+                sendCmd({comando: "GET_TEMP"});
             }
         } else {
             showGenericModal({
