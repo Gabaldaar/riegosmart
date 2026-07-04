@@ -420,6 +420,8 @@ async def procesar_comando(cmd_dict):
         
     cmd = cmd_dict.get("comando")
     
+    origen = cmd_dict.get("_origen", "ALL")
+    
     if cmd == "GET_STATE":
         await enviar_telemetria()
         
@@ -432,7 +434,7 @@ async def procesar_comando(cmd_dict):
                 resp["ssid"] = creds.get("ssid", "Desconocido")
         except:
             pass
-        await tx_queue.put({"tipo": "CONFIG", "data": resp})
+        await tx_queue.put({"tipo": "CONFIG", "data": resp, "_destino": origen})
         
     elif cmd == "GET_TEMP":
         temp = "N/A"
@@ -441,7 +443,7 @@ async def procesar_comando(cmd_dict):
                 temp = round(reloj_rtc.temperature(), 1)
             except:
                 pass
-        await tx_queue.put({"tipo": "TEMP", "data": temp})
+        await tx_queue.put({"tipo": "TEMP", "data": temp, "_destino": origen})
         
     elif cmd == "GET_LOGS":
         # Leer las últimas N líneas para no saturar memoria
@@ -456,7 +458,7 @@ async def procesar_comando(cmd_dict):
                 lines = [json.loads(l.strip()) for l in buffer]
         except Exception as e:
             print("Error GET_LOGS:", e)
-        await tx_queue.put({"tipo": "LOGS", "data": lines})
+        await tx_queue.put({"tipo": "LOGS", "data": lines, "_destino": origen})
         
     elif cmd == "CLEAR_HISTORY":
         await sys_log.limpiar_historial()

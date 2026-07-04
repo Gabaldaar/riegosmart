@@ -97,6 +97,7 @@ async def tarea_led():
 def mqtt_callback(topic, msg):
     try:
         payload = json.loads(msg.decode('utf-8'))
+        payload['_origen'] = 'MQTT'
         # Pasar comando a riego_core asíncronamente
         asyncio.create_task(riego_core.procesar_comando(payload))
     except Exception as e:
@@ -263,6 +264,8 @@ async def procesar_cola_ble():
     from ble_service import rx_queue
     while True:
         cmd_dict = await rx_queue.get()
+        if isinstance(cmd_dict, dict):
+            cmd_dict['_origen'] = 'BLE'
         await riego_core.procesar_comando(cmd_dict)
 
 async def tarea_tx_queue():
@@ -273,26 +276,34 @@ async def tarea_tx_queue():
             msg_dict = await riego_core.tx_queue.get()
             print(f"[MAIN_TX] Desencolado para enviar: {msg_dict.get('tipo', 'UNKN')}")
             
+            destino = msg_dict.get("_destino", "ALL")
+            
+            # Limpiar llaves internas antes de enviar
+            if "_destino" in msg_dict:
+                del msg_dict["_destino"]
+            
             # Enviar via BLE PRIMERO (para que la app responda rapido y no sufra timeout por MQTT bloqueando)
-            from ble_service import send_json_async, is_ble_connected
-            if is_ble_connected():
-                await send_json_async(msg_dict)
+            if destino in ("ALL", "BLE"):
+                from ble_service import send_json_async, is_ble_connected
+                if is_ble_connected():
+                    await send_json_async(msg_dict)
                 
             # Enviar via MQTT despues
-            if mqtt_client and wifi_conectado:
-                try:
-                    topic_hash = riego_core.calcular_hash_seguro()
-                    if topic_hash:
-                        topic_pub = f"riego/{topic_hash}/telemetry"
-                        json_str = json.dumps(msg_dict)
-                        mqtt_client.publish(topic_pub, json_str)
-                except Exception as e:
-                    print("Error publicando MQTT TX:", e)
-                    # Si la conexion se cae o el socket falla, forzamos reconexion
-                    mqtt_client = None
-                    
+            if destino in ("ALL", "MQTT"):
+                if mqtt_client and wifi_conectado:
+                    try:
+                        topic_hash = riego_core.calcular_hash_seguro()
+                        if topic_hash:
+                            topic_pub = f"riego/{topic_hash}/telemetry"
+                            json_str = json.dumps(msg_dict)
+                            mqtt_client.publish(topic_pub, json_str)
+                    except Exception as e:
+                        print("Error publicando MQTT TX:", e)
+                        # Forzar reconexion MQTT si falla la publicacion
+                        mqtt_client = None
         except Exception as e:
             print("Error en tarea_tx_queue:", e)
+        await asyncio.sleep(0.1)
 
 # Iniciar Loop Principal
 try:
