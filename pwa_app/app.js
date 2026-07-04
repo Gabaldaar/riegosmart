@@ -910,6 +910,32 @@ function initSettingsUI() {
         }
     });
 
+    document.getElementById('btn-wifi-connect')?.addEventListener('click', async () => {
+        if (!state.chipId || !state.token) {
+            showGenericModal({
+                title: "No configurado",
+                msg: "Aún no tienes credenciales guardadas. Debes conectarte primero por Bluetooth al menos una vez para vincular el equipo.",
+                hideCancel: true
+            });
+            return;
+        }
+        
+        // Si hay una conexion BLE activa, la cerramos forzosamente para evitar conflictos
+        if (comms.bleDevice && comms.bleDevice.gatt.connected) {
+            comms.bleDevice.gatt.disconnect();
+        }
+        
+        await comms.initConnection(state.chipId, state.token);
+        // Si logro conectarse por MQTT, enviar comandos iniciales
+        if (comms.mode === 'MQTT') {
+            setTimeout(() => {
+                sendCmd({comando: "GET_CONFIG"});
+                sendCmd({comando: "GET_STATE"});
+                sendCmd({comando: "GET_TEMP"});
+            }, 1000);
+        }
+    });
+
     document.getElementById('btn-auth-submit').addEventListener('click', () => {
         const pwd = document.getElementById('auth-password').value.trim();
         if(pwd.length < 4) {
