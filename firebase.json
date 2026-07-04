@@ -1,1 +1,17 @@
-{ hosting: { public: pwa_app, ignore: [ firebase.json, **/.*, **/node_modules/** ], rewrites: [ { source: **, destination: /index.html } ] } }
+{
+  "hosting": {
+    "site": "miriego-smart",
+    "public": "pwa_app",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
