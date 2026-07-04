@@ -448,10 +448,14 @@ async def procesar_comando(cmd_dict):
         lines = []
         try:
             with open(sys_log.LOG_FILE, "r") as f:
-                content = f.readlines()
-                lines = [json.loads(l) for l in content[-50:]]
-        except:
-            pass
+                buffer = []
+                for line in f:
+                    buffer.append(line)
+                    if len(buffer) > 20:
+                        buffer.pop(0)
+                lines = [json.loads(l.strip()) for l in buffer]
+        except Exception as e:
+            print("Error GET_LOGS:", e)
         await tx_queue.put({"tipo": "LOGS", "data": lines})
         
     elif cmd == "CLEAR_HISTORY":

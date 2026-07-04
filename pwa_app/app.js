@@ -1048,16 +1048,19 @@ function startLEDSimulator() {
     const led = document.getElementById('simulated-led');
     if (!led) return;
 
+    let patronActual = [[true, 100], [false, 100]]; // Default
     let step = 0;
+    let timeInStep = 0;
+    const TICK_MS = 100;
     
-    async function loopLED() {
+    setInterval(() => {
         const wifiConectado = (comms.mode === 'MQTT');
         const bleConectado = (comms.mode === 'BLE');
         
         let retraso = false;
         if (state.deviceConfig && state.deviceConfig.timestamp_rain_delay) {
             const nowUnix = Math.floor(Date.now() / 1000);
-            const rainDelayUnix = state.deviceConfig.timestamp_rain_delay + 946684800;
+            const rainDelayUnix = state.deviceConfig.timestamp_rain_delay + 946684800; // Offset epoch 2000
             if (nowUnix < rainDelayUnix) {
                 retraso = true;
             }
@@ -1065,21 +1068,29 @@ function startLEDSimulator() {
         
         const estado = (state.telemetria && state.telemetria.estado) ? state.telemetria.estado : "IDLE";
         
-        let patron = []; 
+        let nuevoPatron = []; 
         if (retraso) {
-            patron = [[true, 2000], [false, 200]];
+            nuevoPatron = [[true, 2000], [false, 200]];
         } else if (estado !== "IDLE") {
-            if (wifiConectado) patron = [[true, 500], [false, 500]];
-            else patron = [[true, 1000], [false, 200]];
+            if (wifiConectado) nuevoPatron = [[true, 500], [false, 500]];
+            else nuevoPatron = [[true, 1000], [false, 200]];
         } else {
-            if (wifiConectado) patron = [[true, 200], [false, 4000]];
-            else if (bleConectado) patron = [[true, 200], [false, 200], [true, 200], [false, 4000]];
-            else patron = [[true, 100], [false, 100]];
+            if (wifiConectado) nuevoPatron = [[true, 200], [false, 4000]];
+            else if (bleConectado) nuevoPatron = [[true, 200], [false, 200], [true, 200], [false, 4000]];
+            else nuevoPatron = [[true, 100], [false, 100]];
         }
         
-        if (step >= patron.length) step = 0;
+        // Si el patron cambia, reseteamos el ciclo
+        if (JSON.stringify(nuevoPatron) !== JSON.stringify(patronActual)) {
+            patronActual = nuevoPatron;
+            step = 0;
+            timeInStep = 0;
+        }
         
-        const [isHigh, duration] = patron[step];
+        const currentPhase = patronActual[step];
+        if (!currentPhase) return;
+        
+        const [isHigh, duration] = currentPhase;
         
         if (isHigh) {
             led.className = "w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)] transition-all duration-100";
@@ -1087,11 +1098,14 @@ function startLEDSimulator() {
             led.className = "w-2 h-2 rounded-full bg-slate-700 transition-all duration-100";
         }
         
-        step++;
-        setTimeout(loopLED, duration);
-    }
-    
-    loopLED();
+        timeInStep += TICK_MS;
+        if (timeInStep >= duration) {
+            timeInStep = 0;
+            step++;
+            if (step >= patronActual.length) step = 0;
+        }
+        
+    }, TICK_MS);
 }
 
 // ==========================================
