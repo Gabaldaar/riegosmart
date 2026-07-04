@@ -256,12 +256,18 @@ async def procesar_cola_ble():
 
 async def tarea_tx_queue():
     """Lee de tx_queue en riego_core y transmite por MQTT y BLE"""
+    global mqtt_client
     while True:
         try:
             msg_dict = await riego_core.tx_queue.get()
-            print(f"[MAIN_TX] Desencolado para enviar: {msg_dict.get('tipo')}")
+            print(f"[MAIN_TX] Desencolado para enviar: {msg_dict.get('tipo', 'UNKN')}")
             
-            # Enviar via MQTT
+            # Enviar via BLE PRIMERO (para que la app responda rapido y no sufra timeout por MQTT bloqueando)
+            from ble_service import send_json_async, is_ble_connected
+            if is_ble_connected():
+                await send_json_async(msg_dict)
+                
+            # Enviar via MQTT despues
             if mqtt_client and wifi_conectado:
                 try:
                     topic_hash = riego_core.calcular_hash_seguro()
@@ -271,12 +277,9 @@ async def tarea_tx_queue():
                         mqtt_client.publish(topic_pub, json_str)
                 except Exception as e:
                     print("Error publicando MQTT TX:", e)
+                    # Si la conexion se cae o el socket falla, forzamos reconexion
+                    mqtt_client = None
                     
-            # Enviar via BLE
-            from ble_service import send_json_async, is_ble_connected
-            if is_ble_connected():
-                await send_json_async(msg_dict)
-                
         except Exception as e:
             print("Error en tarea_tx_queue:", e)
 
