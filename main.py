@@ -1,5 +1,16 @@
 import machine
 import time
+
+# Oportunidad de Ctrl+C (3 segundos con LED azul encendido) antes de arrancar
+try:
+    _led_azul = machine.Pin(2, machine.Pin.OUT)
+    _led_azul.value(1) # Encender LED Azul
+    print("Iniciando... Tienes 3 segundos para pulsar Ctrl+C y detener el script.")
+    time.sleep(3)
+    _led_azul.value(0) # Apagar
+except Exception as e:
+    pass
+
 import uasyncio as asyncio
 import network
 import json
