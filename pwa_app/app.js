@@ -156,6 +156,11 @@ document.getElementById('btn-reconnect').addEventListener('click', () => {
 // RECEPCIÓN DE MENSAJES Y TELEMETRIA
 // ==========================================
 function handleIncomingMessage(msg) {
+    if (pendingCommand) {
+        showToast("Comando recibido por la placa");
+        pendingCommand = false;
+    }
+
     const dbg = document.getElementById('debug-banner');
     if (dbg) {
         dbg.textContent = "DEBUG: Mensaje recibido tipo " + (msg ? msg.tipo : "undefined") + " a las " + new Date().toLocaleTimeString();
@@ -336,6 +341,7 @@ function refreshUIFromConfig() {
                     const nuevas = JSON.parse(JSON.stringify(temporadas)); // clonar
                     nuevas[idx].porcentaje = val;
                     sendCmd({ comando: "UPDATE_CONFIG", config: { ajustes_estacionales: nuevas } });
+                    pendingCommand = true;
                 });
             });
             
@@ -450,10 +456,21 @@ document.getElementById('btn-manual-start').addEventListener('click', () => {
         comando: "RIEGO_MANUAL",
         zonas: { [zona]: { minutos: mins } }
     });
+    pendingCommand = true;
+});
+
+document.getElementById('btn-manual-all').addEventListener('click', () => {
+    let zonas = {};
+    for (let i = 0; i < (state.deviceConfig ? state.deviceConfig.max_zonas : 4); i++) {
+        zonas[String(i+1)] = { minutos: 1 };
+    }
+    sendCmd({comando: "RIEGO_MANUAL", zonas: zonas});
+    pendingCommand = true;
 });
 
 document.getElementById('btn-manual-stop').addEventListener('click', () => {
     sendCmd({ comando: "CANCELAR_RIEGO" });
+    pendingCommand = true;
 });
 
 function openEditSeasonModal(idx, seasonData) {
@@ -490,6 +507,7 @@ function openEditSeasonModal(idx, seasonData) {
         nuevas[idx].inicio = ini;
         nuevas[idx].fin = fin;
         sendCmd({ comando: "UPDATE_CONFIG", config: { ajustes_estacionales: nuevas } });
+        pendingCommand = true;
         
         modal.classList.add('hidden');
     });
@@ -509,6 +527,7 @@ document.getElementById('btn-hemi-sur')?.addEventListener('click', () => {
         {"nombre": "Primavera", "inicio": "09-21", "fin": "12-20", "porcentaje": 100}
     ];
     sendCmd({ comando: "UPDATE_CONFIG", config: { ajustes_estacionales: defaultSur } });
+    pendingCommand = true;
 });
 
 document.getElementById('btn-hemi-norte')?.addEventListener('click', () => {
@@ -519,18 +538,21 @@ document.getElementById('btn-hemi-norte')?.addEventListener('click', () => {
         {"nombre": "Primavera", "inicio": "03-21", "fin": "06-20", "porcentaje": 100}
     ];
     sendCmd({ comando: "UPDATE_CONFIG", config: { ajustes_estacionales: defaultNorte } });
+    pendingCommand = true;
 });
 
 document.querySelectorAll('.btn-rain-delay').forEach(btn => {
     btn.addEventListener('click', () => {
         const dias = parseInt(btn.dataset.days);
         sendCmd({ comando: "RAIN_DELAY", dias: dias });
+        pendingCommand = true;
         setTimeout(() => sendCmd({ comando: "GET_CONFIG" }), 500);
     });
 });
 
 document.getElementById('btn-cancel-rain')?.addEventListener('click', () => {
     sendCmd({ comando: "RAIN_DELAY", dias: 0 });
+    pendingCommand = true;
     setTimeout(() => sendCmd({ comando: "GET_CONFIG" }), 500);
 });
 
@@ -622,6 +644,7 @@ function initSchedulerUI() {
             comando: "UPDATE_CONFIG",
             config: { programas: fullProgObj }
         });
+        pendingCommand = true;
         
         // Animacion del boton
         const btn = document.getElementById('btn-sync-prog');
@@ -716,6 +739,7 @@ function loadProgramIntoUI(progId) {
             if (!state.deviceConfig.nombres_zonas) state.deviceConfig.nombres_zonas = {};
             state.deviceConfig.nombres_zonas[i] = e.target.value;
             sendCmd({ comando: "UPDATE_CONFIG", config: { nombres_zonas: state.deviceConfig.nombres_zonas } });
+            pendingCommand = true;
             refreshUIFromConfig();
         });
         
@@ -786,6 +810,7 @@ document.getElementById('btn-clear-logs')?.addEventListener('click', () => {
         msg: "¿Estás seguro de que deseas borrar todo el historial? Esta acción no se puede deshacer.",
         onOk: () => {
             sendCmd({ comando: "CLEAR_HISTORY" });
+            pendingCommand = true;
             const cont = document.getElementById('logs-container');
             if (cont) cont.innerHTML = '<div class="text-center text-slate-500 text-sm mt-10">El historial ha sido borrado.</div>';
         }
@@ -852,6 +877,7 @@ function initSettingsUI() {
         btn.addEventListener('click', () => {
             const val = parseInt(btn.dataset.val);
             sendCmd({ comando: "UPDATE_CONFIG", config: { max_zonas: val } });
+            pendingCommand = true;
             state.deviceConfig.max_zonas = val;
             refreshUIFromConfig();
         });
@@ -861,6 +887,7 @@ function initSettingsUI() {
         btn.addEventListener('click', () => {
             const val = btn.dataset.val === 'true';
             sendCmd({ comando: "UPDATE_CONFIG", config: { modo_bomba: val } });
+            pendingCommand = true;
             state.deviceConfig.modo_bomba = val;
             refreshUIFromConfig();
         });
@@ -876,6 +903,7 @@ function initSettingsUI() {
                 modo_bomba: state.deviceConfig.modo_bomba 
             } 
         });
+        pendingCommand = true;
         showGenericModal({
             title: "Configuración Guardada",
             msg: "Configuración de hardware guardada en la placa.",
@@ -955,6 +983,7 @@ function initSettingsUI() {
         localStorage.setItem('TOKEN', pwd);
         
         sendCmd({ comando: "INIT_TOKEN", token: pwd });
+        pendingCommand = true;
         setTimeout(() => sendCmd({comando: "GET_CONFIG"}), 500);
         
         document.getElementById('modal-auth').classList.add('hidden');
@@ -979,6 +1008,7 @@ function initSettingsUI() {
             onOk: (pwd) => {
                 if (pwd === state.token) {
                     sendCmd({ comando: "FACTORY_RESET" });
+                    pendingCommand = true;
                     showGenericModal({
                         title: "Reseteo de Fábrica",
                         msg: "Comando enviado. El sistema se reiniciará de fábrica.",
@@ -1006,6 +1036,7 @@ function initSettingsUI() {
         const offsetSecs = date.getTimezoneOffset() * 60;
         const unixSecs = Math.floor(date.getTime() / 1000) - offsetSecs;
         sendCmd({ comando: "SYNC_RTC", timestamp: unixSecs });
+        pendingCommand = true;
         showGenericModal({
             title: "Sincronización de Reloj",
             msg: "Hora sincronizada con el celular.",
@@ -1018,6 +1049,7 @@ function initSettingsUI() {
         const p = document.getElementById('wifi-pass').value;
         if(s) {
             sendCmd({ comando: "config_wifi", ssid: s, pass: p });
+            pendingCommand = true;
             showGenericModal({
                 title: "Credenciales",
                 msg: "Credenciales enviadas al equipo.",
