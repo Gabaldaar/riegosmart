@@ -410,6 +410,8 @@ async def procesar_comando(cmd_dict):
             config_data["token_acceso"] = token_recibido
             await guardar_configuracion()
             await sys_log.log_event({"tipo": "seguridad", "msg": "Token inicializado"})
+            import machine
+            machine.reset()
         return
         
     if token_recibido != config_data.get("token_acceso"):
