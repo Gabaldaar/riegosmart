@@ -183,13 +183,16 @@ function handleIncomingMessage(msg) {
             tempEl.textContent = `${msg.data}°C`;
         }
     } else if (msg.tipo === "AUTH_ERROR") {
+        comms.disconnect();
         showGenericModal({
-            title: "Error de Conexión",
-            msg: "El equipo rechazó la conexión. Token inválido.",
-            hideCancel: true
+            title: "Error de Seguridad",
+            msg: "El token de la app no coincide con el de la placa. Se ha borrado el token de la app.",
+            hideCancel: true,
+            onOk: () => {
+                localStorage.clear();
+                location.reload();
+            }
         });
-        localStorage.clear();
-        location.reload();
     }
 }
 
