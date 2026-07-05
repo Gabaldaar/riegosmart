@@ -511,7 +511,7 @@ async def procesar_comando(cmd_dict):
         await guardar_configuracion()
         if estado_riego != "IDLE":
             abort_event.set()
-        await procesar_comando({"comando": "GET_CONFIG"})
+        await procesar_comando({"comando": "GET_CONFIG", "token": token_recibido, "_origen": origen})
             
     elif cmd == "RIEGO_MANUAL":
         prog = {
@@ -531,4 +531,4 @@ async def procesar_comando(cmd_dict):
         for k, v in cmd_dict.get("config", {}).items():
             config_data[k] = v
         await guardar_configuracion()
-        await tx_queue.put({"tipo": "CONFIG", "data": config_data})
+        await procesar_comando({"comando": "GET_CONFIG", "token": token_recibido, "_origen": origen})

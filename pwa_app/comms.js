@@ -21,6 +21,10 @@ class CommsManager {
         
         // Callbacks
         this.onMessage = null;
+        
+        this.txQueue = [];
+        this.isTransmitting = false;
+
         this.onConnectionChange = null;
     }
 
@@ -189,26 +193,45 @@ class CommsManager {
     // SEND LOGIC
     // ==========================================
     async sendCommand(cmdObject, token) {
-        cmdObject.token = token;
-        const jsonStr = JSON.stringify(cmdObject) + "\n";
+        return new Promise((resolve) => {
+            this.txQueue.push({ cmdObject, token, resolve });
+            this.processTxQueue();
+        });
+    }
 
-        if (this.mode === 'MQTT' && this.mqttClient) {
-            this.mqttClient.publish(this.mqttTopic, jsonStr);
-            return true;
-        } else if (this.mode === 'BLE' && this.bleRxChar) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(jsonStr);
-            // Chunking para BLE (vital porque aioble sin max_len soporta solo 20 bytes)
-            const CHUNK_SIZE = 20;
-            for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-                const chunk = data.slice(i, i + CHUNK_SIZE);
-                await this.bleRxChar.writeValueWithResponse(chunk);
+    async processTxQueue() {
+        if (this.isTransmitting || this.txQueue.length === 0) return;
+        this.isTransmitting = true;
+
+        while (this.txQueue.length > 0) {
+            const { cmdObject, token, resolve } = this.txQueue.shift();
+            cmdObject.token = token;
+            const jsonStr = JSON.stringify(cmdObject) + "\n";
+
+            try {
+                if (this.mode === 'MQTT' && this.mqttClient) {
+                    this.mqttClient.publish(this.mqttTopic, jsonStr, { qos: 1 });
+                    resolve(true);
+                } else if (this.mode === 'BLE' && this.bleRxChar) {
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(jsonStr);
+                    const CHUNK_SIZE = 20;
+                    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+                        const chunk = data.slice(i, i + CHUNK_SIZE);
+                        await this.bleRxChar.writeValueWithResponse(chunk);
+                    }
+                    resolve(true);
+                } else {
+                    console.warn("No hay conexión activa para enviar comando.");
+                    resolve(false);
+                }
+            } catch (e) {
+                console.error("TX Error:", e);
+                resolve(false);
             }
-            return true;
         }
         
-        console.warn("No hay conexión activa para enviar comando.");
-        return false;
+        this.isTransmitting = false;
     }
 
     disconnect() {
