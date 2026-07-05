@@ -16,6 +16,23 @@ const state = {
     hasUnsavedChanges: false
 };
 
+let pendingCommand = false;
+let toastTimeout = null;
+
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toast-msg');
+    if (!toast || !toastMsg) return;
+    
+    toastMsg.textContent = msg;
+    toast.classList.remove('opacity-0', 'translate-y-4');
+    
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-4');
+    }, 3000);
+}
+
 // ==========================================
 // INICIALIZACIÓN
 // ==========================================
@@ -459,15 +476,6 @@ document.getElementById('btn-manual-start').addEventListener('click', () => {
         comando: "RIEGO_MANUAL",
         zonas: { [zona]: { minutos: mins } }
     });
-    pendingCommand = true;
-});
-
-document.getElementById('btn-manual-all').addEventListener('click', () => {
-    let zonas = {};
-    for (let i = 0; i < (state.deviceConfig ? state.deviceConfig.max_zonas : 4); i++) {
-        zonas[String(i+1)] = { minutos: 1 };
-    }
-    sendCmd({comando: "RIEGO_MANUAL", zonas: zonas});
     pendingCommand = true;
 });
 
