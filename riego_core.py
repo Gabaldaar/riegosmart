@@ -10,6 +10,7 @@ import hashlib
 
 CONFIG_FILE = "config_riego.json"
 DEFAULT_CONFIG = {
+  "config_version": 0,
   "max_zonas": 4,
   "modo_bomba": True,
   "ajustes_estacionales": [
@@ -28,11 +29,13 @@ DEFAULT_CONFIG = {
 }
 
 config_data = {}
+reinicio_pendiente = False
+
 _config_lock = asyncio.Lock()
 
 # Mapado de Hardware
-MV_PIN = 19
-ZONAS_PINS = [18, 23, 26, 27, 25, 32, 33, 14]
+MV_PIN = 25
+ZONAS_PINS = [18, 23, 26, 27, 19, 32, 33, 14]
 RAIN_PIN = 4
 ADC_PIN = 34
 BOOT_PIN = 0
@@ -71,6 +74,7 @@ abort_event = asyncio.Event()
 # Seguimiento para telemetria
 ts_inicio_ciclo = 0
 duracion_ciclo_actual = 0
+telemetria_extra = {}
 
 # Seguridad
 chip_id = binascii.hexlify(machine.unique_id()).decode('utf-8').upper()
@@ -128,7 +132,7 @@ def get_time():
 async def init_hardware():
     global mv, zonas, rain_sensor, adc, boot_button, reloj_rtc
     
-    mv = machine.Pin(MV_PIN, machine.Pin.OUT, value=1)
+    mv = machine.Pin(MV_PIN, machine.Pin.OUT, value=0)
     
     max_z = min(8, max(1, config_data.get("max_zonas", 4)))
     zonas = []
@@ -152,21 +156,31 @@ async def init_hardware():
 async def enviar_telemetria():
     """ Encola el estado actual para que se transmita a la app """
     if estado_riego == "IDLE":
+        if rain_sensor and rain_sensor.value() == 0:
+            est = "PAUSA: SENSOR"
+        elif config_data.get("timestamp_rain_delay", 0) > time.time():
+            est = "PAUSA: MANUAL"
+        else:
+            est = "IDLE"
         t_rest = 0
         t_tot = 1
     else:
+        est = estado_riego
         elapsed = time.time() - ts_inicio_ciclo
         t_rest = max(0, duracion_ciclo_actual - int(elapsed))
         t_tot = duracion_ciclo_actual if duracion_ciclo_actual > 0 else 1
         
+    payload_data = {
+        "estado": est,
+        "zona": zona_actual_idx,
+        "tiempo_restante": t_rest,
+        "tiempo_total": t_tot
+    }
+    payload_data.update(telemetria_extra)
+    
     await tx_queue.put({
         "tipo": "TELEMETRIA",
-        "data": {
-            "estado": estado_riego,
-            "zona": zona_actual_idx,
-            "tiempo_restante": t_rest,
-            "tiempo_total": t_tot
-        }
+        "data": payload_data
     })
 
 async def tarea_monitoreo_corriente():
@@ -213,25 +227,36 @@ async def tarea_reset_emergencia():
             presionado_s = 0
         await asyncio.sleep(1)
 
+def obtener_num_zona(z_str):
+    try:
+        s = str(z_str).upper().replace("Z", "").strip()
+        return int(s)
+    except:
+        return 999
+
 def apagar_todo():
-    mv.value(1)
+    mv.value(0) # Apagar (lógica directa)
     for z in zonas:
-        z.value(1)
+        z.value(1) # Apagar (lógica inversa)
 
 async def ejecutar_riego():
-    global estado_riego, programa_activo, abort_event
-    global zona_actual_idx, ts_inicio_ciclo, duracion_ciclo_actual
+    global estado_riego, programa_activo, abort_event, reinicio_pendiente
+    global zona_actual_idx, ts_inicio_ciclo, duracion_ciclo_actual, telemetria_extra
     
     while True:
         if estado_riego == "IDLE" or estado_riego == "FALLO_CORRIENTE":
             programa_activo = await cola_programas.get()
             abort_event.clear()
             estado_riego = "PRESURIZANDO"
+            ts_inicio_ciclo = time.time()
+            duracion_ciclo_actual = 2
+            zona_actual_idx = ""
+            telemetria_extra = {"t_prog": 0, "ajuste": 100, "t_real": 0, "ciclo": 0, "remojo": 0}
             await sys_log.log_event({"tipo": "inicio_prog", "prog": programa_activo.get("nombre", "Manual")})
             await enviar_telemetria()
             
         elif estado_riego == "PRESURIZANDO":
-            mv.value(0)
+            mv.value(1) # Encender (lógica directa)
             try:
                 await asyncio.wait_for(abort_event.wait(), timeout=2.0)
                 # Abortado
@@ -244,10 +269,10 @@ async def ejecutar_riego():
                 
         elif estado_riego == "REGANDO":
             zonas_prog = list(programa_activo.get("zonas", {}).keys())
-            zonas_prog.sort(key=lambda x: int(x))
+            zonas_prog.sort(key=obtener_num_zona)
             
             ajuste = 1.0
-            if reloj_rtc:
+            if programa_activo.get("nombre") != "Manual" and reloj_rtc:
                 try:
                     t = reloj_rtc.get_time() # YYYY, MM, DD, HH, MM, SS, WD, YD
                     current_mm_dd = f"{t[1]:02d}-{t[2]:02d}"
@@ -268,7 +293,7 @@ async def ejecutar_riego():
                     print("Error RTC estacional:", e)
             
             for idx, str_z in enumerate(zonas_prog):
-                z_idx = int(str_z) - 1
+                z_idx = obtener_num_zona(str_z) - 1
                 if z_idx >= len(zonas) or z_idx < 0:
                     continue
                     
@@ -280,9 +305,18 @@ async def ejecutar_riego():
                     continue
                     
                 c_min = z_config.get("cycle_min", min_reales)
-                ciclos = 1
-                if c_min < min_reales and c_min > 0:
-                    ciclos = (min_reales // c_min) + (1 if min_reales % c_min != 0 else 0)
+                if c_min > min_reales or c_min <= 0: c_min = min_reales
+                s_min = z_config.get("soak_min", 0)
+                
+                telemetria_extra = {
+                    "t_prog": min_base,
+                    "ajuste": int(ajuste * 100) if programa_activo.get("nombre") != "Manual" else 100,
+                    "t_real": min_reales,
+                    "ciclo": c_min,
+                    "remojo": s_min
+                }
+
+                ciclos = (min_reales // c_min) + (1 if min_reales % c_min != 0 else 0)
                 
                 soak = z_config.get("soak_min", 0)
                 
@@ -330,7 +364,7 @@ async def ejecutar_riego():
                 if idx < len(zonas_prog) - 1:
                     modo_bomba = config_data.get("modo_bomba", True)
                     next_z_str = zonas_prog[idx + 1]
-                    next_z_idx = int(next_z_str) - 1
+                    next_z_idx = obtener_num_zona(next_z_str) - 1
                     
                     if next_z_idx < len(zonas) and next_z_idx >= 0:
                         estado_riego = "TRANSICION_ZONAS"
@@ -358,8 +392,16 @@ async def ejecutar_riego():
             # Fin del programa
             apagar_todo()
             estado_riego = "IDLE"
+            telemetria_extra = {}
             await sys_log.log_event({"tipo": "fin_prog", "prog": programa_activo.get("nombre", "Manual")})
             await enviar_telemetria()
+            
+            # Ejecutar reinicio diferido seguro si fue programado
+            if reinicio_pendiente:
+                print("[CORE] Ejecutando reinicio diferido seguro...")
+                await asyncio.sleep(2)
+                machine.reset()
+
 
 async def tarea_planificador():
     while True:
@@ -403,15 +445,24 @@ async def iniciar_tareas():
 
 async def procesar_comando(cmd_dict):
     """Interfaz RX para MQTT y BLE"""
+    global reinicio_pendiente
     print(f"[CORE] Procesando comando: {cmd_dict}")
     token_recibido = cmd_dict.get("token")
+    
     if config_data.get("token_acceso") is None:
         if cmd_dict.get("comando") == "INIT_TOKEN":
             config_data["token_acceso"] = token_recibido
+            config_data["config_version"] = 1
             await guardar_configuracion()
             await sys_log.log_event({"tipo": "seguridad", "msg": "Token inicializado"})
-            import machine
-            machine.reset()
+            
+            # Reinicio seguro diferido
+            if estado_riego == "IDLE" or estado_riego == "FALLO_CORRIENTE":
+                await asyncio.sleep(1)
+                machine.reset()
+            else:
+                reinicio_pendiente = True
+                print("[CORE] Riego activo. Reinicio diferido para INIT_TOKEN.")
         return
         
     if token_recibido != config_data.get("token_acceso"):
@@ -421,7 +472,6 @@ async def procesar_comando(cmd_dict):
         return
         
     cmd = cmd_dict.get("comando")
-    
     origen = cmd_dict.get("_origen", "ALL")
     
     if cmd == "GET_STATE":
@@ -436,6 +486,13 @@ async def procesar_comando(cmd_dict):
                 resp["ssid"] = creds.get("ssid", "Desconocido")
         except:
             pass
+            
+        # Reducir peso si proviene de BLE
+        if origen == "BLE":
+            for key in ["nombres_zonas", "ajustes_estacionales"]:
+                if key in resp:
+                     del resp[key]
+                     
         await tx_queue.put({"tipo": "CONFIG", "data": resp, "_destino": origen})
         
     elif cmd == "GET_TEMP":
@@ -448,18 +505,21 @@ async def procesar_comando(cmd_dict):
         await tx_queue.put({"tipo": "TEMP", "data": temp, "_destino": origen})
         
     elif cmd == "GET_LOGS":
-        # Leer las últimas N líneas para no saturar memoria
         lines = []
-        try:
-            with open(sys_log.LOG_FILE, "r") as f:
-                buffer = []
-                for line in f:
-                    buffer.append(line)
-                    if len(buffer) > 20:
-                        buffer.pop(0)
-                lines = [json.loads(l.strip()) for l in buffer]
-        except Exception as e:
-            print("Error GET_LOGS:", e)
+        if origen == "BLE":
+            # Devolver logs mínimos en RAM para BLE para no congestionar
+            lines = sys_log.logs_ram.copy()
+        else:
+            try:
+                with open(sys_log.LOG_FILE, "r") as f:
+                    buffer = []
+                    for line in f:
+                         buffer.append(line)
+                         if len(buffer) > 20:
+                             buffer.pop(0)
+                    lines = [json.loads(l.strip()) for l in buffer]
+            except Exception as e:
+                print("Error GET_LOGS:", e)
         await tx_queue.put({"tipo": "LOGS", "data": lines, "_destino": origen})
         
     elif cmd == "CLEAR_HISTORY":
@@ -467,40 +527,50 @@ async def procesar_comando(cmd_dict):
         await tx_queue.put({"tipo": "LOGS", "data": []})
         
     elif cmd == "SYNC_RTC":
-        # Formato esperado: {"comando": "SYNC_RTC", "timestamp": epoch_segs}
-        # Nota: El PWA debe enviar los segundos (epoch unix offset timezone si lo desea)
         try:
             ts = cmd_dict.get("timestamp", 0)
             if ts > 0 and reloj_rtc:
-                # Ojo: MicroPython usa Y2K epoch (2000-01-01). Unix usa 1970.
-                # Si PWA envia Unix Timestamp, restamos 946684800
                 mpy_ts = int(ts) - 946684800
                 if mpy_ts > 0:
                     t = time.localtime(mpy_ts)
-                    # ds3231: set_time((YY, MM, mday, hh, mm, ss, wday, yday))
-                    # time.localtime(): (year, month, mday, hour, minute, second, weekday, yearday)
                     reloj_rtc.set_time(t)
                     await sys_log.log_event({"tipo": "info", "msg": "RTC Sincronizado por App"})
         except Exception as e:
             print("Error sync rtc:", e)
-
+ 
     elif cmd == "FACTORY_RESET":
         config_data["token_acceso"] = None
+        config_data["config_version"] = 0
         await guardar_configuracion()
         try:
             os.remove(sys_log.LOG_FILE)
         except:
             pass
-        machine.reset()
+            
+        if estado_riego == "IDLE" or estado_riego == "FALLO_CORRIENTE":
+            await asyncio.sleep(1)
+            machine.reset()
+        else:
+            reinicio_pendiente = True
+            print("[CORE] Riego activo. Reinicio diferido para FACTORY_RESET.")
+            await tx_queue.put({"tipo": "ACK", "status": "DEFERRED", "_destino": origen})
         
     elif cmd == "config_wifi":
         try:
+            s = str(cmd_dict.get("ssid", "")).strip()
+            p = str(cmd_dict.get("pass", "")).strip()
             with open("wifi_config.json", "w") as f:
-                json.dump({"ssid": cmd_dict.get("ssid"), "pass": cmd_dict.get("pass")}, f)
-            print("WiFi configurado. Reiniciando equipo para aplicar...")
+                json.dump({"ssid": s, "pass": p}, f)
+            print("WiFi configurado en flash.")
             await sys_log.log_event({"tipo": "info", "msg": "Nuevas credenciales WiFi recibidas"})
-            await asyncio.sleep(1) # dar tiempo al log
-            machine.reset()
+            
+            if estado_riego == "IDLE" or estado_riego == "FALLO_CORRIENTE":
+                await asyncio.sleep(1)
+                machine.reset()
+            else:
+                reinicio_pendiente = True
+                print("[CORE] Riego activo. Reinicio diferido para config_wifi.")
+                await tx_queue.put({"tipo": "ACK", "status": "DEFERRED", "_destino": origen})
         except Exception as e:
             print("Error wifi config:", e)
         
@@ -510,10 +580,15 @@ async def procesar_comando(cmd_dict):
             config_data["timestamp_rain_delay"] = 0
         else:
             config_data["timestamp_rain_delay"] = time.time() + (dias * 86400)
+            
+        # Incremento local de versión
+        config_data["config_version"] = config_data.get("config_version", 0) + 1
         await guardar_configuracion()
+        
         if estado_riego != "IDLE":
             abort_event.set()
         await procesar_comando({"comando": "GET_CONFIG", "token": token_recibido, "_origen": origen})
+        await enviar_telemetria()
             
     elif cmd == "RIEGO_MANUAL":
         prog = {
@@ -522,15 +597,49 @@ async def procesar_comando(cmd_dict):
         }
         if estado_riego != "IDLE":
             abort_event.set()
-            await asyncio.sleep(2.5) # dar tiempo a abortar si estaba corriendo
+            await asyncio.sleep(2.5) 
         await cola_programas.put(prog)
+        
+    elif cmd == "RIEGO_PROGRAMA":
+        prog_id = cmd_dict.get("prog_id")
+        if prog_id and "programas" in config_data and prog_id in config_data["programas"]:
+            if estado_riego != "IDLE":
+                abort_event.set()
+                await asyncio.sleep(2.5)
+            await cola_programas.put(config_data["programas"][prog_id])
         
     elif cmd == "CANCELAR_RIEGO":
         if estado_riego != "IDLE":
             abort_event.set()
             
     elif cmd == "UPDATE_CONFIG":
-        for k, v in cmd_dict.get("config", {}).items():
-            config_data[k] = v
-        await guardar_configuracion()
-        await procesar_comando({"comando": "GET_CONFIG", "token": token_recibido, "_origen": origen})
+        config_recibida = cmd_dict.get("config", {})
+        version_recibida = config_recibida.get("config_version", 0)
+        version_local = config_data.get("config_version", 0)
+        
+        if version_recibida > version_local:
+             print(f"[CORE] Aceptando config versión {version_recibida} (Local: {version_local})")
+             # Preservar nombres_zonas si existían localmente
+             if "nombres_zonas" in config_data and "nombres_zonas" not in config_recibida:
+                 config_recibida["nombres_zonas"] = config_data["nombres_zonas"]
+             for k, v in config_recibida.items():
+                 config_data[k] = v
+             await guardar_configuracion()
+             await tx_queue.put({"tipo": "ACK_CFG", "v": version_recibida, "_destino": origen})
+        else:
+             print(f"[CORE] Rechazando config obsoleta {version_recibida} (Local: {version_local})")
+             await procesar_comando({"comando": "GET_CONFIG", "token": token_recibido, "_origen": origen})
+ 
+    elif cmd == "UPDATE_PROGRAMA":
+        prog_id = cmd_dict.get("prog_id")
+        prog_data = cmd_dict.get("prog_data")
+        if prog_id and prog_data:
+            if "programas" not in config_data:
+                config_data["programas"] = {}
+            config_data["programas"][prog_id] = prog_data
+            
+            # Incremento local de versión
+            config_data["config_version"] = config_data.get("config_version", 0) + 1
+            await guardar_configuracion()
+            await procesar_comando({"comando": "GET_CONFIG", "token": token_recibido, "_origen": origen})
+

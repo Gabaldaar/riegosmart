@@ -1,20 +1,127 @@
 // app.js - UI Controller
 
+// Configuración de Firebase del proyecto RiegoSmart (Reemplaza "TU_API_KEY_AQUI" con tu Web API Key)
+const firebaseConfig = {
+  apiKey: "AIzaSyDOXu7MTGkr0In2NluAggFejTW7Ukap604", 
+  authDomain: "riego-smart-b8487.firebaseapp.com",
+  projectId: "riego-smart-b8487",
+  storageBucket: "riego-smart-b8487.firebasestorage.app",
+  messagingSenderId: "127532086869",
+  appId: "1:127532086869:web:b3a1a142e9fd4f9dc186dc"
+};
+
+let db = null;
+let firestoreUnsubscribe = null;
+
+// Inicializar Firebase
+if (typeof firebase !== 'undefined' && firebaseConfig.apiKey !== "TU_API_KEY_AQUI") {
+    try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        
+        // Autenticación anónima para cumplir con las reglas de seguridad
+        firebase.auth().signInAnonymously().then(() => {
+            console.log("[FIREBASE] Autenticado de forma anónima.");
+        }).catch(err => {
+            console.error("[FIREBASE] Error de autenticación anónima:", err);
+        });
+    } catch (e) {
+        console.error("Error inicializando Firebase SDK:", e);
+    }
+}
+
 // Estado global de la App
 const state = {
     chipId: localStorage.getItem('CHIP_ID') || null,
     token: localStorage.getItem('TOKEN') || null,
     deviceConfig: {
-        max_zonas: 4,
+        max_zonas: 8,
         modo_bomba: true,
         ajuste_estacional: 100,
-        nombres_zonas: { "1":"Zona 1", "2":"Zona 2", "3":"Zona 3", "4":"Zona 4" },
+        nombres_zonas: {
+            "Z1": "Zona 1", "Z2": "Zona 2", "Z3": "Zona 3", "Z4": "Zona 4",
+            "Z5": "Zona 5", "Z6": "Zona 6", "Z7": "Zona 7", "Z8": "Zona 8"
+        },
         programas: {}
     },
     activeProgTab: 'A',
     tempProgData: {}, // Datos del programa que se está editando
     hasUnsavedChanges: false
 };
+
+// Helper para traducir IDs de zonas de forma híbrida
+function obtenerNombreZona(zonaId) {
+    if (!state.deviceConfig.nombres_zonas) return `Zona ${zonaId}`;
+    const zKey = String(zonaId).toUpperCase().startsWith('Z') ? String(zonaId).toUpperCase() : `Z${zonaId}`;
+    return state.deviceConfig.nombres_zonas[zKey] || state.deviceConfig.nombres_zonas[zonaId] || `Zona ${zonaId}`;
+}
+
+function escucharConfiguracionFirestore(chipId) {
+    if (!db) {
+        console.warn("[FIRESTORE] Firebase no inicializado. Operando en modo local (BLE/MQTT directo).");
+        return;
+    }
+    
+    if (firestoreUnsubscribe) {
+        firestoreUnsubscribe();
+    }
+    
+    console.log(`[FIRESTORE] Escuchando cambios en tiempo real en: dispositivos/${chipId}`);
+    firestoreUnsubscribe = db.collection("dispositivos").doc(chipId).onSnapshot((doc) => {
+        if (doc.exists) {
+            const data = doc.data();
+            console.log("[FIRESTORE] Configuración recibida desde la nube:", data);
+            
+            // Fusión segura de datos locales y nube
+            state.deviceConfig.max_zonas = data.max_zonas || state.deviceConfig.max_zonas;
+            state.deviceConfig.modo_bomba = data.modo_bomba !== undefined ? data.modo_bomba : state.deviceConfig.modo_bomba;
+            state.deviceConfig.nombres_zonas = data.nombres_zonas || state.deviceConfig.nombres_zonas;
+            state.deviceConfig.programas = data.programas || state.deviceConfig.programas;
+            state.deviceConfig.config_version = data.config_version || state.deviceConfig.config_version;
+            
+            refreshUIFromConfig();
+        } else {
+            console.log("[FIRESTORE] Registrando nuevo equipo en Firestore...");
+            // Si el documento no existe en Firestore, lo aprovisionamos automáticamente
+            db.collection("dispositivos").doc(chipId).set({
+                config_version: 1,
+                max_zonas: state.deviceConfig.max_zonas,
+                modo_bomba: state.deviceConfig.modo_bomba,
+                nombres_zonas: state.deviceConfig.nombres_zonas,
+                programas: state.deviceConfig.programas,
+                timestamp_rain_delay: 0,
+                token_acceso: state.token || "token_por_defecto_1234"
+            }).catch(err => {
+                console.error("[FIRESTORE] Error inicializando regador en la nube:", err);
+            });
+        }
+    }, (error) => {
+        console.error("[FIRESTORE] Error en Snapshot de Firestore:", error);
+    });
+}
+
+function sincronizarConfigTecnicaAFirestore(nuevaConfigParcial) {
+    if (!db || !state.chipId) return;
+    
+    // Incrementar versión local
+    const nuevaVersion = (state.deviceConfig.config_version || 0) + 1;
+    state.deviceConfig.config_version = nuevaVersion;
+    
+    // Preparar payload para la nube
+    const payload = {
+        ...nuevaConfigParcial,
+        config_version: nuevaVersion
+    };
+    
+    console.log("[FIRESTORE] Subiendo cambios a la nube...", payload);
+    db.collection("dispositivos").doc(state.chipId).set(payload, { merge: true })
+        .then(() => {
+            console.log("[FIRESTORE] Subida a Firestore completada.");
+        })
+        .catch(err => {
+            console.error("[FIRESTORE] Error subiendo cambios a Firestore:", err);
+        });
+}
 
 let pendingCommand = false;
 let toastTimeout = null;
@@ -52,11 +159,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Intentar inicio dual
     if (state.chipId && state.token) {
         await comms.initConnection(state.chipId, state.token);
-            setTimeout(() => {
-                sendCmd({comando: "GET_CONFIG"});
-                sendCmd({comando: "GET_STATE"});
-                sendCmd({comando: "GET_TEMP"});
-            }, 1000);
+        escucharConfiguracionFirestore(state.chipId);
+        setTimeout(() => {
+            sendCmd({comando: "GET_CONFIG"});
+            sendCmd({comando: "GET_STATE"});
+            sendCmd({comando: "GET_TEMP"});
+        }, 1000);
     } else {
         // Obliga a configurar por BLE primero llevandolo a ajustes
         document.querySelector('.nav-btn[data-target="view-settings"]').click();
@@ -164,6 +272,7 @@ function updateConnectionUI(status) {
 document.getElementById('btn-reconnect').addEventListener('click', () => {
     if (state.chipId && state.token) {
         comms.initConnection(state.chipId, state.token);
+        escucharConfiguracionFirestore(state.chipId);
     } else {
         document.querySelector('.nav-btn[data-target="view-settings"]').click();
     }
@@ -188,10 +297,24 @@ function handleIncomingMessage(msg) {
     if (!msg || !msg.tipo) return;
 
     if (msg.tipo === "CONFIG") {
+        const nombresZonasLocales = state.deviceConfig.nombres_zonas;
         state.deviceConfig = { ...state.deviceConfig, ...msg.data };
+        
+        if (!msg.data.nombres_zonas || Object.keys(msg.data.nombres_zonas).length === 0) {
+            state.deviceConfig.nombres_zonas = nombresZonasLocales;
+        }
         refreshUIFromConfig();
+        if (window._startupSeq === 1) {
+            window._startupSeq = 2;
+            setTimeout(() => sendCmd({comando: "GET_STATE"}), 200);
+        }
     } else if (msg.tipo === "TELEMETRIA") {
+        state.telemetria = msg.data;
         updateActiveWidget(msg.data);
+        if (window._startupSeq === 2) {
+            window._startupSeq = 0;
+            setTimeout(() => sendCmd({comando: "GET_TEMP"}), 200);
+        }
     } else if (msg.tipo === "LOGS") {
         renderLogs(msg.data);
     } else if (msg.tipo === "TEMP") {
@@ -231,24 +354,33 @@ function updateActiveWidget(data) {
         countdownTimer = null;
     }
 
-    if (!data.estado || data.estado === "IDLE") {
-        badge.textContent = "EN REPOSO";
-        badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-slate-700 text-slate-300";
+    if (!data.estado || data.estado === "IDLE" || data.estado.startsWith("PAUSA")) {
+        badge.textContent = data.estado && data.estado.startsWith("PAUSA") ? data.estado : "EN REPOSO";
+        badge.className = data.estado && data.estado.startsWith("PAUSA") ? "px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-900 text-yellow-300" : "px-2.5 py-1 rounded-full text-xs font-bold bg-slate-700 text-slate-300";
         infoPanel.classList.add('hidden');
+        document.getElementById('next-watering-info').classList.remove('hidden');
+        calculateNextWatering();
         document.getElementById('btn-manual-stop').classList.add('hidden');
     } else if (data.estado === "FALLO_CORRIENTE") {
         badge.textContent = "FALLO HARDWARE";
         badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-red-900 text-red-300 animate-pulse";
         infoPanel.classList.add('hidden');
+        document.getElementById('next-watering-info').classList.add('hidden');
         document.getElementById('btn-manual-stop').classList.add('hidden');
     } else {
         badge.textContent = data.estado;
         badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-teal-500/20 text-teal-400 border border-teal-500/30";
         infoPanel.classList.remove('hidden');
+        document.getElementById('next-watering-info').classList.add('hidden');
         document.getElementById('btn-manual-stop').classList.remove('hidden');
         
-        let zname = (state.deviceConfig.nombres_zonas && state.deviceConfig.nombres_zonas[data.zona]) ? state.deviceConfig.nombres_zonas[data.zona] : `Zona ${data.zona}`;
+        let zname = data.zona ? obtenerNombreZona(data.zona) : "Preparando...";
         zoneName.textContent = zname;
+
+        document.getElementById('info-tiempo-prog').textContent = (data.t_prog || 0) + " min";
+        document.getElementById('info-ajuste').textContent = (data.ajuste || 100) + "%";
+        document.getElementById('info-ciclo').textContent = (data.ciclo || 0) + " min";
+        document.getElementById('info-remojo').textContent = (data.remojo || 0) + " min";
         
         currentRemainingSecs = data.tiempo_restante || 0; 
         currentTotalSecs = data.tiempo_total || 1;
@@ -284,6 +416,87 @@ function renderTimeTick(timeEl, circleEl) {
     circleEl.style.strokeDasharray = `${percent}, 100`;
 }
 
+function calculateNextWatering() {
+    if (!state.deviceConfig || !state.deviceConfig.programas) return;
+    const now = new Date();
+    // dia de la semana (1 Lunes ... 7 Domingo)
+    let currentDay = now.getDay();
+    if (currentDay === 0) currentDay = 7;
+    
+    let minDiff = Infinity;
+    let nextProgStr = "No hay riegos programados";
+    let nextProgId = null;
+
+    for (const [pKey, pObj] of Object.entries(state.deviceConfig.programas)) {
+        if (!pObj.activo) continue;
+        if (!pObj.dias_semana || pObj.dias_semana.length === 0) continue;
+        if (!pObj.horas_arranque || pObj.horas_arranque.length === 0) continue;
+        
+        // check if any zone has minutes
+        let hasZones = false;
+        if (pObj.zonas) {
+            for (const z of Object.values(pObj.zonas)) {
+                if (z.minutos > 0) hasZones = true;
+            }
+        }
+        if (!hasZones) continue;
+
+        for (const hora_inicio of pObj.horas_arranque) {
+            const [hh, mm] = hora_inicio.split(':').map(Number);
+            
+            for (const d of pObj.dias_semana) {
+                let daysUntil = d - currentDay;
+                if (daysUntil < 0) daysUntil += 7;
+                
+                let dateTarget = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                dateTarget.setDate(dateTarget.getDate() + daysUntil);
+                dateTarget.setHours(hh, mm, 0, 0);
+                
+                let diffMs = dateTarget.getTime() - now.getTime();
+                if (diffMs <= 0) {
+                    // If it already passed today, it will be next week
+                    dateTarget.setDate(dateTarget.getDate() + 7);
+                    diffMs = dateTarget.getTime() - now.getTime();
+                }
+                
+                if (diffMs < minDiff) {
+                    minDiff = diffMs;
+                    nextProgId = pKey;
+                    const dNames = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+                    
+                    let tmr = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    tmr.setDate(tmr.getDate() + 1);
+                    
+                    const pName = pObj.nombre || "Programa";
+
+                    if (dateTarget.toDateString() === now.toDateString()) {
+                        nextProgStr = `Hoy a las ${hora_inicio}h - ${pName}`;
+                    } else if (dateTarget.toDateString() === tmr.toDateString()) {
+                        nextProgStr = `Mañana a las ${hora_inicio}h - ${pName}`;
+                    } else {
+                        // dateTarget.getDay() is 0 for Sun, 1 for Mon. We want our 1..7 index.
+                        let dayIdx = dateTarget.getDay();
+                        if (dayIdx === 0) dayIdx = 7;
+                        nextProgStr = `${dNames[dayIdx]} a las ${hora_inicio}h - ${pName}`;
+                    }
+                }
+            }
+        }
+    }
+    const el = document.getElementById('next-watering-time');
+    if (el) el.textContent = nextProgStr;
+    
+    const btnStart = document.getElementById('btn-next-start');
+    if (btnStart) {
+        if (nextProgId) {
+            btnStart.dataset.progId = nextProgId;
+            btnStart.classList.remove('hidden');
+        } else {
+            btnStart.classList.add('hidden');
+        }
+    }
+}
+
 function refreshUIFromConfig() {
     // Actualizar SSID en ajustes
     const ssidDisp = document.getElementById('current-ssid-display');
@@ -298,7 +511,7 @@ function refreshUIFromConfig() {
     manualContainer.innerHTML = '';
     
     for (let i = 1; i <= maxZ; i++) {
-        const zName = (state.deviceConfig.nombres_zonas && state.deviceConfig.nombres_zonas[i]) ? state.deviceConfig.nombres_zonas[i] : `Zona ${i}`;
+        const zName = obtenerNombreZona(i);
         const btn = document.createElement('button');
         btn.className = `manual-z-btn py-2 px-1 text-xs font-medium rounded-lg bg-slate-900 border border-slate-700 text-slate-400 hover:text-white transition`;
         btn.textContent = zName;
@@ -404,18 +617,22 @@ function refreshUIFromConfig() {
     
     // 2.5 Dashboard: Rain Delay Status
     const txtRain = document.getElementById('rain-delay-status');
-    if (txtRain && state.deviceConfig.timestamp_rain_delay) {
-        const nowSecs = Math.floor(Date.now() / 1000);
-        const rainDelayUnix = state.deviceConfig.timestamp_rain_delay + 946684800; // Y2K a Unix
-        
-        if (rainDelayUnix > nowSecs) {
-            const futureDate = new Date(rainDelayUnix * 1000);
-            const mm = String(futureDate.getMonth()+1).padStart(2,'0');
-            const dd = String(futureDate.getDate()).padStart(2,'0');
-            const hh = String(futureDate.getHours()).padStart(2,'0');
-            const mn = String(futureDate.getMinutes()).padStart(2,'0');
-            txtRain.querySelector('strong').textContent = `${dd}/${mm} a las ${hh}:${mn}`;
-            txtRain.classList.remove('hidden');
+    if (txtRain) {
+        if (state.deviceConfig.timestamp_rain_delay) {
+            const nowSecs = Math.floor(Date.now() / 1000);
+            const rainDelayUnix = state.deviceConfig.timestamp_rain_delay + 946684800; // Y2K a Unix
+            
+            if (rainDelayUnix > nowSecs) {
+                const futureDate = new Date(rainDelayUnix * 1000);
+                const mm = String(futureDate.getMonth()+1).padStart(2,'0');
+                const dd = String(futureDate.getDate()).padStart(2,'0');
+                const hh = String(futureDate.getHours()).padStart(2,'0');
+                const mn = String(futureDate.getMinutes()).padStart(2,'0');
+                txtRain.querySelector('strong').textContent = `${dd}/${mm} a las ${hh}:${mn}`;
+                txtRain.classList.remove('hidden');
+            } else {
+                txtRain.classList.add('hidden');
+            }
         } else {
             txtRain.classList.add('hidden');
         }
@@ -423,7 +640,7 @@ function refreshUIFromConfig() {
 
     // 3. Hardware Settings
     document.querySelectorAll('.hw-zones-btn').forEach(b => {
-        if(b.dataset.val == maxZ) {
+        if(b.dataset.val == state.deviceConfig.max_zonas) {
             b.classList.add('bg-slate-700', 'text-white');
             b.classList.remove('text-slate-400');
         } else {
@@ -432,9 +649,9 @@ function refreshUIFromConfig() {
         }
     });
 
-    const modoBomba = state.deviceConfig.modo_bomba;
     document.querySelectorAll('.hw-pump-btn').forEach(b => {
-        if(b.dataset.val === String(modoBomba)) {
+        const boolVal = b.dataset.val === "true";
+        if (boolVal === state.deviceConfig.modo_bomba) {
             b.classList.add('bg-slate-700', 'text-white');
             b.classList.remove('text-slate-400');
         } else {
@@ -446,9 +663,14 @@ function refreshUIFromConfig() {
     // 4. Scheduler
     loadProgramIntoUI(state.activeProgTab);
     
-    // 5. Update Connection Header (to show SSID if now available)
+    // 5. Update Connection Header
     if (comms.mode) {
         updateConnectionUI(comms.mode);
+    }
+    
+    const badge = document.getElementById('status-badge');
+    if (badge && badge.textContent === "EN REPOSO") {
+        calculateNextWatering();
     }
 }
 
@@ -482,6 +704,14 @@ document.getElementById('btn-manual-start').addEventListener('click', () => {
 document.getElementById('btn-manual-stop').addEventListener('click', () => {
     sendCmd({ comando: "CANCELAR_RIEGO" });
     pendingCommand = true;
+});
+
+document.getElementById('btn-next-start')?.addEventListener('click', (e) => {
+    const progId = e.target.dataset.progId;
+    if (progId) {
+        sendCmd({ comando: "RIEGO_PROGRAMA", prog_id: progId });
+        pendingCommand = true;
+    }
 });
 
 function openEditSeasonModal(idx, seasonData) {
@@ -557,14 +787,12 @@ document.querySelectorAll('.btn-rain-delay').forEach(btn => {
         const dias = parseInt(btn.dataset.days);
         sendCmd({ comando: "RAIN_DELAY", dias: dias });
         pendingCommand = true;
-        setTimeout(() => sendCmd({ comando: "GET_CONFIG" }), 500);
     });
 });
 
 document.getElementById('btn-cancel-rain')?.addEventListener('click', () => {
     sendCmd({ comando: "RAIN_DELAY", dias: 0 });
     pendingCommand = true;
-    setTimeout(() => sendCmd({ comando: "GET_CONFIG" }), 500);
 });
 
 // ==========================================
@@ -652,8 +880,9 @@ function initSchedulerUI() {
         state.hasUnsavedChanges = false;
         
         sendCmd({
-            comando: "UPDATE_CONFIG",
-            config: { programas: fullProgObj }
+            comando: "UPDATE_PROGRAMA",
+            prog_id: state.activeProgTab,
+            prog_data: state.tempProgData
         });
         pendingCommand = true;
         
@@ -714,14 +943,18 @@ function loadProgramIntoUI(progId) {
     contZones.innerHTML = '';
     
     for (let i = 1; i <= maxZ; i++) {
-        const zName = (state.deviceConfig.nombres_zonas && state.deviceConfig.nombres_zonas[i]) ? state.deviceConfig.nombres_zonas[i] : `Zona ${i}`;
-        const zData = prog.zonas[i] || { minutos: 0, cycle_min: 0, soak_min: 0 };
+        const zoneId = `Z${i}`;
+        const zName = obtenerNombreZona(i);
+        const zData = prog.zonas[zoneId] || prog.zonas[i] || { minutos: 0, cycle_min: 0, soak_min: 0 };
         
         const div = document.createElement('div');
         div.className = "bg-slate-900 border border-slate-700 rounded-xl p-3";
         div.innerHTML = `
             <div class="flex justify-between items-center mb-2">
-                <input type="text" class="bg-transparent text-sm font-medium w-1/2 focus:outline-none focus:border-b focus:border-teal-500 z-name-input" data-zidx="${i}" value="${zName}">
+                <div class="flex items-center flex-1 pr-2">
+                    <span class="text-xs font-bold text-teal-500 mr-2 whitespace-nowrap">ZONA ${i}:</span>
+                    <input type="text" class="bg-transparent text-sm font-medium w-full focus:outline-none focus:border-b focus:border-teal-500 z-name-input" data-zidx="${i}" value="${zName}" placeholder="Nombre...">
+                </div>
                 <div class="flex items-center gap-2">
                     <input type="number" min="0" max="240" class="w-16 bg-slate-800 border border-slate-600 rounded p-1 text-center text-sm z-min-input" data-zidx="${i}" value="${zData.minutos}">
                     <span class="text-xs text-slate-400">min</span>
@@ -746,11 +979,22 @@ function loadProgramIntoUI(progId) {
         
         // Bindings de UI zona
         div.querySelector('.z-name-input').addEventListener('change', (e) => {
-            // Actualizar nombre global de zona
             if (!state.deviceConfig.nombres_zonas) state.deviceConfig.nombres_zonas = {};
-            state.deviceConfig.nombres_zonas[i] = e.target.value;
-            sendCmd({ comando: "UPDATE_CONFIG", config: { nombres_zonas: state.deviceConfig.nombres_zonas } });
-            pendingCommand = true;
+            const zoneId = `Z${i}`;
+            state.deviceConfig.nombres_zonas[zoneId] = e.target.value;
+            
+            if (db && state.chipId) {
+                db.collection("dispositivos").doc(state.chipId).update({
+                    nombres_zonas: state.deviceConfig.nombres_zonas
+                }).then(() => {
+                    showToast("Nombre guardado en la nube.");
+                }).catch(err => {
+                    console.error("Error actualizando nombre en Firestore:", err);
+                });
+            } else {
+                sendCmd({ comando: "UPDATE_CONFIG", config: { nombres_zonas: state.deviceConfig.nombres_zonas } });
+                showToast("Guardado localmente en navegador.");
+            }
             refreshUIFromConfig();
         });
         
@@ -936,9 +1180,8 @@ function initSettingsUI() {
             if (!state.token) showModalAuth();
             else {
                 // Si ya teníamos token, lo mandamos para validar e intentar update
+                window._startupSeq = 1;
                 sendCmd({comando: "GET_CONFIG"});
-                sendCmd({comando: "GET_STATE"});
-                sendCmd({comando: "GET_TEMP"});
             }
         } else {
             showGenericModal({
@@ -965,12 +1208,12 @@ function initSettingsUI() {
         }
         
         await comms.initConnection(state.chipId, state.token);
+        escucharConfiguracionFirestore(state.chipId);
         // Si logro conectarse por MQTT, enviar comandos iniciales
         if (comms.mode === 'MQTT') {
             setTimeout(() => {
+                window._startupSeq = 1;
                 sendCmd({comando: "GET_CONFIG"});
-                sendCmd({comando: "GET_STATE"});
-                sendCmd({comando: "GET_TEMP"});
             }, 1000);
         }
     });
@@ -995,7 +1238,10 @@ function initSettingsUI() {
         
         sendCmd({ comando: "INIT_TOKEN", token: pwd });
         pendingCommand = true;
-        setTimeout(() => sendCmd({comando: "GET_CONFIG"}), 500);
+        setTimeout(() => {
+            window._startupSeq = 1;
+            sendCmd({comando: "GET_CONFIG"});
+        }, 500);
         
         document.getElementById('modal-auth').classList.add('hidden');
     });
@@ -1056,8 +1302,8 @@ function initSettingsUI() {
     });
     
     document.getElementById('btn-send-wifi').addEventListener('click', () => {
-        const s = document.getElementById('wifi-ssid').value;
-        const p = document.getElementById('wifi-pass').value;
+        const s = document.getElementById('wifi-ssid').value.trim();
+        const p = document.getElementById('wifi-pass').value.trim();
         if(s) {
             sendCmd({ comando: "config_wifi", ssid: s, pass: p });
             pendingCommand = true;
@@ -1074,8 +1320,49 @@ function showModalAuth() {
     document.getElementById('modal-auth').classList.remove('hidden');
 }
 
-// Wrapper envio comandos
+// Wrapper envio comandos con interceptor de sincronización a Firestore
 function sendCmd(obj) {
+    if (obj && (obj.comando === "UPDATE_CONFIG" || obj.comando === "UPDATE_PROGRAMA" || obj.comando === "RAIN_DELAY")) {
+        const payload = {};
+        
+        if (obj.comando === "UPDATE_CONFIG" && obj.config) {
+            Object.assign(payload, obj.config);
+            // Evitar enviar nombres_zonas al ESP32 por BLE/MQTT para no congestionar
+            if (payload.nombres_zonas) {
+                delete payload.nombres_zonas;
+            }
+        } else if (obj.comando === "UPDATE_PROGRAMA") {
+            // Mapear zonas del programa a claves "Z1", "Z2", etc.
+            const progData = { ...obj.prog_data };
+            if (progData.zonas) {
+                const zonasNuevas = {};
+                for (let zKey in progData.zonas) {
+                    const zNewKey = String(zKey).toUpperCase().startsWith('Z') ? String(zKey).toUpperCase() : `Z${zKey}`;
+                    zonasNuevas[zNewKey] = progData.zonas[zKey];
+                }
+                progData.zonas = zonasNuevas;
+            }
+            obj.prog_data = progData;
+            
+            if (!state.deviceConfig.programas) state.deviceConfig.programas = {};
+            state.deviceConfig.programas[obj.prog_id] = obj.prog_data;
+            
+            payload.programas = state.deviceConfig.programas;
+        } else if (obj.comando === "RAIN_DELAY") {
+            payload.timestamp_rain_delay = obj.dias > 0 ? (Math.floor(Date.now() / 1000) + obj.dias * 86400) : 0;
+        }
+        
+        // Sincronizar en Firestore
+        sincronizarConfigTecnicaAFirestore(payload);
+        
+        // Inyectar versión en comando de salida
+        if (obj.comando === "UPDATE_CONFIG") {
+            obj.config.config_version = state.deviceConfig.config_version;
+        } else if (obj.comando === "UPDATE_PROGRAMA" || obj.comando === "RAIN_DELAY") {
+            obj.config_version = state.deviceConfig.config_version;
+        }
+    }
+    
     comms.sendCommand(obj, state.token);
 }
 
@@ -1246,4 +1533,52 @@ document.getElementById('btn-toggle-seasons')?.addEventListener('click', () => {
             icon.classList.remove('rotate-180');
         }
     }
+});
+
+// PWA Installation Logic
+let deferredPrompt;
+
+const isIos = () => /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+const isInStandaloneMode = () => ('standalone' in window.navigator) && (window.navigator.standalone) || window.matchMedia('(display-mode: standalone)').matches;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+});
+
+if (!isInStandaloneMode() && !sessionStorage.getItem('installPromptDismissed')) {
+    setTimeout(() => {
+        const modal = document.getElementById('modal-install');
+        if (modal) {
+            modal.classList.remove('hidden');
+            if (isIos()) {
+                document.getElementById('install-instructions-ios')?.classList.remove('hidden');
+                document.getElementById('btn-install-app')?.classList.add('hidden');
+            } else if (!deferredPrompt) {
+                // PC o navegador sin soporte automático de prompt
+                const inst = document.getElementById('install-instructions-ios');
+                if (inst) {
+                    inst.innerHTML = 'Para instalar en PC/Mac:<br>Haz clic en el ícono de instalar en la barra de direcciones del navegador <i data-lucide="monitor" class="w-3 h-3 inline"></i>';
+                    inst.classList.remove('hidden');
+                }
+                document.getElementById('btn-install-app')?.classList.add('hidden');
+            }
+            lucide.createIcons();
+        }
+    }, 3000);
+}
+
+document.getElementById('btn-install-app')?.addEventListener('click', async () => {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            document.getElementById('modal-install')?.classList.add('hidden');
+        }
+        deferredPrompt = null;
+    }
+});
+
+document.querySelector('#modal-install button[onclick]')?.addEventListener('click', () => {
+    sessionStorage.setItem('installPromptDismissed', 'true');
 });

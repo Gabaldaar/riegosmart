@@ -38,7 +38,7 @@ rx_queue = AsyncQueue()
 _current_connection = None
 # Flag para serializar envíos BLE y evitar interleaving de chunks JSON
 _ble_sending = False
-# Flag para controlar las tareas
+# Flag para controlar el ciclo de tareas (idempotencia y estado)
 _ble_running = False
 
 def is_ble_connected():
@@ -74,12 +74,23 @@ async def ble_rx_task():
 async def send_json_async(datos_dict):
     """ Envía datos JSON a la característica TX en fragmentos.
     
-    Usa _ble_sending para serializar envíos y evitar que dos tareas
-    concurrentes intercalen sus chunks, corrompiendo el stream JSON en la app.
+    Rechaza payloads extensos (>150 bytes) para evitar fragmentación de memoria y congestión BLE.
+    Usa _ble_sending para serializar envíos y evitar colisiones de chunks.
     """
     global _current_connection, _ble_sending
     if _current_connection is None:
         print("[BLE_TX] Error: No hay conexion activa para enviar")
+        return
+
+    try:
+        json_str = json.dumps(datos_dict) + "\n"
+    except Exception as e:
+        print(f"[BLE_TX] Error serializando JSON: {e}")
+        return
+
+    # Limitar de forma estricta los bytes transmitidos para evitar inestabilidades
+    if len(json_str) > 150:
+        print(f"[BLE_TX] Error: Payload excedió límite BLE ({len(json_str)} bytes > 150)")
         return
 
     # Esperar a que el envío anterior termine (máx ~2s)
@@ -89,11 +100,10 @@ async def send_json_async(datos_dict):
         await asyncio.sleep_ms(40)
     else:
         print("[BLE_TX] Error: Timeout esperando que se libere el TX")
-        return  # Timeout: descartar para no acumular indefinidamente
+        return  # Timeout: descartar
 
     _ble_sending = True
     try:
-        json_str = json.dumps(datos_dict) + "\n"
         max_len = 20  # MTU conservador
         print(f"[BLE_TX] Enviando {len(json_str)} bytes en trozos de {max_len}...")
 
@@ -109,8 +119,7 @@ async def send_json_async(datos_dict):
             except Exception as e:
                 print("[BLE_TX] Notify Error:", e)
                 break
-            # 40ms para dar tiempo al teléfono a procesar las notificaciones
-            # sin perder paquetes (vital para JSON grandes como el historial).
+            # Esperar 40ms entre chunks
             await asyncio.sleep_ms(40)
         print("[BLE_TX] Envío completado.")
 
@@ -151,21 +160,50 @@ async def ble_advertise_task(name="RiegoBLE"):
 ble_tasks = []
 
 async def start_ble_service(name="RiegoBLE"):
-    """ Lanza las tareas BLE concurrentemente """
+    """ Lanza las tareas BLE concurrentemente (Idempotente) """
     global ble_tasks, _ble_running
-    if ble_tasks:
-        return
+    if _ble_running:
+        return  # Ya iniciado
+        
     _ble_running = True
-    t1 = asyncio.create_task(ble_advertise_task(name))
-    t2 = asyncio.create_task(ble_rx_task())
-    ble_tasks = [t1, t2]
+    try:
+        # Asegurar inicialización física del controlador de radio
+        ble_hw = bluetooth.BLE()
+        if not ble_hw.active():
+            ble_hw.active(True)
+            
+        t1 = asyncio.create_task(ble_advertise_task(name))
+        t2 = asyncio.create_task(ble_rx_task())
+        ble_tasks = [t1, t2]
+        print("[BLE] Servicio de Bluetooth iniciado.")
+    except Exception as e:
+        print("[BLE] Error al iniciar servicio BLE:", e)
+        _ble_running = False
 
 async def stop_ble_service():
-    """ Detiene las tareas BLE para liberar memoria """
-    global ble_tasks, _ble_running
+    """ Detiene las tareas BLE y apaga el hardware para liberar memoria (Idempotente) """
+    global ble_tasks, _ble_running, _current_connection
+    if not _ble_running:
+        return  # Ya apagado
+        
     _ble_running = False
+    _current_connection = None
+    
+    # Cancelar tareas
     for t in ble_tasks:
-        t.cancel()
+        try:
+            t.cancel()
+        except:
+            pass
     ble_tasks = []
-    # Limpiamos el buffer de BLE si es posible
+    
+    # Detener controlador de Bluetooth nativo del chip para liberar memoria del stack RF
+    try:
+        ble_hw = bluetooth.BLE()
+        ble_hw.active(False)
+        print("[BLE] Hardware Bluetooth desactivado.")
+    except Exception as e:
+        print("[BLE] Error al desactivar hardware Bluetooth:", e)
+        
     gc.collect()
+

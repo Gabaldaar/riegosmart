@@ -15,8 +15,9 @@ import uasyncio as asyncio
 import network
 import json
 import binascii
+import gc
 
-# Importar el nuevo core
+# Importar el core y log
 import riego_core
 import sys_log
 
@@ -25,9 +26,18 @@ try:
 except ImportError:
     from simple import MQTTClient
 
-# Variables Globales
+# Variables Globales de Red y Estados
+STATE_INIT = 0
+STATE_BLE_ONLY = 1
+STATE_WIFI_CONNECTING = 2
+STATE_WIFI_ONLINE = 3
+STATE_FALLBACK_BLE = 4
+
+current_state = STATE_INIT
 wifi_conectado = False
 mqtt_client = None
+mqtt_loop_task = None
+ventana_fallback_ble_s = 180  # 3 minutos de ventana de BLE offline antes de reintentar WiFi
 
 # Constantes Red
 MQTT_BROKER = "broker.hivemq.com"
@@ -41,14 +51,13 @@ async def main():
     
     # Iniciar tareas de red
     asyncio.create_task(tarea_led())
-    asyncio.create_task(mantener_conexion_wifi())
-    asyncio.create_task(escuchar_comandos_mqtt())
+    asyncio.create_task(gestionar_interfaces_network())
     asyncio.create_task(procesar_cola_ble())
     asyncio.create_task(tarea_tx_queue())
     
-    # Watchdog Timer (8 segundos)
+    # Watchdog Timer (30 segundos para soportar bloqueos de red)
     try:
-        wdt = machine.WDT(timeout=8000)
+        wdt = machine.WDT(timeout=30000)
     except:
         wdt = None
     
@@ -91,7 +100,7 @@ async def tarea_led():
             await asyncio.sleep_ms(duracion)
 
 # ======================================================================
-# MQTT CALLBACK Y CONEXIÓN
+# MQTT CALLBACK Y CONEXIÓN ASÍNCRONA
 # ======================================================================
 
 def mqtt_callback(topic, msg):
@@ -101,21 +110,21 @@ def mqtt_callback(topic, msg):
         # Pasar comando a riego_core asíncronamente
         asyncio.create_task(riego_core.procesar_comando(payload))
     except Exception as e:
-        print("MQTT Callback Error:", e)
+        print("[MQTT_CB] Error:", e)
 
-def conectar_mqtt():
-    global mqtt_client
+async def conectar_mqtt_async():
+    global mqtt_client, mqtt_loop_task
     if not wifi_conectado:
         return False
         
     try:
         if mqtt_client:
-            mqtt_client.disconnect()
-    except:
-        pass
-        
-    try:
-        # Client ID independiente
+            try:
+                mqtt_client.disconnect()
+            except:
+                pass
+            mqtt_client = None
+            
         import urandom
         client_id = f"riego_{riego_core.chip_id}_{urandom.getrandbits(16)}"
         
@@ -127,137 +136,222 @@ def conectar_mqtt():
         )
         
         mqtt_client.set_callback(mqtt_callback)
-        mqtt_client.connect(clean_session=True)
         
-        # Suscribir al topic seguro si tenemos token
+        # Inyectar un timeout bajo al socket connect para evitar bloqueos prolongados de CPU
+        import socket
+        org_socket = socket.socket
+        
+        def socket_wrapper(*args, **kwargs):
+            s = org_socket(*args, **kwargs)
+            s.settimeout(2.0) # Timeout rápido
+            return s
+            
+        socket.socket = socket_wrapper
+        try:
+            mqtt_client.connect(clean_session=True)
+        finally:
+            socket.socket = org_socket # Restaurar inmediatamente
+            
+        # FIX: Wrapper para escrituras seguras en MicroPython
+        class SockWrapper:
+            def __init__(self, s): 
+                self.s = s
+            def read(self, *a): 
+                return self.s.read(*a)
+            def write(self, buf, *args):
+                if args: 
+                    buf = buf[:args[0]]
+                if type(buf) is str: 
+                    buf = buf.encode()
+                t = 0
+                while t < len(buf):
+                    r = self.s.write(buf[t:])
+                    if r: 
+                        t += r
+                return t
+            def setblocking(self, b): 
+                self.s.setblocking(b)
+            def settimeout(self, to): 
+                if hasattr(self.s, 'settimeout'): 
+                    self.s.settimeout(to)
+            def close(self): 
+                self.s.close()
+                
+        if hasattr(mqtt_client, 'sock') and mqtt_client.sock:
+            mqtt_client.sock = SockWrapper(mqtt_client.sock)
+            mqtt_client.sock.settimeout(5.0)
+            
         topic_hash = riego_core.calcular_hash_seguro()
         if topic_hash:
             topic_sub = f"riego/{topic_hash}/cmd"
             mqtt_client.subscribe(topic_sub)
-            print(f"MQTT Conectado y Suscrito a {topic_sub}")
-        else:
-            print("MQTT Conectado pero no hay TOKEN (No suscrito a cmd)")
+            print(f"[MQTT] Conectado y Suscrito a {topic_sub}")
             
-        return True
+            if mqtt_loop_task:
+                try:
+                    mqtt_loop_task.cancel()
+                except:
+                    pass
+            mqtt_loop_task = asyncio.create_task(loop_mqtt_escucha())
+            return True
+        else:
+            print("[MQTT] Conectado pero no hay TOKEN (No suscrito a cmd)")
+            return True
     except Exception as e:
-        print("Error conectando MQTT:", e)
+        print("[MQTT] Error conectando MQTT asíncronamente:", e)
         mqtt_client = None
         return False
 
-async def escuchar_comandos_mqtt():
+async def loop_mqtt_escucha():
     global mqtt_client
     last_ping = time.time()
-    while True:
-        if wifi_conectado and mqtt_client:
-            try:
-                mqtt_client.check_msg()
-                if time.time() - last_ping >= 30:
-                    mqtt_client.ping()
-                    last_ping = time.time()
-            except OSError as e:
-                err_code = e.args[0] if e.args else None
-                if err_code not in (-1, 11, 110, 115, 116):
-                    mqtt_client = None
-            except Exception as e:
+    while wifi_conectado and mqtt_client is not None:
+        try:
+            mqtt_client.sock.setblocking(False)
+            mqtt_client.check_msg()
+            
+            if time.time() - last_ping >= 30:
+                mqtt_client.ping()
+                last_ping = time.time()
+        except OSError as e:
+            err_code = e.args[0] if e.args else None
+            if err_code not in (11, 110, 115, 116):
+                print("[MQTT] Error de socket en escucha:", err_code)
                 mqtt_client = None
-        await asyncio.sleep(0.5)
+                break
+        except Exception as e:
+            print("[MQTT] Excepción fatal en loop escucha:", e)
+            mqtt_client = None
+            break
+        await asyncio.sleep_ms(200)
 
 # ======================================================================
-# WIFI Y BLE HYBRID LOGIC
+# MAQUINA DE ESTADOS Y CONTROL DE INTERFACES RF (NO-COEXISTENCIA)
 # ======================================================================
 
-async def conectar_wifi():
+async def conectar_wifi_non_blocking(wlan):
     global wifi_conectado
     try:
         with open("wifi_config.json", "r") as f:
             cred = json.load(f)
-            ssid = cred.get("ssid", "")
-            password = cred.get("pass", "")
+            ssid = str(cred.get("ssid", "")).strip()
+            password = str(cred.get("pass", "")).strip()
     except:
         return False
         
     if not ssid:
         return False
         
-    print(f"Conectando a Wi-Fi: {ssid}...")
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    
-    try:
-        wlan.disconnect()
-    except:
-        pass
-    await asyncio.sleep(0.2)
-    
+    print(f"[WIFI] Conectando a Wi-Fi: {ssid}...")
     wlan.connect(ssid, password)
+    
+    # Intentar conexión durante 15 segundos máximo asíncronamente
     for _ in range(30):
         if wlan.isconnected():
             wifi_conectado = True
-            print("Wi-Fi Conectado.", wlan.ifconfig())
+            print("[WIFI] Conectado exitosamente.", wlan.ifconfig())
             
-            # Sincronizar NTP y RTC DS3231
+            # NTP Sync rápido
             try:
                 import ntptime
-                ntptime.settime() # Sincroniza RTC interno del ESP32 a UTC
+                ntptime.host = "pool.ntp.org"
+                ntptime.settime()
                 if riego_core.reloj_rtc:
-                    import time
-                    # UTC-3 (Argentina) = -10800 segundos
-                    local_now = time.time() - 10800 
+                    local_now = time.time() - 10800 # UTC-3
                     t = time.localtime(local_now)
                     riego_core.reloj_rtc.set_time(t)
-                    print("RTC DS3231 sincronizado por NTP a UTC-3.")
+                    print("[NTP] RTC DS3231 sincronizado por NTP.")
             except Exception as e:
-                print("Error NTP sync:", e)
+                print("[NTP] Error NTP sync:", e)
                 
             return True
-        await asyncio.sleep(0.5)
+        await asyncio.sleep_ms(500)
     return False
 
-async def mantener_conexion_wifi():
-    global wifi_conectado, mqtt_client
+async def gestionar_interfaces_network():
+    global current_state, wifi_conectado, mqtt_client
     wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    
-    from ble_service import start_ble_service, stop_ble_service, is_ble_connected
-    ble_activo = True
-    
-    # Arranca BLE al inicio
-    await start_ble_service(name=f"Riego_{riego_core.chip_id[-4:]}")
     
     while True:
-        if wifi_conectado and not wlan.isconnected():
-            wifi_conectado = False
-            mqtt_client = None
-            
-        if not wifi_conectado:
-            # Si no hay WiFi, intentamos reconectar
-            # Pero primero verificamos si siquiera hay credenciales
-            tiene_creds = False
-            try:
-                with open("wifi_config.json", "r") as f:
-                    c = json.load(f)
-                    if c.get("ssid"):
-                        tiene_creds = True
-            except:
-                pass
-                
+        # Evaluar credenciales locales
+        tiene_creds = False
+        try:
+            with open("wifi_config.json", "r") as f:
+                c = json.load(f)
+                if c.get("ssid"):
+                    tiene_creds = True
+        except:
+            pass
+
+        if current_state == STATE_INIT:
             if tiene_creds:
-                # Intentar conectar a WiFi sin detener BLE
-                if await conectar_wifi():
-                    conectar_mqtt()
+                print("[NET] Credenciales detectadas. Conectando WiFi...")
+                current_state = STATE_WIFI_CONNECTING
             else:
-                # No hay credenciales, mantener BLE activo siempre
-                if not ble_activo:
-                    await start_ble_service(name=f"Riego_{riego_core.chip_id[-4:]}")
-                    ble_activo = True
-        else:
-            if mqtt_client is None:
-                conectar_mqtt()
-            if not ble_activo:
-                await start_ble_service(name=f"Riego_{riego_core.chip_id[-4:]}")
-                ble_activo = True
+                print("[NET] Sin credenciales. Iniciando BLE de configuración...")
+                current_state = STATE_BLE_ONLY
+
+        elif current_state == STATE_BLE_ONLY:
+            # Exclusión mutua: WiFi OFF, BLE ON
+            if wlan.active():
+                wlan.active(False)
+                gc.collect()
+            from ble_service import start_ble_service
+            await start_ble_service(name=f"Riego_{riego_core.chip_id[-4:]}")
+            
+            # Transición inmediata si se configuran credenciales
+            if tiene_creds:
+                current_state = STATE_WIFI_CONNECTING
+            await asyncio.sleep(5)
+
+        elif current_state == STATE_WIFI_CONNECTING:
+            # Exclusión mutua: BLE OFF, WiFi ON
+            from ble_service import stop_ble_service
+            await stop_ble_service()
+            wlan.active(True)
+            gc.collect()
+            
+            success = await conectar_wifi_non_blocking(wlan)
+            if success:
+                current_state = STATE_WIFI_ONLINE
+            else:
+                print("[NET] Error conectando WiFi. Yendo a Fallback BLE...")
+                current_state = STATE_FALLBACK_BLE
+
+        elif current_state == STATE_WIFI_ONLINE:
+            # Monitorear enlace WiFi y MQTT
+            if not wlan.isconnected():
+                print("[NET] Link WiFi caído. Yendo a Fallback BLE.")
+                wifi_conectado = False
+                mqtt_client = None
+                current_state = STATE_FALLBACK_BLE
+            else:
+                if mqtt_client is None:
+                    await conectar_mqtt_async()
+            await asyncio.sleep(5)
+
+        elif current_state == STATE_FALLBACK_BLE:
+            # Exclusión mutua: WiFi OFF, BLE ON durante ventana temporal
+            print("[NET] Fallback BLE iniciado.")
+            wlan.active(False)
+            gc.collect()
+            
+            from ble_service import start_ble_service
+            await start_ble_service(name=f"Riego_{riego_core.chip_id[-4:]}")
+            
+            # Mantener la ventana temporal de BLE de emergencia
+            for _ in range(int(ventana_fallback_ble_s / 5)):
+                # Salida anticipada si el estado cambió (por ejemplo, nuevas credenciales)
+                if current_state != STATE_FALLBACK_BLE:
+                    break
+                await asyncio.sleep(5)
                 
-        await asyncio.sleep(15 if not wifi_conectado else 10)
+            # Expiró la ventana, intentar re-conectar WiFi
+            if current_state == STATE_FALLBACK_BLE:
+                print("[NET] Ventana de fallback expirada. Intentando reconectar WiFi...")
+                from ble_service import stop_ble_service
+                await stop_ble_service()
+                current_state = STATE_WIFI_CONNECTING
 
 async def procesar_cola_ble():
     """Lee comandos de la cola BLE y los pasa a riego_core"""
@@ -278,31 +372,31 @@ async def tarea_tx_queue():
             
             destino = msg_dict.get("_destino", "ALL")
             
-            # Limpiar llaves internas antes de enviar
             if "_destino" in msg_dict:
                 del msg_dict["_destino"]
             
-            # Enviar via BLE PRIMERO (para que la app responda rapido y no sufra timeout por MQTT bloqueando)
+            # Transmitir vía BLE
             if destino in ("ALL", "BLE"):
                 from ble_service import send_json_async, is_ble_connected
                 if is_ble_connected():
                     await send_json_async(msg_dict)
                 
-            # Enviar via MQTT despues
+            # Transmitir vía MQTT
             if destino in ("ALL", "MQTT"):
                 if mqtt_client and wifi_conectado:
                     try:
                         topic_hash = riego_core.calcular_hash_seguro()
                         if topic_hash:
-                            topic_pub = f"riego/{topic_hash}/telemetry"
-                            json_str = json.dumps(msg_dict)
-                            mqtt_client.publish(topic_pub, json_str)
+                            topic_pub = f"riego/{topic_hash}/telemetry".encode('utf-8')
+                            json_bytes = json.dumps(msg_dict).encode('utf-8')
+                            mqtt_client.publish(topic_pub, json_bytes)
                     except Exception as e:
-                        print("Error publicando MQTT TX:", e)
-                        # Forzar reconexion MQTT si falla la publicacion
+                        print("[MAIN_TX] Error publicando MQTT:", e)
                         mqtt_client = None
+                    
+                    await asyncio.sleep(0.5)
         except Exception as e:
-            print("Error en tarea_tx_queue:", e)
+            print("[MAIN_TX] Error general en tarea_tx_queue:", e)
         await asyncio.sleep(0.1)
 
 # Iniciar Loop Principal
@@ -310,3 +404,4 @@ try:
     asyncio.run(main())
 except KeyboardInterrupt:
     print("Programa terminado")
+

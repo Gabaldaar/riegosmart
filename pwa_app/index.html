@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Smart Riego</title>
     <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    
+    <!-- Iconos de la App -->
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="apple-touch-icon" href="icon-192.png">
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -33,7 +38,7 @@
                 registration.update();
             });
             // Also notify user that they are on the latest version
-            window.APP_VERSION = "v5";
+            window.APP_VERSION = "v12";
         }
     </script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -48,18 +53,18 @@
         <div class="flex items-center gap-3 w-1/3">
             <h1 class="font-bold text-xl tracking-wide bg-gradient-to-r from-teal-400 to-blue-500 bg-clip-text text-transparent flex items-baseline gap-2">
                 Smart Riego
-                <span class="text-[10px] font-medium text-slate-500 tracking-normal border border-slate-700 px-1.5 py-0.5 rounded-md">v21</span>
+                <span class="text-[10px] font-medium text-slate-500 tracking-normal border border-slate-700 px-1.5 py-0.5 rounded-md">v12.7</span>
             </h1>
         </div>
         
         <!-- Centro: Reloj y Temperatura -->
-        <div class="flex items-center justify-center gap-4 w-1/3 text-slate-400 font-mono text-sm">
+        <div class="flex flex-col items-center justify-center gap-0.5 w-1/3 text-slate-400 font-mono text-xs">
             <div class="flex items-center space-x-1">
-                <i data-lucide="clock" class="w-4 h-4 text-slate-500"></i>
+                <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-500"></i>
                 <span id="header-time" class="font-medium text-slate-300">--:--</span>
             </div>
             <div class="flex items-center space-x-1">
-                <i data-lucide="thermometer" class="w-4 h-4 text-slate-500"></i>
+                <i data-lucide="thermometer" class="w-3.5 h-3.5 text-slate-500"></i>
                 <span id="header-temp" class="font-medium text-slate-300">--°C</span>
             </div>
         </div>
@@ -91,18 +96,50 @@
                     <span id="status-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-700 text-slate-300">IDLE</span>
                 </div>
                 
-                <div id="active-watering-info" class="hidden flex-col items-center justify-center py-4">
-                    <div class="relative w-24 h-24 mb-4">
-                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                            <path class="text-slate-700" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="2.5" />
-                            <path id="progress-circle" class="text-teal-500 transition-all duration-1000 ease-linear" stroke-dasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="2.5" />
-                        </svg>
-                        <div class="absolute inset-0 flex flex-col items-center justify-center">
-                            <span id="time-remaining" class="text-xl font-bold">--:--</span>
-                            <span class="text-[10px] text-slate-400 uppercase">min</span>
+                <div id="next-watering-info" class="flex flex-col items-center justify-center py-6 relative">
+                    <i data-lucide="calendar-clock" class="w-8 h-8 text-slate-600 mb-2"></i>
+                    <p class="text-sm font-medium text-slate-400">Siguiente Riego</p>
+                    <p id="next-watering-time" class="text-lg font-bold text-slate-300">Calculando...</p>
+                    <button id="btn-next-start" class="mt-4 px-6 py-2 bg-teal-600 hover:bg-teal-500 rounded-xl text-white text-sm font-bold transition-colors shadow-lg shadow-teal-500/20 hidden">
+                        Iniciar Ahora
+                    </button>
+                </div>
+
+                <div id="active-watering-info" class="hidden flex-row items-center justify-between py-4 gap-6">
+                    <!-- Circulo y Zona (Izquierda) -->
+                    <div class="flex-shrink-0 flex flex-col items-center">
+                        <div class="relative w-28 h-28">
+                            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                <path class="text-slate-700" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="2.5" />
+                                <path id="progress-circle" class="text-teal-500 transition-all duration-1000 ease-linear" stroke-dasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="2.5" />
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                <span id="time-remaining" class="text-2xl font-bold mt-1">--:--</span>
+                                <span class="text-[9px] text-slate-400 uppercase mt-0.5">restantes</span>
+                            </div>
+                        </div>
+                        <p id="active-zone-name" class="mt-3 text-sm font-bold text-teal-400">Zona Activa</p>
+                    </div>
+                    
+                    <!-- Datos del Riego -->
+                    <div class="flex-1 flex flex-col gap-2 text-xs">
+                        <div class="flex justify-between border-b border-slate-700 pb-1">
+                            <span class="text-slate-500">Total Programado:</span>
+                            <span id="info-tiempo-prog" class="font-bold text-slate-300">-</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-700 pb-1">
+                            <span class="text-slate-500">Ajuste Estacional:</span>
+                            <span id="info-ajuste" class="font-bold text-slate-300">-</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-700 pb-1">
+                            <span class="text-slate-500">Ciclo (Riego):</span>
+                            <span id="info-ciclo" class="font-bold text-slate-300">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Remojo (Pausa):</span>
+                            <span id="info-remojo" class="font-bold text-slate-300">-</span>
                         </div>
                     </div>
-                    <p id="active-zone-name" class="text-lg font-medium text-teal-400">Zona Activa</p>
                 </div>
             </div>
 
@@ -182,8 +219,7 @@
                         </div>
                         
                         <div id="seasons-container" class="space-y-3">
-                            <!-- Tarjetas generadas dinamicamente -->
-                            <div class="text-center text-slate-500 text-xs py-4">Cargando temporadas...</div>
+                            <div class="text-[10px] text-slate-500 text-center">App: v12.7 | ESP32: v3.1</div>
                         </div>
                     </div>
                 </div>
@@ -192,6 +228,14 @@
 
         <!-- SCHEDULER VIEW -->
         <section id="view-scheduler" class="p-4 space-y-4 tab-view hidden">
+            <!-- Header Scheduler -->
+            <div class="flex justify-between items-center mb-1">
+                <h2 class="text-xl font-bold text-white">Programación</h2>
+                <button onclick="document.getElementById('modal-help').classList.remove('hidden')" class="p-2 text-teal-400 hover:text-teal-300 transition bg-slate-800 rounded-full shadow">
+                    <i data-lucide="help-circle" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
             <!-- Tabs Programas -->
             <div class="flex p-1 bg-slate-800 rounded-xl space-x-1 mb-4" id="program-tabs">
                 <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg bg-slate-700 text-white shadow" data-prog="A">Prog A</button>
@@ -334,7 +378,12 @@
                 </div>
                 <div class="space-y-3">
                     <input type="text" id="wifi-ssid" placeholder="Nombre de red (SSID)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-teal-500">
-                    <input type="password" id="wifi-pass" placeholder="Contraseña" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-teal-500">
+                    <div class="relative">
+                        <input type="password" id="wifi-pass" placeholder="Contraseña" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-teal-500 pr-10">
+                        <button type="button" onclick="const p=document.getElementById('wifi-pass'); const i=this.querySelector('i'); if(p.type==='password'){p.type='text';i.setAttribute('data-lucide','eye-off');}else{p.type='password';i.setAttribute('data-lucide','eye');} lucide.createIcons();" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                    </div>
                     <button id="btn-send-wifi" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-colors">
                         Enviar Credenciales
                     </button>
@@ -391,7 +440,12 @@
                 <p class="text-xs text-slate-400" id="auth-desc">El equipo detectado es nuevo. Crea una contraseña de acceso.</p>
             </div>
             
-            <input type="password" id="auth-password" placeholder="Contraseña segura" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-4 text-sm focus:outline-none focus:border-teal-500">
+            <div class="relative mb-4">
+                <input type="password" id="auth-password" placeholder="Contraseña segura" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-teal-500 pr-10">
+                <button type="button" onclick="const p=document.getElementById('auth-password'); const i=this.querySelector('i'); if(p.type==='password'){p.type='text';i.setAttribute('data-lucide','eye-off');}else{p.type='password';i.setAttribute('data-lucide','eye');} lucide.createIcons();" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300">
+                    <i data-lucide="eye" class="w-4 h-4"></i>
+                </button>
+            </div>
             
             <button id="btn-auth-submit" class="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-medium transition-colors">
                 Autorizar
@@ -428,6 +482,81 @@
             </div>
         </div>
     </div>
+    
+    <!-- Help Modal -->
+    <div id="modal-help" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-center items-center p-4">
+        <div class="bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-700 max-h-[85vh] overflow-y-auto">
+            <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <i data-lucide="info" class="w-5 h-5 text-teal-400"></i> Ayuda de Programación
+            </h2>
+            
+            <div class="space-y-4 text-sm text-slate-300">
+                <div>
+                    <h3 class="font-semibold text-teal-400 mb-1">¿Qué son los Programas (A, B, C, D)?</h3>
+                    <p>Puedes tener hasta 4 rutinas de riego totalmente independientes. Cada programa tiene sus propios días, horarios de inicio y tiempos para cada zona.</p>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold text-teal-400 mb-1">Días y Horarios</h3>
+                    <p>Selecciona los días de la semana que quieres que riegue. Puedes agregar múltiples horarios (ej: 07:00 y 19:00); el programa completo se ejecutará en cada uno de esos horarios secuencialmente.</p>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold text-teal-400 mb-1">Ciclo y Remojo (Cycle & Soak)</h3>
+                    <p>Es una función avanzada para evitar que el agua escurra y se desperdicie en terrenos inclinados o arcillosos.</p>
+                    <ul class="list-disc pl-5 mt-2 space-y-1 text-slate-400 text-xs">
+                        <li><strong class="text-slate-300">Tiempo total:</strong> El tiempo que la zona debe recibir agua en total.</li>
+                        <li><strong class="text-slate-300">Ciclo:</strong> El tiempo máximo que la válvula estará abierta de corrido.</li>
+                        <li><strong class="text-slate-300">Remojo:</strong> El tiempo de pausa que esperará para que el agua penetre en la tierra antes de darle el siguiente ciclo.</li>
+                    </ul>
+                    <p class="text-xs text-slate-400 mt-2 italic">Ejemplo: Si pones 30 min totales, Ciclo de 10 y Remojo de 20, regará 10 min, pausará 20, regará 10, pausará 20, y regará los últimos 10 min.</p>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="document.getElementById('modal-help').classList.add('hidden')" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm font-medium transition-colors w-full">Entendido</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Install App Modal -->
+    <div id="modal-install" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-end sm:justify-center items-center p-4 pb-8 sm:pb-4 transition-all">
+        <div class="bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl border border-slate-700 animate-[slideUp_0.3s_ease-out]">
+            <div class="flex items-center gap-4 mb-4">
+                <img src="icon-192.png" class="w-16 h-16 rounded-2xl shadow-lg" alt="App Icon" onerror="this.src='favicon.ico'; this.onerror=null;">
+                <div>
+                    <h2 class="text-xl font-bold text-white">Smart Riego</h2>
+                    <p class="text-xs text-slate-400">Instala la App para una mejor experiencia</p>
+                </div>
+            </div>
+            
+            <ul class="space-y-2 mb-6 text-sm text-slate-300">
+                <li class="flex items-center gap-2"><i data-lucide="zap" class="w-4 h-4 text-amber-400"></i> Acceso rápido desde el inicio</li>
+                <li class="flex items-center gap-2"><i data-lucide="wifi-off" class="w-4 h-4 text-teal-400"></i> Funciona sin conexión (Bluetooth)</li>
+                <li class="flex items-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-indigo-400"></i> Experiencia de App Nativa</li>
+            </ul>
+            
+            <div id="install-instructions-ios" class="hidden bg-slate-900 rounded-xl p-3 text-xs text-slate-400 mb-4 border border-slate-700">
+                Para instalar en iPhone/iPad:<br>
+                1. Toca el botón Compartir <i data-lucide="share" class="w-3 h-3 inline"></i><br>
+                2. Selecciona "Agregar a inicio" <i data-lucide="plus-square" class="w-3 h-3 inline"></i>
+            </div>
+            
+            <div class="flex flex-col gap-2">
+                <button id="btn-install-app" class="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-teal-500/20">
+                    Instalar Aplicación
+                </button>
+                <button onclick="document.getElementById('modal-install').classList.add('hidden')" class="w-full py-2 text-slate-400 hover:text-slate-300 text-sm font-medium transition-colors">
+                    Ahora no
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <style>
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+    
     <!-- Scripts -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script>
@@ -466,8 +595,13 @@
         <span id="toast-msg">Comando recibido</span>
     </div>
 
+    <!-- Firebase SDKs compat -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
     <!-- PWA y App Scripts con versión forzada -->
     <script src="comms.js?v=23"></script>
-    <script src="app.js?v=23"></script>
+    <script src="app.js?v=27"></script>
 </body>
 </html>
