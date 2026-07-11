@@ -511,11 +511,11 @@ function actualizarVisualizacionPestanasProgramas() {
         }
         
         if (isActive) {
-            dot.classList.remove('bg-slate-500', 'opacity-30');
+            dot.classList.remove('bg-rose-500/30', 'border', 'border-rose-500/50', 'bg-slate-500', 'opacity-30');
             dot.classList.add('bg-teal-400', 'shadow-[0_0_8px_rgba(45,212,191,0.8)]');
         } else {
             dot.classList.remove('bg-teal-400', 'shadow-[0_0_8px_rgba(45,212,191,0.8)]');
-            dot.classList.add('bg-slate-500', 'opacity-30');
+            dot.classList.add('bg-rose-500/30', 'border', 'border-rose-500/50');
         }
     });
 }
