@@ -897,12 +897,13 @@ function initSchedulerUI() {
         updateTempProgData();
     });
 
-    // Guardar
     document.getElementById('btn-sync-prog').addEventListener('click', () => {
         updateTempProgData();
         const fullProgObj = { ...state.deviceConfig.programas };
         fullProgObj[state.activeProgTab] = state.tempProgData;
+        state.deviceConfig.programas = fullProgObj;
         state.hasUnsavedChanges = false;
+        actualizarVisualizacionPestanasProgramas();
         
         sendCmd({
             comando: "UPDATE_PROGRAMA",
@@ -1400,6 +1401,10 @@ function initHelpModals() {
         'rain': {
             title: 'Retraso por Lluvia',
             body: 'Pausa todos los programas automáticos durante los días especificados. Si tienes un sensor de lluvia conectado al Hardware, también se detendrán los riegos automáticamente mientras esté lloviendo.'
+        },
+        'hardware': {
+            title: 'Configuración de Hardware',
+            body: '<strong>Zonas de Riego</strong>: Para expandir la capacidad del equipo de 4 a 8 zonas, es indispensable contar con el módulo de expansión de hardware (relevadores y bornes físicos) acoplado a tu ESP32.<br><br><strong>Modos Hidráulicos (Transición)</strong>:<br>• <strong>Bomba (Overlap)</strong>: Diseñado para instalaciones con bomba de agua. Al cambiar de zona, inicia la apertura de la siguiente electroválvula unos segundos antes de cerrar la actual. Esto evita golpes de ariete e impide que la bomba funcione a tubería tapada.<br>• <strong>Red (Pausa)</strong>: Diseñado para agua directa de red de suministro. Aplica una breve pausa de apagado total entre zonas para que la presión de agua de la línea se estabilice antes de abrir la siguiente zona.'
         }
     };
 
@@ -1416,7 +1421,7 @@ function initHelpModals() {
             const type = btn.getAttribute('data-help');
             if (helpData[type]) {
                 titleEl.textContent = helpData[type].title;
-                bodyEl.textContent = helpData[type].body;
+                bodyEl.innerHTML = helpData[type].body;
                 modal.classList.remove('hidden');
             }
         });
