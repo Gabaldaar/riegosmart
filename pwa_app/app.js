@@ -497,6 +497,29 @@ function calculateNextWatering() {
     }
 }
 
+function actualizarVisualizacionPestanasProgramas() {
+    document.querySelectorAll('.prog-tab').forEach(tab => {
+        const progId = tab.dataset.prog;
+        const prog = (state.deviceConfig.programas || {})[progId];
+        const isActive = prog && prog.activo === true;
+        
+        let dot = tab.querySelector('.prog-active-dot');
+        if (!dot) {
+            dot = document.createElement('span');
+            dot.className = "prog-active-dot w-2 h-2 rounded-full inline-block ml-2 transition-all duration-300";
+            tab.appendChild(dot);
+        }
+        
+        if (isActive) {
+            dot.classList.remove('bg-slate-500', 'opacity-30');
+            dot.classList.add('bg-teal-400', 'shadow-[0_0_8px_rgba(45,212,191,0.8)]');
+        } else {
+            dot.classList.remove('bg-teal-400', 'shadow-[0_0_8px_rgba(45,212,191,0.8)]');
+            dot.classList.add('bg-slate-500', 'opacity-30');
+        }
+    });
+}
+
 function refreshUIFromConfig() {
     // Actualizar SSID en ajustes
     const ssidDisp = document.getElementById('current-ssid-display');
@@ -672,6 +695,8 @@ function refreshUIFromConfig() {
     if (badge && badge.textContent === "EN REPOSO") {
         calculateNextWatering();
     }
+    
+    actualizarVisualizacionPestanasProgramas();
 }
 
 // ==========================================
