@@ -203,11 +203,11 @@ function initTabs() {
             
             // Actualizar botones nav
             navBtns.forEach(b => {
-                b.classList.remove('text-teal-400');
-                b.classList.add('text-slate-500');
+                b.classList.remove('text-teal-655', 'dark:text-teal-400');
+                b.classList.add('text-slate-400', 'dark:text-slate-500');
             });
-            btn.classList.add('text-teal-400');
-            btn.classList.remove('text-slate-500');
+            btn.classList.add('text-teal-655', 'dark:text-teal-400');
+            btn.classList.remove('text-slate-400', 'dark:text-slate-500');
 
             // Mostrar vista
             views.forEach(v => {
@@ -785,6 +785,14 @@ document.getElementById('manual-time-slider').addEventListener('input', (e) => {
     document.getElementById('manual-time-val').textContent = e.target.value + " min";
 });
 
+document.getElementById('manual-cycle-check')?.addEventListener('change', (e) => {
+    const opts = document.getElementById('manual-cycle-opts');
+    if (opts) {
+        if (e.target.checked) opts.classList.remove('hidden');
+        else opts.classList.add('hidden');
+    }
+});
+
 document.getElementById('btn-manual-start').addEventListener('click', () => {
     const activeBtn = document.querySelector('.manual-z-btn.bg-teal-600');
     if (!activeBtn) {
@@ -798,9 +806,20 @@ document.getElementById('btn-manual-start').addEventListener('click', () => {
     const zona = activeBtn.dataset.zone;
     const mins = parseInt(document.getElementById('manual-time-slider').value);
     
+    const zonaObj = { minutos: mins };
+    
+    const cycleCheck = document.getElementById('manual-cycle-check');
+    if (cycleCheck && cycleCheck.checked) {
+        const cycleMin = parseInt(document.getElementById('manual-cycle-min').value) || 5;
+        const soakMin = parseInt(document.getElementById('manual-soak-min').value) || 10;
+        
+        zonaObj.cycle_min = cycleMin;
+        zonaObj.soak_min = soakMin;
+    }
+    
     sendCmd({
         comando: "RIEGO_MANUAL",
-        zonas: { [zona]: { minutos: mins } }
+        zonas: { [zona]: zonaObj }
     });
     pendingCommand = true;
 });

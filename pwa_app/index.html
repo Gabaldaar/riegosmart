@@ -164,6 +164,24 @@
                     <input type="range" id="manual-time-slider" min="1" max="60" value="10" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500">
                 </div>
                 
+                <!-- Ciclo y Remojo para Riego Manual -->
+                <div class="mb-5">
+                    <label class="flex items-center gap-2 text-xs text-slate-555 dark:text-slate-400 cursor-pointer select-none">
+                        <input type="checkbox" id="manual-cycle-check" class="rounded border-slate-300 dark:border-slate-600 text-teal-655 bg-white dark:bg-slate-800">
+                        Activar Ciclo y Remojo
+                    </label>
+                    <div id="manual-cycle-opts" class="mt-3 grid grid-cols-2 gap-3 hidden">
+                        <div>
+                            <span class="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">Ciclo (min)</span>
+                            <input type="number" id="manual-cycle-min" min="1" value="5" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm focus:outline-none focus:border-teal-500 text-slate-800 dark:text-slate-100">
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">Remojo (min)</span>
+                            <input type="number" id="manual-soak-min" min="1" value="10" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm focus:outline-none focus:border-teal-500 text-slate-800 dark:text-slate-100">
+                        </div>
+                    </div>
+                </div>
+                
                 <button id="btn-manual-start" class="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-medium transition-colors shadow-lg shadow-teal-500/20">
                     Iniciar Riego
                 </button>
