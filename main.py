@@ -38,6 +38,7 @@ wifi_conectado = False
 mqtt_client = None
 mqtt_loop_task = None
 mqtt_lock = asyncio.Lock()
+wdt = None
 ventana_fallback_ble_s = 180  # 3 minutos de ventana de BLE offline antes de reintentar WiFi
 
 # Constantes Red
@@ -61,6 +62,7 @@ async def main():
     asyncio.create_task(tarea_tx_queue())
     
     # Watchdog Timer (30 segundos para soportar bloqueos de red)
+    global wdt
     try:
         wdt = machine.WDT(timeout=30000)
     except:
@@ -146,7 +148,9 @@ async def conectar_mqtt_async():
         # Conectar al broker. umqtt.simple usa usocket internamente.
         # No hacemos monkey-patching de socket.socket (no portable en MicroPython moderno).
         # En su lugar aplicamos el timeout al socket ya creado, justo después del connect().
+        if wdt: wdt.feed()
         mqtt_client.connect(clean_session=True)
+        if wdt: wdt.feed()
         
         # Aplicar timeout de operación sobre el socket abierto por umqtt
         if hasattr(mqtt_client, 'sock') and mqtt_client.sock:
@@ -170,8 +174,9 @@ async def conectar_mqtt_async():
                 t = 0
                 while t < len(buf):
                     r = self.s.write(buf[t:])
-                    if r: 
-                        t += r
+                    if r is None or r <= 0:
+                        raise OSError("[SockWrapper] Write returned None/0")
+                    t += r
                 return t
             def setblocking(self, b): 
                 self.s.setblocking(b)
@@ -256,15 +261,18 @@ async def conectar_wifi_non_blocking(wlan):
     
     # Intentar conexión durante 15 segundos máximo asíncronamente
     for _ in range(30):
+        if wdt: wdt.feed()
         if wlan.isconnected():
             wifi_conectado = True
             print("[WIFI] Conectado exitosamente.", wlan.ifconfig())
             
             # NTP Sync rápido
             try:
+                if wdt: wdt.feed()
                 import ntptime
                 ntptime.host = "pool.ntp.org"
                 ntptime.settime()
+                if wdt: wdt.feed()
                 if riego_core.reloj_rtc:
                     local_now = time.time() - 10800 # UTC-3
                     t = time.localtime(local_now)
