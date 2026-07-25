@@ -38,6 +38,12 @@ const state = {
         max_zonas: 8,
         modo_bomba: true,
         ajuste_estacional: 100,
+        ajustes_estacionales: [
+            {"nombre": "Verano", "inicio": "12-21", "fin": "03-20", "porcentaje": 100},
+            {"nombre": "Otono", "inicio": "03-21", "fin": "06-20", "porcentaje": 100},
+            {"nombre": "Invierno", "inicio": "06-21", "fin": "09-20", "porcentaje": 100},
+            {"nombre": "Primavera", "inicio": "09-21", "fin": "12-20", "porcentaje": 100}
+        ],
         nombres_zonas: {
             "Z1": "Zona 1", "Z2": "Zona 2", "Z3": "Zona 3", "Z4": "Zona 4",
             "Z5": "Zona 5", "Z6": "Zona 6", "Z7": "Zona 7", "Z8": "Zona 8"
@@ -70,7 +76,7 @@ function obtenerNombreZona(zonaId) {
 
 // Helper para dar formato DD/MM a las fechas de las temporadas (almacenadas como MM-DD)
 function formatSeasonDate(dateStr) {
-    if (!dateStr || !dateStr.includes('-')) return dateStr;
+    if (!dateStr || typeof dateStr !== 'string' || !dateStr.includes('-')) return dateStr;
     const parts = dateStr.split('-');
     return `${parts[1]}/${parts[0]}`; // DD/MM
 }
@@ -106,6 +112,9 @@ function escucharConfiguracionFirestore(chipId) {
                 state.deviceConfig.nombres_zonas = data.nombres_zonas;
                 localStorage.setItem(`NOMBRES_ZONAS_${chipId}`, JSON.stringify(data.nombres_zonas));
             }
+            if (data.ajustes_estacionales) {
+                state.deviceConfig.ajustes_estacionales = data.ajustes_estacionales;
+            }
             state.deviceConfig.programas = data.programas || state.deviceConfig.programas;
             state.deviceConfig.config_version = data.config_version || state.deviceConfig.config_version;
             
@@ -118,6 +127,7 @@ function escucharConfiguracionFirestore(chipId) {
                 max_zonas: state.deviceConfig.max_zonas,
                 modo_bomba: state.deviceConfig.modo_bomba,
                 nombres_zonas: state.deviceConfig.nombres_zonas,
+                ajustes_estacionales: state.deviceConfig.ajustes_estacionales || [],
                 programas: state.deviceConfig.programas,
                 timestamp_rain_delay: 0,
                 token_acceso: state.token || "token_por_defecto_1234"
@@ -730,7 +740,7 @@ function refreshUIFromConfig() {
             btnNorte.classList.remove('border-blue-400', 'text-blue-400');
             btnNorte.classList.add('border-transparent', 'text-slate-400');
             
-            if (temporadas.length === 4) {
+            if (temporadas.length === 4 && temporadas[0] && temporadas[1]) {
                 const isSur = temporadas[0].inicio === "12-21" && temporadas[1].inicio === "03-21";
                 const isNorte = temporadas[0].inicio === "06-21" && temporadas[1].inicio === "09-21";
                 if (isSur) {
