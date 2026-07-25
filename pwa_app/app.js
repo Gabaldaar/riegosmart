@@ -504,9 +504,9 @@ function updateActiveWidget(data) {
                 // Se enciende si el estado es REGANDO (o presurizando)
                 const isPumpOn = (data.estado === "REGANDO" || data.estado === "PRESURIZANDO");
                 if (isPumpOn) {
-                    sourceContainer.innerHTML = `<i data-lucide="fan" class="w-6 h-6 text-teal-600 dark:text-teal-400 animate-spin-fast"></i>`;
+                    sourceContainer.innerHTML = `<i data-lucide="fan" class="w-8 h-8 stroke-[2.5] text-teal-655 dark:text-teal-400 animate-spin-fast"></i>`;
                 } else {
-                    sourceContainer.innerHTML = `<i data-lucide="fan" class="w-6 h-6 text-slate-400 opacity-40"></i>`;
+                    sourceContainer.innerHTML = `<i data-lucide="fan" class="w-8 h-8 stroke-[2] text-slate-400 opacity-40"></i>`;
                 }
             } else {
                 // Agua de red: Válvula animada (faucet)
@@ -515,14 +515,14 @@ function updateActiveWidget(data) {
                 if (isFlowing) {
                     sourceContainer.innerHTML = `
                         <div class="relative flex flex-col items-center">
-                            <i data-lucide="faucet" class="w-6 h-6 text-teal-600 dark:text-teal-400"></i>
-                            <i data-lucide="droplet" class="w-3 h-3 text-blue-500 absolute bottom-[-8px] animate-drip"></i>
+                            <i data-lucide="faucet" class="w-8 h-8 stroke-[2.5] text-teal-655 dark:text-teal-400"></i>
+                            <i data-lucide="droplet" class="w-3.5 h-3.5 stroke-[3] text-blue-500 absolute bottom-[-9px] animate-drip"></i>
                         </div>
                     `;
                 } else {
                     sourceContainer.innerHTML = `
                         <div class="relative flex flex-col items-center opacity-40">
-                            <i data-lucide="faucet" class="w-6 h-6 text-slate-400"></i>
+                            <i data-lucide="faucet" class="w-8 h-8 stroke-[2] text-slate-400"></i>
                         </div>
                     `;
                 }
@@ -534,14 +534,14 @@ function updateActiveWidget(data) {
             if (isZoneWatering) {
                 valveContainer.innerHTML = `
                     <div class="relative flex flex-col items-center">
-                        <i data-lucide="faucet" class="w-6 h-6 text-teal-600 dark:text-teal-400"></i>
-                        <i data-lucide="droplet" class="w-3 h-3 text-blue-500 absolute bottom-[-8px] animate-drip"></i>
+                        <i data-lucide="faucet" class="w-8 h-8 stroke-[2.5] text-teal-655 dark:text-teal-400"></i>
+                        <i data-lucide="droplet" class="w-3.5 h-3.5 stroke-[3] text-blue-500 absolute bottom-[-9px] animate-drip"></i>
                     </div>
                 `;
             } else {
                 valveContainer.innerHTML = `
                     <div class="relative flex flex-col items-center opacity-40">
-                        <i data-lucide="faucet" class="w-6 h-6 text-slate-400"></i>
+                        <i data-lucide="faucet" class="w-8 h-8 stroke-[2] text-slate-400"></i>
                     </div>
                 `;
             }
