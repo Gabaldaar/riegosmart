@@ -155,7 +155,7 @@ async def conectar_mqtt_async():
         # Aplicar timeout de operación sobre el socket abierto por umqtt
         if hasattr(mqtt_client, 'sock') and mqtt_client.sock:
             try:
-                mqtt_client.sock.settimeout(5.0)
+                mqtt_client.sock.settimeout(3.0)
             except:
                 pass  # Algunos backends no soportan settimeout; se ignora de forma segura
 
@@ -188,7 +188,7 @@ async def conectar_mqtt_async():
                 
         if hasattr(mqtt_client, 'sock') and mqtt_client.sock:
             mqtt_client.sock = SockWrapper(mqtt_client.sock)
-            mqtt_client.sock.settimeout(5.0)
+            mqtt_client.sock.settimeout(3.0)
             
         topic_hash = riego_core.calcular_hash_seguro()
         if topic_hash:

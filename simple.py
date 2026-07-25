@@ -67,7 +67,7 @@ class MQTTClient:
 
     def connect(self, clean_session=True):
         self.sock = socket.socket()
-        self.sock.settimeout(10.0)
+        self.sock.settimeout(3.0)
         addr = socket.getaddrinfo(self.server, self.port)[0][-1]
         self.sock.connect(addr)
         if self.ssl:
