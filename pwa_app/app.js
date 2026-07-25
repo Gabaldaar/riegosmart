@@ -698,6 +698,10 @@ function refreshUIFromConfig() {
                     const val = parseInt(e.target.value);
                     const nuevas = JSON.parse(JSON.stringify(temporadas)); // clonar
                     nuevas[idx].porcentaje = val;
+                    
+                    state.deviceConfig.ajustes_estacionales = nuevas;
+                    refreshUIFromConfig();
+                    
                     sendCmd({ comando: "UPDATE_CONFIG", config: { ajustes_estacionales: nuevas } });
                     pendingCommand = true;
                 });
@@ -893,6 +897,10 @@ function openEditSeasonModal(idx, seasonData) {
         const nuevas = JSON.parse(JSON.stringify(state.deviceConfig.ajustes_estacionales));
         nuevas[idx].inicio = ini;
         nuevas[idx].fin = fin;
+        
+        state.deviceConfig.ajustes_estacionales = nuevas;
+        refreshUIFromConfig();
+        
         sendCmd({ comando: "UPDATE_CONFIG", config: { ajustes_estacionales: nuevas } });
         pendingCommand = true;
         
