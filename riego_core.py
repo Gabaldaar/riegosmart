@@ -290,7 +290,7 @@ async def ejecutar_riego():
                     
                 z_config = programa_activo["zonas"][str_z]
                 min_base = z_config.get("minutos", 0)
-                min_reales = int(min_base * ajuste)
+                min_reales = round(min_base * ajuste)
                 
                 if min_reales < 0.5:
                     continue
@@ -322,6 +322,7 @@ async def ejecutar_riego():
                         
                     # Encender zona y notificar PWA
                     zonas[z_idx].value(0)
+                    mv.value(1) # Asegurar bomba (MV) encendida
                     zona_actual_idx = str_z
                     duracion_ciclo_actual = int(t_ciclo * 60)
                     ts_inicio_ciclo = time.time()
@@ -346,6 +347,7 @@ async def ejecutar_riego():
                     # Transición o Soak
                     if c < ciclos - 1 and soak > 0:
                         zonas[z_idx].value(1) # Soak OFF
+                        mv.value(0) # Apagar bomba (MV) durante remojo
                         estado_riego = "REMOJANDO"
                         duracion_ciclo_actual = int(soak * 60)
                         ts_inicio_ciclo = time.time()

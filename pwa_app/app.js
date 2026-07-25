@@ -535,6 +535,7 @@ function calculateNextWatering() {
     
     let minDiff = Infinity;
     let nextProgStr = "No hay riegos programados";
+    let nextProgDetails = "";
     let nextProgId = null;
 
     for (const [pKey, pObj] of Object.entries(state.deviceConfig.programas)) {
@@ -589,12 +590,38 @@ function calculateNextWatering() {
                         if (dayIdx === 0) dayIdx = 7;
                         nextProgStr = `${dNames[dayIdx]} a las ${hora_inicio}h - ${pName}`;
                     }
+
+                    // Calcular el desglose de zonas, duración y ciclo/remojo
+                    let zonesDetail = [];
+                    if (pObj.zonas) {
+                        const zKeys = Object.keys(pObj.zonas).sort((a,b) => {
+                            const numA = parseInt(a.replace(/\D/g, '')) || 0;
+                            const numB = parseInt(b.replace(/\D/g, '')) || 0;
+                            return numA - numB;
+                        });
+                        for (const zKey of zKeys) {
+                            const z = pObj.zonas[zKey];
+                            if (z.minutos > 0) {
+                                const zName = obtenerNombreZona(zKey);
+                                let detail = `${zName} (${z.minutos} min`;
+                                if (z.cycle_min && z.cycle_min > 0 && z.cycle_min < z.minutos) {
+                                    detail += ` - Ciclos: ${z.cycle_min}/${z.soak_min || 0} min`;
+                                }
+                                detail += `)`;
+                                zonesDetail.push(detail);
+                            }
+                        }
+                    }
+                    nextProgDetails = zonesDetail.join(" | ");
                 }
             }
         }
     }
     const el = document.getElementById('next-watering-time');
     if (el) el.textContent = nextProgStr;
+
+    const detailsEl = document.getElementById('next-watering-details');
+    if (detailsEl) detailsEl.textContent = nextProgDetails;
     
     const btnStart = document.getElementById('btn-next-start');
     if (btnStart) {
