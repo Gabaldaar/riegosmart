@@ -2,6 +2,7 @@
 html, body {
     overscroll-behavior-y: none;
     -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 /* Custom Scrollbar for Logs */
@@ -9,10 +10,18 @@ html, body {
     width: 6px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(226, 232, 240, 0.5); /* slate-200 */
+    border-radius: 10px;
+}
+.dark .custom-scrollbar::-webkit-scrollbar-track {
     background: rgba(30, 41, 59, 0.5); 
     border-radius: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.8); /* slate-400 */
+    border-radius: 10px;
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
     background: rgba(71, 85, 105, 0.8); 
     border-radius: 10px;
 }
@@ -20,17 +29,66 @@ html, body {
     background: rgba(100, 116, 139, 1); 
 }
 
-/* Day Button active state */
-.day-btn.active {
-    background-color: #0d9488; /* teal-600 */
-    color: #ffffff;
+/* Date input color scheme adaptation */
+input[type="date"] {
+    color-scheme: light;
+}
+.dark input[type="date"] {
+    color-scheme: dark;
 }
 
-/* Prog tab active state */
-.prog-tab.active {
-    background-color: #334155; /* slate-700 */
-    color: #ffffff;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+/* Active states for program tabs, hw settings buttons, pump buttons */
+.prog-tab.bg-slate-700, .hw-zones-btn.bg-slate-700, .hw-pump-btn.bg-slate-700 {
+    background-color: #ffffff !important;
+    color: #0f172a !important; /* slate-900 */
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+}
+.dark .prog-tab.bg-slate-700, .dark .hw-zones-btn.bg-slate-700, .dark .hw-pump-btn.bg-slate-700 {
+    background-color: #334155 !important; /* slate-700 */
+    color: #ffffff !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Inactive states */
+.prog-tab.text-slate-400, .hw-zones-btn.text-slate-400, .hw-pump-btn.text-slate-400 {
+    color: #64748b !important; /* slate-500 */
+}
+.dark .prog-tab.text-slate-400, .dark .hw-zones-btn.text-slate-400, .dark .hw-pump-btn.text-slate-400 {
+    color: #94a3b8 !important; /* slate-400 */
+}
+
+/* Day buttons inactive states */
+.day-btn {
+    background-color: #f1f5f9 !important; /* slate-100 */
+    color: #475569 !important; /* slate-600 */
+    transition: all 0.2s ease;
+}
+.dark .day-btn {
+    background-color: #334155 !important; /* slate-700 */
+    color: #cbd5e1 !important; /* slate-300 */
+}
+/* Day buttons active states */
+.day-btn.active {
+    background-color: #0d9488 !important; /* teal-600 */
+    color: #ffffff !important;
+}
+
+/* Manual zone selector buttons inactive */
+.manual-z-btn.bg-slate-900 {
+    background-color: #f1f5f9 !important; /* slate-100 */
+    border-color: #e2e8f0 !important; /* slate-200 */
+    color: #475569 !important; /* slate-600 */
+}
+.manual-z-btn.bg-slate-900:hover {
+    color: #0f172a !important; /* slate-900 */
+}
+.dark .manual-z-btn.bg-slate-900 {
+    background-color: #0f172a !important; /* slate-900 */
+    border-color: #334155 !important; /* slate-700 */
+    color: #94a3b8 !important; /* slate-400 */
+}
+.dark .manual-z-btn.bg-slate-900:hover {
+    color: #ffffff !important;
 }
 
 /* Animations */

@@ -145,6 +145,7 @@ function showToast(msg) {
 // ==========================================
 document.addEventListener("DOMContentLoaded", async () => {
     initTabs();
+    initTheme();
     initSettingsUI();
     initSchedulerUI();
     initHelpModals();
@@ -564,22 +565,22 @@ function refreshUIFromConfig() {
         } else {
             temporadas.forEach((temp, idx) => {
                 const card = document.createElement('div');
-                card.className = "bg-slate-900 border border-slate-700 p-3 rounded-xl";
+                card.className = "bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-xl transition-colors duration-200";
                 card.innerHTML = `
                     <div class="flex justify-between items-center mb-2">
                         <div>
-                            <div class="text-sm font-bold text-slate-200">${temp.nombre || 'Temporada'}</div>
-                            <div class="text-xs text-slate-400">${temp.inicio} al ${temp.fin}</div>
+                            <div class="text-sm font-bold text-slate-800 dark:text-slate-200">${temp.nombre || 'Temporada'}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">${temp.inicio} al ${temp.fin}</div>
                         </div>
-                        <button class="text-slate-500 hover:text-teal-400 transition-colors btn-edit-season" data-idx="${idx}">
+                        <button class="text-slate-400 dark:text-slate-500 hover:text-teal-605 dark:hover:text-teal-400 transition-colors btn-edit-season" data-idx="${idx}">
                             <i data-lucide="edit-3" class="w-4 h-4"></i>
                         </button>
                     </div>
                     <div class="flex justify-between items-center mb-1">
-                        <span class="text-xs text-slate-400">Porcentaje</span>
-                        <span id="pct-val-${idx}" class="text-xs font-bold ${temp.porcentaje !== 100 ? 'text-yellow-500' : 'text-teal-400'}">${temp.porcentaje}%</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">Porcentaje</span>
+                        <span id="pct-val-${idx}" class="text-xs font-bold ${temp.porcentaje !== 100 ? 'text-yellow-600 dark:text-yellow-500' : 'text-teal-655 dark:text-teal-400'}">${temp.porcentaje}%</span>
                     </div>
-                    <input type="range" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500 season-slider" data-idx="${idx}" min="10" max="250" step="10" value="${temp.porcentaje}">
+                    <input type="range" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500 season-slider" data-idx="${idx}" min="10" max="250" step="10" value="${temp.porcentaje}">
                 `;
                 seasonsContainer.appendChild(card);
             });
@@ -888,8 +889,8 @@ function initSchedulerUI() {
         const div = document.createElement('div');
         div.className = "flex items-center gap-2";
         div.innerHTML = `
-            <input type="time" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm focus:outline-none focus:border-teal-500 time-input">
-            <button class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition" onclick="this.parentElement.remove(); updateTempProgData();"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            <input type="time" class="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm focus:outline-none focus:border-teal-500 text-slate-800 dark:text-slate-100 time-input">
+            <button class="p-2 text-red-550 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-lg transition" onclick="this.parentElement.remove(); updateTempProgData();"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
         `;
         cont.appendChild(div);
         lucide.createIcons();
@@ -956,8 +957,8 @@ function loadProgramIntoUI(progId) {
         const div = document.createElement('div');
         div.className = "flex items-center gap-2";
         div.innerHTML = `
-            <input type="time" value="${t}" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm focus:outline-none focus:border-teal-500 time-input">
-            <button class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition" onclick="this.parentElement.remove(); updateTempProgData();"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            <input type="time" value="${t}" class="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm focus:outline-none focus:border-teal-500 text-slate-800 dark:text-slate-100 time-input">
+            <button class="p-2 text-red-550 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-lg transition" onclick="this.parentElement.remove(); updateTempProgData();"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
         `;
         contTimes.appendChild(div);
         div.querySelector('input').addEventListener('change', updateTempProgData);
@@ -974,30 +975,30 @@ function loadProgramIntoUI(progId) {
         const zData = prog.zonas[zoneId] || prog.zonas[i] || { minutos: 0, cycle_min: 0, soak_min: 0 };
         
         const div = document.createElement('div');
-        div.className = "bg-slate-900 border border-slate-700 rounded-xl p-3";
+        div.className = "bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 transition-colors duration-200";
         div.innerHTML = `
             <div class="flex justify-between items-center mb-2">
                 <div class="flex items-center flex-1 pr-2">
-                    <span class="text-xs font-bold text-teal-500 mr-2 whitespace-nowrap">ZONA ${i}:</span>
-                    <input type="text" class="bg-transparent text-sm font-medium w-full focus:outline-none focus:border-b focus:border-teal-500 z-name-input" data-zidx="${i}" value="${zName}" placeholder="Nombre...">
+                    <span class="text-xs font-bold text-teal-655 dark:text-teal-400 mr-2 whitespace-nowrap">ZONA ${i}:</span>
+                    <input type="text" class="bg-transparent text-sm font-medium w-full focus:outline-none focus:border-b focus:border-teal-500 z-name-input text-slate-800 dark:text-slate-200" data-zidx="${i}" value="${zName}" placeholder="Nombre...">
                 </div>
                 <div class="flex items-center gap-2">
-                    <input type="number" min="0" max="240" class="w-16 bg-slate-800 border border-slate-600 rounded p-1 text-center text-sm z-min-input" data-zidx="${i}" value="${zData.minutos}">
-                    <span class="text-xs text-slate-400">min</span>
+                    <input type="number" min="0" max="240" class="w-16 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-center text-sm text-slate-800 dark:text-slate-100 z-min-input" data-zidx="${i}" value="${zData.minutos}">
+                    <span class="text-xs text-slate-500 dark:text-slate-400">min</span>
                 </div>
             </div>
-            <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none">
-                <input type="checkbox" class="rounded border-slate-600 text-teal-500 bg-slate-800 z-cycle-check" data-zidx="${i}" ${zData.cycle_min > 0 && zData.cycle_min < zData.minutos ? 'checked' : ''}>
+            <label class="flex items-center gap-2 text-xs text-slate-550 dark:text-slate-400 cursor-pointer select-none">
+                <input type="checkbox" class="rounded border-slate-300 dark:border-slate-600 text-teal-655 dark:text-teal-500 bg-white dark:bg-slate-800 z-cycle-check" data-zidx="${i}" ${zData.cycle_min > 0 && zData.cycle_min < zData.minutos ? 'checked' : ''}>
                 Activar Ciclo y Remojo
             </label>
             <div class="z-cycle-opts mt-2 grid grid-cols-2 gap-2 ${zData.cycle_min > 0 && zData.cycle_min < zData.minutos ? '' : 'hidden'}">
                 <div>
-                    <span class="text-[10px] text-slate-500">Ciclo (min)</span>
-                    <input type="number" min="1" class="w-full bg-slate-800 border border-slate-600 rounded p-1 text-sm z-c-input" data-zidx="${i}" value="${zData.cycle_min || 5}">
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400">Ciclo (min)</span>
+                    <input type="number" min="1" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-sm text-slate-800 dark:text-slate-100 z-c-input" data-zidx="${i}" value="${zData.cycle_min || 5}">
                 </div>
                 <div>
-                    <span class="text-[10px] text-slate-500">Remojo (min)</span>
-                    <input type="number" min="1" class="w-full bg-slate-800 border border-slate-600 rounded p-1 text-sm z-s-input" data-zidx="${i}" value="${zData.soak_min || 10}">
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400">Remojo (min)</span>
+                    <input type="number" min="1" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-sm text-slate-800 dark:text-slate-100 z-s-input" data-zidx="${i}" value="${zData.soak_min || 10}">
                 </div>
             </div>
         `;
@@ -1111,13 +1112,13 @@ function renderLogs(logsArray) {
     
     logsArray.reverse().forEach(log => {
         const div = document.createElement('div');
-        div.className = "flex gap-3 text-sm p-3 rounded-xl bg-slate-900 border border-slate-800";
+        div.className = "flex gap-3 text-sm p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 transition-colors duration-200";
         
-        let icon = '<i data-lucide="info" class="w-4 h-4 text-slate-400"></i>';
-        if (log.tipo === 'error' || log.tipo === 'alerta') icon = '<i data-lucide="alert-triangle" class="w-4 h-4 text-red-400"></i>';
-        else if (log.tipo === 'inicio_prog') icon = '<i data-lucide="play-circle" class="w-4 h-4 text-teal-400"></i>';
-        else if (log.tipo === 'fin_prog') icon = '<i data-lucide="check-circle" class="w-4 h-4 text-green-400"></i>';
-        else if (log.tipo === 'inicio_zona') icon = '<i data-lucide="droplets" class="w-4 h-4 text-blue-400"></i>';
+        let icon = '<i data-lucide="info" class="w-4 h-4 text-slate-500 dark:text-slate-400"></i>';
+        if (log.tipo === 'error' || log.tipo === 'alerta') icon = '<i data-lucide="alert-triangle" class="w-4 h-4 text-red-550 dark:text-red-400"></i>';
+        else if (log.tipo === 'inicio_prog') icon = '<i data-lucide="play-circle" class="w-4 h-4 text-teal-655 dark:text-teal-400"></i>';
+        else if (log.tipo === 'fin_prog') icon = '<i data-lucide="check-circle" class="w-4 h-4 text-green-600 dark:text-green-400"></i>';
+        else if (log.tipo === 'inicio_zona') icon = '<i data-lucide="droplets" class="w-4 h-4 text-blue-600 dark:text-blue-400"></i>';
         
         let desc = log.msg || "";
         if (log.tipo === 'inicio_prog') desc = `Inicio de Programa: ${log.prog}`;
@@ -1135,14 +1136,14 @@ function renderLogs(logsArray) {
             const y = date.getFullYear();
             const hh = String(date.getHours()).padStart(2, '0');
             const mm = String(date.getMinutes()).padStart(2, '0');
-            timeStr = `<span class="text-xs text-slate-500 mr-2">[${d} ${m} ${y} - ${hh}:${mm}]</span>`;
+            timeStr = `<span class="text-xs text-slate-500 dark:text-slate-500 mr-2">[${d} ${m} ${y} - ${hh}:${mm}]</span>`;
         }
 
         div.innerHTML = `
             <div class="mt-0.5">${icon}</div>
             <div>
-                <span class="font-medium text-slate-300 block mb-0.5">${timeStr}${log.tipo.toUpperCase()}</span>
-                <span class="text-slate-400 text-xs">${desc}</span>
+                <span class="font-medium text-slate-800 dark:text-slate-300 block mb-0.5">${timeStr}${log.tipo.toUpperCase()}</span>
+                <span class="text-slate-600 dark:text-slate-400 text-xs">${desc}</span>
             </div>
         `;
         cont.appendChild(div);
@@ -1151,9 +1152,78 @@ function renderLogs(logsArray) {
 }
 
 // ==========================================
+// THEME MANAGER (LIGHT/DARK/SYSTEM)
+// ==========================================
+function initTheme() {
+    const savedMode = localStorage.getItem('theme-mode') || 'system';
+    applyTheme(savedMode);
+}
+
+function setTheme(mode) {
+    localStorage.setItem('theme-mode', mode);
+    applyTheme(mode);
+}
+
+function applyTheme(mode) {
+    const htmlEl = document.documentElement;
+    
+    // Clean up existing system listener if any
+    if (window._systemThemeListener) {
+        try {
+            window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', window._systemThemeListener);
+        } catch (e) {
+            // Support older devices
+            window.matchMedia('(prefers-color-scheme: dark)').removeListener(window._systemThemeListener);
+        }
+        window._systemThemeListener = null;
+    }
+    
+    if (mode === 'system') {
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const updateSystemTheme = (e) => {
+            if (e.matches) {
+                htmlEl.classList.add('dark');
+            } else {
+                htmlEl.classList.remove('dark');
+            }
+        };
+        updateSystemTheme(mq);
+        window._systemThemeListener = updateSystemTheme;
+        try {
+            mq.addEventListener('change', window._systemThemeListener);
+        } catch (e) {
+            mq.addListener(window._systemThemeListener);
+        }
+    } else if (mode === 'dark') {
+        htmlEl.classList.add('dark');
+    } else {
+        htmlEl.classList.remove('dark');
+    }
+    
+    // Update theme selector buttons active state in Settings UI
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        const themeVal = btn.getAttribute('data-theme');
+        if (themeVal === mode) {
+            btn.classList.remove('border-slate-200', 'dark:border-slate-700', 'text-slate-500', 'dark:text-slate-400', 'bg-slate-55', 'bg-slate-50', 'dark:bg-slate-900');
+            btn.classList.add('border-teal-500', 'text-teal-655', 'dark:text-teal-400', 'bg-teal-50', 'dark:bg-teal-950/30');
+        } else {
+            btn.classList.add('border-slate-200', 'dark:border-slate-700', 'text-slate-500', 'dark:text-slate-400', 'bg-slate-50', 'dark:bg-slate-900');
+            btn.classList.remove('border-teal-500', 'text-teal-655', 'dark:text-teal-400', 'bg-teal-50', 'dark:bg-teal-950/30');
+        }
+    });
+}
+
+// ==========================================
 // SETTINGS & AUTH
 // ==========================================
 function initSettingsUI() {
+    // Theme selector listeners
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.getAttribute('data-theme');
+            setTheme(mode);
+        });
+    });
     document.querySelectorAll('.hw-zones-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const val = parseInt(btn.dataset.val);
