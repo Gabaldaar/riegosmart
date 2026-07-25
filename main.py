@@ -39,6 +39,7 @@ mqtt_client = None
 mqtt_loop_task = None
 mqtt_lock = asyncio.Lock()
 wdt = None
+cached_mqtt_ip = None
 ventana_fallback_ble_s = 180  # 3 minutos de ventana de BLE offline antes de reintentar WiFi
 
 # Constantes Red
@@ -120,7 +121,7 @@ def mqtt_callback(topic, msg):
         print("[MQTT_CB] Error:", e)
 
 async def conectar_mqtt_async():
-    global mqtt_client, mqtt_loop_task
+    global mqtt_client, mqtt_loop_task, cached_mqtt_ip
     if not wifi_conectado:
         return False
         
@@ -136,9 +137,14 @@ async def conectar_mqtt_async():
         import urandom
         client_id = f"riego_{riego_core.chip_id}_{urandom.getrandbits(16)}"
         
+        broker_host = MQTT_BROKER
+        if cached_mqtt_ip:
+            broker_host = cached_mqtt_ip
+            print(f"[MQTT] Usando IP de broker cacheada: {broker_host}")
+            
         mqtt_client = MQTTClient(
             client_id,
-            MQTT_BROKER,
+            broker_host,
             port=MQTT_PORT,
             keepalive=60
         )
@@ -197,6 +203,15 @@ async def conectar_mqtt_async():
                 mqtt_client.subscribe(topic_sub)
             print(f"[MQTT] Conectado y Suscrito a {topic_sub}")
             
+            # Cachear IP si la conexión se hizo exitosamente con el dominio
+            if not cached_mqtt_ip:
+                try:
+                    addr_info = socket.getaddrinfo(MQTT_BROKER, MQTT_PORT)
+                    cached_mqtt_ip = addr_info[0][-1][0]
+                    print(f"[MQTT] Guardada IP cacheada: {cached_mqtt_ip}")
+                except Exception as ex:
+                    print("[MQTT] No se pudo cachear la IP del DNS:", ex)
+            
             if mqtt_loop_task:
                 try:
                     mqtt_loop_task.cancel()
@@ -209,6 +224,9 @@ async def conectar_mqtt_async():
             return True
     except Exception as e:
         print("[MQTT] Error conectando MQTT asíncronamente:", e)
+        if cached_mqtt_ip:
+            print("[MQTT] Limpiando IP cacheada por error de conexión.")
+            cached_mqtt_ip = None
         mqtt_client = None
         return False
 
@@ -285,6 +303,23 @@ async def conectar_wifi_non_blocking(wlan):
         await asyncio.sleep_ms(500)
     return False
 
+def comprobar_internet():
+    import usocket as socket
+    s = socket.socket()
+    s.settimeout(2.0)
+    try:
+        if wdt: wdt.feed()
+        addr = ("8.8.8.8", 53)
+        s.connect(addr)
+        s.close()
+        return True
+    except Exception as e:
+        try:
+            s.close()
+        except:
+            pass
+        return False
+
 async def gestionar_interfaces_network():
     global current_state, wifi_conectado, mqtt_client
     wlan = network.WLAN(network.STA_IF)
@@ -347,10 +382,13 @@ async def gestionar_interfaces_network():
                 current_state = STATE_FALLBACK_BLE
             else:
                 if mqtt_client is None:
-                    await conectar_mqtt_async()
-            # Fix #9 MQTT: Polling dinámico — 1s si MQTT está caído (reconexión rápida),
-            # 5s si todo está estable para no saturar el event-loop.
-            await asyncio.sleep(1 if (current_state == STATE_WIFI_ONLINE and mqtt_client is None) else 5)
+                    # Evitar llamadas DNS bloqueantes si no hay internet real
+                    if comprobar_internet():
+                        await conectar_mqtt_async()
+                    else:
+                        print("[NET] WiFi conectado, pero sin salida a Internet (DNS omitido para evitar WDT).")
+            # Fix #9 MQTT: Polling dinámico
+            await asyncio.sleep(2 if (current_state == STATE_WIFI_ONLINE and mqtt_client is None) else 5)
 
         elif current_state == STATE_FALLBACK_BLE:
             # Exclusión mutua: WiFi OFF, BLE ON durante ventana temporal
