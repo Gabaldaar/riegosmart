@@ -13,6 +13,7 @@ except Exception as e:
 
 import uasyncio as asyncio
 import network
+import usocket as socket
 import json
 import binascii
 import gc
