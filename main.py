@@ -42,6 +42,10 @@ ventana_fallback_ble_s = 180  # 3 minutos de ventana de BLE offline antes de rei
 # Constantes Red
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
+# Fix #2: El hash del topic MQTT se calcula como SHA256(chip_id[-4:] + token).
+# En main.py el nombre BLE se construye como f"Riego_{chip_id[-4:]}" por lo que
+# la PWA extrae exactamente los mismos 4 caracteres para calcular el hash.
+# Ambos extremos son consistentes por construcción.
 
 async def main():
     # Cargar config de riego y arrancar tareas core
@@ -137,20 +141,18 @@ async def conectar_mqtt_async():
         
         mqtt_client.set_callback(mqtt_callback)
         
-        # Inyectar un timeout bajo al socket connect para evitar bloqueos prolongados de CPU
-        import socket
-        org_socket = socket.socket
+        # Conectar al broker. umqtt.simple usa usocket internamente.
+        # No hacemos monkey-patching de socket.socket (no portable en MicroPython moderno).
+        # En su lugar aplicamos el timeout al socket ya creado, justo después del connect().
+        mqtt_client.connect(clean_session=True)
         
-        def socket_wrapper(*args, **kwargs):
-            s = org_socket(*args, **kwargs)
-            s.settimeout(2.0) # Timeout rápido
-            return s
-            
-        socket.socket = socket_wrapper
-        try:
-            mqtt_client.connect(clean_session=True)
-        finally:
-            socket.socket = org_socket # Restaurar inmediatamente
+        # Aplicar timeout de operación sobre el socket abierto por umqtt
+        if hasattr(mqtt_client, 'sock') and mqtt_client.sock:
+            try:
+                mqtt_client.sock.settimeout(5.0)
+            except:
+                pass  # Algunos backends no soportan settimeout; se ignora de forma segura
+
             
         # FIX: Wrapper para escrituras seguras en MicroPython
         class SockWrapper:
@@ -299,9 +301,12 @@ async def gestionar_interfaces_network():
             from ble_service import start_ble_service
             await start_ble_service(name=f"Riego_{riego_core.chip_id[-4:]}")
             
-            # Transición inmediata si se configuran credenciales
+            # Fix #4: Si se detectan credenciales WiFi, transicionar de inmediato
+            # sin ejecutar el sleep de 5s para evitar que el estado lógico y el
+            # hardware (BLE activo) estén desincronizados durante ese período.
             if tiene_creds:
                 current_state = STATE_WIFI_CONNECTING
+                continue  # Re-iterar el while True inmediatamente
             await asyncio.sleep(5)
 
         elif current_state == STATE_WIFI_CONNECTING:
@@ -328,7 +333,9 @@ async def gestionar_interfaces_network():
             else:
                 if mqtt_client is None:
                     await conectar_mqtt_async()
-            await asyncio.sleep(5)
+            # Fix #9 MQTT: Polling dinámico — 1s si MQTT está caído (reconexión rápida),
+            # 5s si todo está estable para no saturar el event-loop.
+            await asyncio.sleep(1 if (current_state == STATE_WIFI_ONLINE and mqtt_client is None) else 5)
 
         elif current_state == STATE_FALLBACK_BLE:
             # Exclusión mutua: WiFi OFF, BLE ON durante ventana temporal

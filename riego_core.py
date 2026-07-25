@@ -7,6 +7,7 @@ import sys_log
 import ds3231
 import binascii
 import hashlib
+from utils import AsyncQueue  # Fix #3: Cola asíncrona centralizada en utils.py
 
 CONFIG_FILE = "config_riego.json"
 DEFAULT_CONFIG = {
@@ -48,20 +49,6 @@ adc = None
 boot_button = None
 reloj_rtc = None
 
-class AsyncQueue:
-    def __init__(self):
-        self._queue = []
-        self._event = asyncio.Event()
-
-    async def put(self, item):
-        self._queue.append(item)
-        self._event.set()
-
-    async def get(self):
-        while not self._queue:
-            self._event.clear()
-            await self._event.wait()
-        return self._queue.pop(0)
 
 # Variables de Estado
 estado_riego = "IDLE"
@@ -69,7 +56,7 @@ programa_activo = None
 zona_actual_idx = "0"  
 cola_programas = AsyncQueue()
 tx_queue = AsyncQueue() # Cola para enviar datos (telemetria, config, logs) al movil
-abort_event = asyncio.Event()
+abort_event = None
 
 # Seguimiento para telemetria
 ts_inicio_ciclo = 0
@@ -198,7 +185,8 @@ async def tarea_monitoreo_corriente():
             if ventanas_alto >= 5:
                 print("FALLO CORRIENTE DETECTADO")
                 await sys_log.log_event({"tipo": "error", "msg": "Fallo corriente. Corto detectado."})
-                abort_event.set()
+                if abort_event is not None:  # Fix #5: Guard contra race condition al arranque
+                    abort_event.set()
                 ventanas_alto = 0
                 # Si falla forzamos FALLO_CORRIENTE
                 estado_riego = "FALLO_CORRIENTE"
@@ -436,6 +424,9 @@ async def tarea_planificador():
         await asyncio.sleep(10)
 
 async def iniciar_tareas():
+    global abort_event
+    if abort_event is None:
+        abort_event = asyncio.Event()
     await init_hardware()
     asyncio.create_task(tarea_monitoreo_corriente())
     asyncio.create_task(tarea_reset_emergencia())
@@ -448,7 +439,8 @@ async def procesar_comando(cmd_dict):
     global reinicio_pendiente
     print(f"[CORE] Procesando comando: {cmd_dict}")
     token_recibido = cmd_dict.get("token")
-    
+    origen = cmd_dict.get("_origen", "ALL")  # Asignado aquí para que esté disponible en todos los bloques
+
     if config_data.get("token_acceso") is None:
         if cmd_dict.get("comando") == "INIT_TOKEN":
             config_data["token_acceso"] = token_recibido
@@ -463,6 +455,11 @@ async def procesar_comando(cmd_dict):
             else:
                 reinicio_pendiente = True
                 print("[CORE] Riego activo. Reinicio diferido para INIT_TOKEN.")
+        else:
+            # Fix: en lugar de descartar silenciosamente, notificar al cliente
+            # que el dispositivo necesita inicialización con INIT_TOKEN.
+            print("[CORE] Dispositivo sin token. Enviando NEED_INIT al cliente.")
+            await tx_queue.put({"tipo": "NEED_INIT", "_destino": origen})
         return
         
     if token_recibido != config_data.get("token_acceso"):
@@ -472,7 +469,6 @@ async def procesar_comando(cmd_dict):
         return
         
     cmd = cmd_dict.get("comando")
-    origen = cmd_dict.get("_origen", "ALL")
     
     if cmd == "GET_STATE":
         await enviar_telemetria()
@@ -486,14 +482,26 @@ async def procesar_comando(cmd_dict):
                 resp["ssid"] = creds.get("ssid", "Desconocido")
         except:
             pass
-            
-        # Reducir peso si proviene de BLE
+
         if origen == "BLE":
-            for key in ["nombres_zonas", "ajustes_estacionales"]:
-                if key in resp:
-                     del resp[key]
-                     
-        await tx_queue.put({"tipo": "CONFIG", "data": resp, "_destino": origen})
+            # Fix #1: Fragmentar respuesta BLE en múltiples mensajes pequeños
+            # para no superar el límite de 500 bytes por mensaje del canal BLE.
+            # Parte 1 — Campos técnicos básicos (config_version, max_zonas, etc.)
+            campos_basicos = ["config_version", "max_zonas", "modo_bomba",
+                              "timestamp_rain_delay", "ssid"]
+            resp_base = {k: resp[k] for k in campos_basicos if k in resp}
+            await tx_queue.put({"tipo": "CONFIG", "data": resp_base, "_destino": "BLE"})
+
+            # Parte 2 — Un mensaje CONFIG_PROG por cada programa (la PWA los fusiona)
+            for prog_id, prog_data in resp.get("programas", {}).items():
+                await tx_queue.put({
+                    "tipo": "CONFIG_PROG",
+                    "prog_id": prog_id,
+                    "data": prog_data,
+                    "_destino": "BLE"
+                })
+        else:
+            await tx_queue.put({"tipo": "CONFIG", "data": resp, "_destino": origen})
         
     elif cmd == "GET_TEMP":
         temp = "N/A"
@@ -531,10 +539,15 @@ async def procesar_comando(cmd_dict):
             ts = cmd_dict.get("timestamp", 0)
             if ts > 0 and reloj_rtc:
                 mpy_ts = int(ts) - 946684800
-                if mpy_ts > 0:
+                # Fix #7: Validar que el timestamp corresponde a una fecha razonable.
+                # 631152000 es el epoch MicroPython (Y2K) equivalente a 2020-01-01 UTC.
+                # Esto descarta timestamps nulos, negativos o de años anteriores a 2020.
+                if mpy_ts > 631152000:
                     t = time.localtime(mpy_ts)
                     reloj_rtc.set_time(t)
                     await sys_log.log_event({"tipo": "info", "msg": "RTC Sincronizado por App"})
+                else:
+                    print("[RTC] Timestamp inválido recibido:", ts)
         except Exception as e:
             print("Error sync rtc:", e)
  
@@ -607,7 +620,12 @@ async def procesar_comando(cmd_dict):
                 abort_event.set()
                 await asyncio.sleep(2.5)
             await cola_programas.put(config_data["programas"][prog_id])
-        
+        else:
+            # Programa no encontrado localmente: responder con la config actual para que
+            # la app detecte el desajuste de versión y dispare el re-sync automático.
+            print(f"[CORE] Programa '{prog_id}' no encontrado en config local (v{config_data.get('config_version',0)}). Enviando CONFIG para re-sync.")
+            await procesar_comando({"comando": "GET_CONFIG", "token": token_recibido, "_origen": origen})
+
     elif cmd == "CANCELAR_RIEGO":
         if estado_riego != "IDLE":
             abort_event.set()
@@ -634,10 +652,22 @@ async def procesar_comando(cmd_dict):
         prog_id = cmd_dict.get("prog_id")
         prog_data = cmd_dict.get("prog_data")
         if prog_id and prog_data:
+            # Fix #9: Normalizar claves de zonas a formato "Z1".."Z8" antes de guardar.
+            # La PWA ya hace esta conversión en sendCmd(), pero se normaliza aquí también
+            # como capa defensiva ante cualquier ruta alternativa de entrada de datos.
+            if "zonas" in prog_data:
+                zonas_norm = {}
+                for z_key, z_val in prog_data["zonas"].items():
+                    norm_key = str(z_key).upper()
+                    if not norm_key.startswith("Z"):
+                        norm_key = "Z" + norm_key
+                    zonas_norm[norm_key] = z_val
+                prog_data["zonas"] = zonas_norm
+
             if "programas" not in config_data:
                 config_data["programas"] = {}
             config_data["programas"][prog_id] = prog_data
-            
+
             # Incremento local de versión
             config_data["config_version"] = config_data.get("config_version", 0) + 1
             await guardar_configuracion()

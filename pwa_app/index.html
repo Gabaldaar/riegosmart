@@ -46,9 +46,9 @@
     <!-- Custom Styles -->
     <link rel="stylesheet" href="styles.css">
 </head>
-<body class="bg-slate-950 text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30">
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30 transition-colors duration-200">
     <!-- Top Header -->
-    <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-20 flex justify-between items-center shadow-md">
+    <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 sticky top-0 z-20 flex justify-between items-center shadow-md transition-colors duration-200">
         <!-- Izquierda: Logo -->
         <div class="flex items-center gap-3 w-1/3">
             <h1 class="font-bold text-xl tracking-wide bg-gradient-to-r from-teal-400 to-blue-500 bg-clip-text text-transparent flex items-baseline gap-2">
@@ -58,24 +58,24 @@
         </div>
         
         <!-- Centro: Reloj y Temperatura -->
-        <div class="flex flex-col items-center justify-center gap-0.5 w-1/3 text-slate-400 font-mono text-xs">
+        <div class="flex flex-col items-center justify-center gap-0.5 w-1/3 text-slate-500 dark:text-slate-400 font-mono text-xs">
             <div class="flex items-center space-x-1">
-                <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-500"></i>
-                <span id="header-time" class="font-medium text-slate-300">--:--</span>
+                <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400 dark:text-slate-500"></i>
+                <span id="header-time" class="font-medium text-slate-700 dark:text-slate-300">--:--</span>
             </div>
             <div class="flex items-center space-x-1">
-                <i data-lucide="thermometer" class="w-3.5 h-3.5 text-slate-500"></i>
-                <span id="header-temp" class="font-medium text-slate-300">--°C</span>
+                <i data-lucide="thermometer" class="w-3.5 h-3.5 text-slate-400 dark:text-slate-500"></i>
+                <span id="header-temp" class="font-medium text-slate-700 dark:text-slate-300">--°C</span>
             </div>
         </div>
         
         <!-- Derecha: Conexión -->
         <div class="flex items-center justify-end gap-2 w-1/3">
-            <span id="conn-status" class="text-[10px] font-medium px-2 py-1 bg-slate-800 rounded-full text-slate-400 truncate max-w-[100px]">Desconectado</span>
-            <div id="conn-icon" class="text-slate-500">
+            <span id="conn-status" class="text-[10px] font-medium px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-655 dark:text-slate-400 truncate max-w-[100px]">Desconectado</span>
+            <div id="conn-icon" class="text-slate-400 dark:text-slate-500">
                 <i data-lucide="wifi-off" class="w-5 h-5"></i>
             </div>
-            <button id="btn-reconnect" class="p-2 rounded-full bg-slate-800 hover:bg-slate-700 transition hidden">
+            <button id="btn-reconnect" class="p-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition hidden">
                 <i data-lucide="refresh-cw" class="w-4 h-4"></i>
             </button>
         </div>
@@ -87,19 +87,19 @@
         <!-- DASHBOARD VIEW -->
         <section id="view-dashboard" class="p-4 space-y-4 tab-view">
             <!-- Active Status Widget -->
-            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
                 <div class="flex justify-between items-center mb-4">
                     <div class="flex items-center gap-2">
-                        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Estado Actual</h2>
+                        <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider">Estado Actual</h2>
                         <div id="simulated-led" class="w-2 h-2 rounded-full bg-blue-500 opacity-20 transition-opacity duration-100"></div>
                     </div>
-                    <span id="status-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-700 text-slate-300">IDLE</span>
+                    <span id="status-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">IDLE</span>
                 </div>
                 
                 <div id="next-watering-info" class="flex flex-col items-center justify-center py-6 relative">
-                    <i data-lucide="calendar-clock" class="w-8 h-8 text-slate-600 mb-2"></i>
-                    <p class="text-sm font-medium text-slate-400">Siguiente Riego</p>
-                    <p id="next-watering-time" class="text-lg font-bold text-slate-300">Calculando...</p>
+                    <i data-lucide="calendar-clock" class="w-8 h-8 text-slate-400 dark:text-slate-600 mb-2"></i>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Siguiente Riego</p>
+                    <p id="next-watering-time" class="text-lg font-bold text-slate-800 dark:text-slate-300">Calculando...</p>
                     <button id="btn-next-start" class="mt-4 px-6 py-2 bg-teal-600 hover:bg-teal-500 rounded-xl text-white text-sm font-bold transition-colors shadow-lg shadow-teal-500/20 hidden">
                         Iniciar Ahora
                     </button>
@@ -110,47 +110,47 @@
                     <div class="flex-shrink-0 flex flex-col items-center">
                         <div class="relative w-28 h-28">
                             <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                                <path class="text-slate-700" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="2.5" />
+                                <path class="text-slate-200 dark:text-slate-700" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="2.5" />
                                 <path id="progress-circle" class="text-teal-500 transition-all duration-1000 ease-linear" stroke-dasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="2.5" />
                             </svg>
                             <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
-                                <span id="time-remaining" class="text-2xl font-bold mt-1">--:--</span>
-                                <span class="text-[9px] text-slate-400 uppercase mt-0.5">restantes</span>
+                                <span id="time-remaining" class="text-2xl font-bold mt-1 text-slate-800 dark:text-white">--:--</span>
+                                <span class="text-[9px] text-slate-500 dark:text-slate-400 uppercase mt-0.5">restantes</span>
                             </div>
                         </div>
-                        <p id="active-zone-name" class="mt-3 text-sm font-bold text-teal-400">Zona Activa</p>
+                        <p id="active-zone-name" class="mt-3 text-sm font-bold text-teal-600 dark:text-teal-400">Zona Activa</p>
                     </div>
                     
                     <!-- Datos del Riego -->
                     <div class="flex-1 flex flex-col gap-2 text-xs">
-                        <div class="flex justify-between border-b border-slate-700 pb-1">
-                            <span class="text-slate-500">Total Programado:</span>
-                            <span id="info-tiempo-prog" class="font-bold text-slate-300">-</span>
+                        <div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-1">
+                            <span class="text-slate-500 dark:text-slate-400">Total Programado:</span>
+                            <span id="info-tiempo-prog" class="font-bold text-slate-800 dark:text-slate-300">-</span>
                         </div>
-                        <div class="flex justify-between border-b border-slate-700 pb-1">
-                            <span class="text-slate-500">Ajuste Estacional:</span>
-                            <span id="info-ajuste" class="font-bold text-slate-300">-</span>
+                        <div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-1">
+                            <span class="text-slate-500 dark:text-slate-400">Ajuste Estacional:</span>
+                            <span id="info-ajuste" class="font-bold text-slate-800 dark:text-slate-300">-</span>
                         </div>
-                        <div class="flex justify-between border-b border-slate-700 pb-1">
-                            <span class="text-slate-500">Ciclo (Riego):</span>
-                            <span id="info-ciclo" class="font-bold text-slate-300">-</span>
+                        <div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-1">
+                            <span class="text-slate-500 dark:text-slate-400">Ciclo (Riego):</span>
+                            <span id="info-ciclo" class="font-bold text-slate-800 dark:text-slate-300">-</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-slate-500">Remojo (Pausa):</span>
-                            <span id="info-remojo" class="font-bold text-slate-300">-</span>
+                            <span class="text-slate-500 dark:text-slate-400">Remojo (Pausa):</span>
+                            <span id="info-remojo" class="font-bold text-slate-800 dark:text-slate-300">-</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Manual Control Widget -->
-            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
-                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <i data-lucide="droplet" class="w-4 h-4"></i> Riego Manual
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+                <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <i data-lucide="droplet" class="w-4 h-4 text-teal-600 dark:text-teal-400"></i> Riego Manual
                 </h2>
                 
                 <div class="mb-5">
-                    <label class="block text-xs text-slate-400 mb-2">Seleccionar Zona</label>
+                    <label class="block text-xs text-slate-550 dark:text-slate-400 mb-2">Seleccionar Zona</label>
                     <div id="manual-zone-selector" class="grid grid-cols-2 gap-2">
                         <!-- Botones renderizados dinámicamente -->
                     </div>
@@ -158,10 +158,10 @@
                 
                 <div class="mb-5">
                     <div class="flex justify-between mb-2 text-xs">
-                        <span class="text-slate-400">Duración</span>
-                        <span id="manual-time-val" class="font-bold text-teal-400">10 min</span>
+                        <span class="text-slate-550 dark:text-slate-400">Duración</span>
+                        <span id="manual-time-val" class="font-bold text-teal-600 dark:text-teal-400">10 min</span>
                     </div>
-                    <input type="range" id="manual-time-slider" min="1" max="60" value="10" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500">
+                    <input type="range" id="manual-time-slider" min="1" max="60" value="10" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500">
                 </div>
                 
                 <button id="btn-manual-start" class="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-medium transition-colors shadow-lg shadow-teal-500/20">
@@ -175,46 +175,46 @@
             <!-- Global Adjustments -->
             <div class="grid grid-cols-1 gap-4">
                 <!-- Retraso por Lluvia -->
-                <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                            <i data-lucide="cloud-rain" class="w-4 h-4"></i> Retraso por Lluvia
+                        <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="cloud-rain" class="w-4 h-4 text-blue-500 dark:text-blue-400"></i> Retraso por Lluvia
                         </h2>
-                        <button class="text-slate-500 hover:text-blue-400 transition-colors btn-help" data-help="rain">
+                        <button class="text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors btn-help" data-help="rain">
                             <i data-lucide="help-circle" class="w-5 h-5"></i>
                         </button>
                     </div>
                     <div class="grid grid-cols-3 gap-2">
-                        <button class="btn-rain-delay py-2 bg-slate-700 rounded-lg text-sm font-medium hover:bg-blue-600/50 transition-colors" data-days="1">24h</button>
-                        <button class="btn-rain-delay py-2 bg-slate-700 rounded-lg text-sm font-medium hover:bg-blue-600/50 transition-colors" data-days="2">48h</button>
-                        <button class="btn-rain-delay py-2 bg-slate-700 rounded-lg text-sm font-medium hover:bg-blue-600/50 transition-colors" data-days="3">72h</button>
+                        <button class="btn-rain-delay py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" data-days="1">24h</button>
+                        <button class="btn-rain-delay py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" data-days="2">48h</button>
+                        <button class="btn-rain-delay py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" data-days="3">72h</button>
                     </div>
-                    <p id="rain-delay-status" class="text-xs text-blue-400 mt-3 text-center hidden flex flex-col items-center gap-2">
+                    <p id="rain-delay-status" class="text-xs text-blue-600 dark:text-blue-400 mt-3 text-center hidden flex flex-col items-center gap-2">
                         <span>Retraso activo hasta: <strong>--</strong></span>
-                        <button id="btn-cancel-rain" class="px-3 py-1 bg-red-900/50 hover:bg-red-900 text-red-400 rounded transition-colors border border-red-900/50">Cancelar Retraso</button>
+                        <button id="btn-cancel-rain" class="px-3 py-1 bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-900 text-red-600 dark:text-red-400 rounded transition-colors border border-red-200 dark:border-red-900/50">Cancelar Retraso</button>
                     </p>
                 </div>
 
                 <!-- Ajustes por Temporada (Collapsible) -->
-                <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
                     <div class="flex items-center justify-between cursor-pointer group" id="btn-toggle-seasons">
-                        <h2 class="text-sm font-semibold text-slate-400 group-hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
-                            <i data-lucide="sun" class="w-4 h-4"></i> Ajustes por Temporada
+                        <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
+                            <i data-lucide="sun" class="w-4 h-4 text-amber-500 dark:text-amber-400"></i> Ajustes por Temporada
                         </h2>
                         <div class="flex items-center gap-2">
-                            <button class="text-slate-500 hover:text-teal-400 transition-colors btn-help" data-help="seasonal" onclick="event.stopPropagation();">
+                            <button class="text-slate-400 dark:text-slate-500 hover:text-teal-500 dark:hover:text-teal-400 transition-colors btn-help" data-help="seasonal" onclick="event.stopPropagation();">
                                 <i data-lucide="help-circle" class="w-5 h-5"></i>
                             </button>
-                            <i data-lucide="chevron-down" id="icon-seasons-collapse" class="w-5 h-5 text-slate-500 group-hover:text-white transition-transform duration-300"></i>
+                            <i data-lucide="chevron-down" id="icon-seasons-collapse" class="w-5 h-5 text-slate-400 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-white transition-transform duration-300"></i>
                         </div>
                     </div>
                     
                     <div id="seasons-collapsible-content" class="hidden overflow-hidden mt-4">
                         <div class="flex justify-between items-center mb-3">
-                            <span class="text-xs text-slate-400">Preestablecer Fechas:</span>
+                            <span class="text-xs text-slate-550 dark:text-slate-400">Preestablecer Fechas:</span>
                             <div class="flex gap-2">
-                                <button id="btn-hemi-sur" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-400 transition-colors border border-transparent">Sur</button>
-                                <button id="btn-hemi-norte" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-400 transition-colors border border-transparent">Norte</button>
+                                <button id="btn-hemi-sur" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-xs text-slate-655 dark:text-slate-400 transition-colors border border-transparent">Sur</button>
+                                <button id="btn-hemi-norte" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-xs text-slate-655 dark:text-slate-400 transition-colors border border-transparent">Norte</button>
                             </div>
                         </div>
                         
@@ -230,48 +230,48 @@
         <section id="view-scheduler" class="p-4 space-y-4 tab-view hidden">
             <!-- Header Scheduler -->
             <div class="flex justify-between items-center mb-1">
-                <h2 class="text-xl font-bold text-white">Programación</h2>
-                <button onclick="document.getElementById('modal-help').classList.remove('hidden')" class="p-2 text-teal-400 hover:text-teal-300 transition bg-slate-800 rounded-full shadow">
+                <h2 class="text-xl font-bold text-slate-800 dark:text-white">Programación</h2>
+                <button onclick="document.getElementById('modal-help').classList.remove('hidden')" class="p-2 text-teal-655 dark:text-teal-400 hover:text-teal-500 dark:hover:text-teal-300 transition bg-white dark:bg-slate-800 rounded-full shadow border border-slate-200 dark:border-transparent">
                     <i data-lucide="help-circle" class="w-5 h-5"></i>
                 </button>
             </div>
             
             <!-- Tabs Programas -->
-            <div class="flex p-1 bg-slate-800 rounded-xl space-x-1 mb-4" id="program-tabs">
-                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg bg-slate-700 text-white shadow" data-prog="A">Prog A</button>
-                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white transition" data-prog="B">Prog B</button>
-                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white transition" data-prog="C">Prog C</button>
-                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white transition" data-prog="D">Prog D</button>
+            <div class="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl space-x-1 mb-4" id="program-tabs">
+                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg" data-prog="A">Prog A</button>
+                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg" data-prog="B">Prog B</button>
+                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg" data-prog="C">Prog C</button>
+                <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg" data-prog="D">Prog D</button>
             </div>
 
-            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
                 <div class="flex justify-between items-center mb-5">
-                    <input type="text" id="prog-name" class="bg-transparent border-b border-slate-600 text-lg font-bold focus:outline-none focus:border-teal-500 w-2/3" value="Riego Césped" maxlength="20">
+                    <input type="text" id="prog-name" class="bg-transparent border-b border-slate-300 dark:border-slate-600 text-lg font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-teal-500 w-2/3" value="Riego Césped" maxlength="20">
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="prog-active" class="sr-only peer" checked>
-                        <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
+                        <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
                     </label>
                 </div>
 
                 <!-- Dias -->
                 <div class="mb-5">
-                    <label class="block text-xs text-slate-400 mb-2 uppercase tracking-wider">Días de la semana</label>
+                    <label class="block text-xs text-slate-550 dark:text-slate-400 mb-2 uppercase tracking-wider">Días de la semana</label>
                     <div class="flex justify-between" id="prog-days">
-                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="1">L</button>
-                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="2">M</button>
-                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="3">M</button>
-                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="4">J</button>
-                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="5">V</button>
-                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="6">S</button>
-                        <button class="day-btn w-9 h-9 rounded-full bg-slate-700 text-sm font-medium text-slate-300" data-day="7">D</button>
+                        <button class="day-btn w-9 h-9 rounded-full text-sm font-medium" data-day="1">L</button>
+                        <button class="day-btn w-9 h-9 rounded-full text-sm font-medium" data-day="2">M</button>
+                        <button class="day-btn w-9 h-9 rounded-full text-sm font-medium" data-day="3">M</button>
+                        <button class="day-btn w-9 h-9 rounded-full text-sm font-medium" data-day="4">J</button>
+                        <button class="day-btn w-9 h-9 rounded-full text-sm font-medium" data-day="5">V</button>
+                        <button class="day-btn w-9 h-9 rounded-full text-sm font-medium" data-day="6">S</button>
+                        <button class="day-btn w-9 h-9 rounded-full text-sm font-medium" data-day="7">D</button>
                     </div>
                 </div>
 
                 <!-- Horarios -->
                 <div class="mb-5">
                     <div class="flex justify-between items-center mb-2">
-                        <label class="block text-xs text-slate-400 uppercase tracking-wider">Horas de Arranque</label>
-                        <button id="add-time-btn" class="text-teal-400 text-xs flex items-center"><i data-lucide="plus" class="w-3 h-3 mr-1"></i>Añadir</button>
+                        <label class="block text-xs text-slate-550 dark:text-slate-400 uppercase tracking-wider">Horas de Arranque</label>
+                        <button id="add-time-btn" class="text-teal-600 dark:text-teal-400 text-xs flex items-center hover:underline"><i data-lucide="plus" class="w-3 h-3 mr-1"></i>Añadir</button>
                     </div>
                     <div id="prog-times" class="space-y-2">
                         <!-- Dinamico -->
@@ -280,7 +280,7 @@
 
                 <!-- Zonas -->
                 <div>
-                    <label class="block text-xs text-slate-400 mb-2 uppercase tracking-wider">Tiempos por Zona</label>
+                    <label class="block text-xs text-slate-550 dark:text-slate-400 mb-2 uppercase tracking-wider">Tiempos por Zona</label>
                     <div id="prog-zones" class="space-y-3">
                         <!-- Dinamico -->
                     </div>
@@ -296,17 +296,17 @@
 
         <!-- HISTORY VIEW -->
         <section id="view-history" class="p-4 space-y-4 tab-view hidden h-full">
-            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50 flex flex-col h-full min-h-[400px]">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 flex flex-col h-full min-h-[400px] transition-colors duration-200">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                        <i data-lucide="scroll-text" class="w-4 h-4"></i> Caja Negra
+                    <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="scroll-text" class="w-4 h-4 text-teal-655 dark:text-teal-400"></i> Caja Negra
                     </h2>
                     <div class="flex gap-2">
-                        <button id="btn-clear-logs" class="p-2 bg-slate-700 rounded-lg hover:bg-red-900/50 transition border border-transparent hover:border-red-900/50 text-slate-300 hover:text-red-400" title="Limpiar Historial">
+                        <button id="btn-clear-logs" class="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 border border-transparent hover:border-red-200 dark:hover:border-red-900/50 text-slate-700 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 transition" title="Limpiar Historial">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                         </button>
-                        <button id="btn-refresh-logs" class="p-2 bg-slate-700 rounded-lg hover:bg-slate-600 transition" title="Actualizar">
-                            <i data-lucide="refresh-cw" class="w-4 h-4 text-slate-300"></i>
+                        <button id="btn-refresh-logs" class="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition" title="Actualizar">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                         </button>
                     </div>
                 </div>
@@ -321,10 +321,28 @@
 
         <!-- SETTINGS VIEW -->
         <section id="view-settings" class="p-4 space-y-4 tab-view hidden">
+            <!-- Appearance / Theme Selector -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+                <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <i data-lucide="palette" class="w-4 h-4 text-teal-655 dark:text-teal-400"></i> Apariencia
+                </h2>
+                <div class="grid grid-cols-3 gap-2.5" id="theme-selector">
+                    <button class="theme-btn flex flex-col items-center gap-1.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white text-xs font-semibold transition-all shadow-sm" data-theme="light">
+                        <i data-lucide="sun" class="w-4 h-4"></i> Claro
+                    </button>
+                    <button class="theme-btn flex flex-col items-center gap-1.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white text-xs font-semibold transition-all shadow-sm" data-theme="dark">
+                        <i data-lucide="moon" class="w-4 h-4"></i> Oscuro
+                    </button>
+                    <button class="theme-btn flex flex-col items-center gap-1.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white text-xs font-semibold transition-all shadow-sm" data-theme="system">
+                        <i data-lucide="monitor" class="w-4 h-4"></i> Sistema
+                    </button>
+                </div>
+            </div>
+
             <!-- Asistente BLE -->
-            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
-                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <i data-lucide="bluetooth" class="w-4 h-4"></i> Vinculación
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+                <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <i data-lucide="bluetooth" class="w-4 h-4 text-blue-500 dark:text-blue-400"></i> Vinculación
                 </h2>
                 <button id="btn-ble-pair" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors mb-3">
                     Buscar Equipo (Bluetooth)
@@ -332,40 +350,40 @@
                 <button id="btn-wifi-connect" class="w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-medium transition-colors mb-3">
                     Conectar por Wi-Fi (Remoto)
                 </button>
-                <div id="ble-info" class="text-xs text-slate-400 hidden">
-                    Conectado a: <span id="ble-device-name" class="font-bold text-slate-200"></span><br>
-                    Chip ID: <span id="ble-chip-id" class="font-bold text-slate-200"></span>
+                <div id="ble-info" class="text-xs text-slate-500 dark:text-slate-400 hidden">
+                    Conectado a: <span id="ble-device-name" class="font-bold text-slate-800 dark:text-slate-200"></span><br>
+                    Chip ID: <span id="ble-chip-id" class="font-bold text-slate-800 dark:text-slate-200"></span>
                 </div>
             </div>
 
             <!-- Hardware Config -->
-            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                        <i data-lucide="cpu" class="w-4 h-4"></i> Hardware
+                    <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="cpu" class="w-4 h-4 text-purple-500 dark:text-purple-400"></i> Hardware
                     </h2>
-                    <button class="text-slate-500 hover:text-teal-400 transition-colors btn-help" data-help="hardware">
+                    <button class="text-slate-400 dark:text-slate-500 hover:text-teal-555 dark:hover:text-teal-400 transition-colors btn-help" data-help="hardware">
                         <i data-lucide="help-circle" class="w-5 h-5"></i>
                     </button>
                 </div>
                 
                 <div class="mb-4">
-                    <label class="block text-xs text-slate-400 mb-2">Capacidad del Equipo</label>
-                    <div class="flex bg-slate-900 p-1 rounded-lg">
+                    <label class="block text-xs text-slate-550 dark:text-slate-400 mb-2">Capacidad del Equipo</label>
+                    <div class="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
                         <button class="hw-zones-btn flex-1 py-1.5 rounded-md text-sm font-medium bg-slate-700 text-white" data-val="4">4 Zonas</button>
                         <button class="hw-zones-btn flex-1 py-1.5 rounded-md text-sm font-medium text-slate-400" data-val="8">8 Zonas</button>
                     </div>
                 </div>
                 
                 <div class="mb-4">
-                    <label class="block text-xs text-slate-400 mb-2">Modo Hidráulico (Transición)</label>
-                    <div class="flex bg-slate-900 p-1 rounded-lg">
+                    <label class="block text-xs text-slate-550 dark:text-slate-400 mb-2">Modo Hidráulico (Transición)</label>
+                    <div class="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
                         <button class="hw-pump-btn flex-1 py-1.5 rounded-md text-sm font-medium bg-slate-700 text-white" data-val="true">Bomba (Overlap)</button>
                         <button class="hw-pump-btn flex-1 py-1.5 rounded-md text-sm font-medium text-slate-400" data-val="false">Red (Pausa)</button>
                     </div>
                 </div>
                 
-                <button id="btn-save-hw" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-colors">
+                <button id="btn-save-hw" class="w-full py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-medium transition-colors border border-slate-200 dark:border-transparent">
                     Guardar Hardware
                 </button>
                 <button id="btn-sync-rtc" class="w-full py-2 bg-blue-600/80 hover:bg-blue-600 text-white rounded-xl text-sm font-medium transition-colors mt-3">
@@ -374,36 +392,36 @@
             </div>
 
             <!-- WiFi Config -->
-            <div class="bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-700/50">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                        <i data-lucide="wifi" class="w-4 h-4"></i> Red Wi-Fi
+                    <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="wifi" class="w-4 h-4 text-emerald-555 dark:text-emerald-400"></i> Red Wi-Fi
                     </h2>
-                    <span id="current-ssid-display" class="text-xs text-teal-400 font-medium">No configurada</span>
+                    <span id="current-ssid-display" class="text-xs text-teal-600 dark:text-teal-400 font-medium">No configurada</span>
                 </div>
                 <div class="space-y-3">
-                    <input type="text" id="wifi-ssid" placeholder="Nombre de red (SSID)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-teal-500">
+                    <input type="text" id="wifi-ssid" placeholder="Nombre de red (SSID)" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-teal-500 text-slate-800 dark:text-slate-200">
                     <div class="relative">
-                        <input type="password" id="wifi-pass" placeholder="Contraseña" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-teal-500 pr-10">
-                        <button type="button" onclick="const p=document.getElementById('wifi-pass'); const i=this.querySelector('i'); if(p.type==='password'){p.type='text';i.setAttribute('data-lucide','eye-off');}else{p.type='password';i.setAttribute('data-lucide','eye');} lucide.createIcons();" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300">
+                        <input type="password" id="wifi-pass" placeholder="Contraseña" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-teal-500 pr-10 text-slate-800 dark:text-slate-200">
+                        <button type="button" onclick="const p=document.getElementById('wifi-pass'); const i=this.querySelector('svg, i'); if(p.type==='password'){p.type='text'; if(i) i.setAttribute('data-lucide','eye-off');}else{p.type='password'; if(i) i.setAttribute('data-lucide','eye');} lucide.createIcons();" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
                             <i data-lucide="eye" class="w-4 h-4"></i>
                         </button>
                     </div>
-                    <button id="btn-send-wifi" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-medium transition-colors">
+                    <button id="btn-send-wifi" class="w-full py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-605 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-medium transition-colors border border-slate-200 dark:border-transparent">
                         Enviar Credenciales
                     </button>
                 </div>
             </div>
 
             <!-- Peligro -->
-            <div class="bg-red-950/30 rounded-2xl p-5 shadow-lg border border-red-900/50">
-                <h2 class="text-sm font-semibold text-red-400 uppercase tracking-wider mb-2">Zona de Peligro</h2>
-                <p class="text-xs text-slate-400 mb-4">Estas acciones borrarán configuraciones de forma permanente.</p>
+            <div class="bg-red-50 dark:bg-red-950/30 rounded-2xl p-5 shadow-lg border border-red-200 dark:border-red-900/50 transition-colors duration-200">
+                <h2 class="text-sm font-semibold text-red-655 dark:text-red-400 uppercase tracking-wider mb-2">Zona de Peligro</h2>
+                <p class="text-xs text-slate-555 dark:text-slate-400 mb-4">Estas acciones borrarán configuraciones de forma permanente.</p>
                 
-                <button id="btn-clear-local" class="w-full py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors mb-2">
+                <button id="btn-clear-local" class="w-full py-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-colors mb-2 shadow-sm">
                     Cerrar Sesión (Borrar Token Local)
                 </button>
-                <button id="btn-factory-reset" class="w-full py-2 bg-red-900/80 hover:bg-red-800 text-white rounded-xl text-sm font-medium transition-colors">
+                <button id="btn-factory-reset" class="w-full py-2 bg-red-600 dark:bg-red-900/80 hover:bg-red-500 dark:hover:bg-red-800 text-white rounded-xl text-sm font-medium transition-colors">
                     Restablecer Hardware a Fábrica
                 </button>
             </div>
@@ -412,21 +430,21 @@
     </main>
 
     <!-- Bottom Navigation -->
-    <nav class="bg-slate-900/90 backdrop-blur-md border-t border-slate-800 fixed bottom-0 w-full z-20 pb-safe">
+    <nav class="bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 fixed bottom-0 w-full z-20 pb-safe transition-colors duration-200">
         <div class="flex justify-around items-center p-2">
-            <button class="nav-btn flex flex-col items-center p-2 text-teal-400" data-target="view-dashboard">
+            <button class="nav-btn flex flex-col items-center p-2 text-teal-655 dark:text-teal-400" data-target="view-dashboard">
                 <i data-lucide="layout-dashboard" class="w-6 h-6 mb-1"></i>
                 <span class="text-[10px] font-medium">Panel</span>
             </button>
-            <button class="nav-btn flex flex-col items-center p-2 text-slate-500 hover:text-slate-300 transition" data-target="view-scheduler">
+            <button class="nav-btn flex flex-col items-center p-2 text-slate-400 hover:text-slate-655 dark:text-slate-500 dark:hover:text-slate-300 transition" data-target="view-scheduler">
                 <i data-lucide="calendar-clock" class="w-6 h-6 mb-1"></i>
                 <span class="text-[10px] font-medium">Programas</span>
             </button>
-            <button class="nav-btn flex flex-col items-center p-2 text-slate-500 hover:text-slate-300 transition" data-target="view-history">
+            <button class="nav-btn flex flex-col items-center p-2 text-slate-400 hover:text-slate-655 dark:text-slate-500 dark:hover:text-slate-300 transition" data-target="view-history">
                 <i data-lucide="list" class="w-6 h-6 mb-1"></i>
                 <span class="text-[10px] font-medium">Historial</span>
             </button>
-            <button class="nav-btn flex flex-col items-center p-2 text-slate-500 hover:text-slate-300 transition" data-target="view-settings">
+            <button class="nav-btn flex flex-col items-center p-2 text-slate-400 hover:text-slate-655 dark:text-slate-500 dark:hover:text-slate-300 transition" data-target="view-settings">
                 <i data-lucide="settings" class="w-6 h-6 mb-1"></i>
                 <span class="text-[10px] font-medium">Ajustes</span>
             </button>
@@ -436,35 +454,35 @@
     <!-- Modals -->
     <!-- Setup Modal (First Run / Auth) -->
     <div id="modal-auth" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-center items-center p-4">
-        <div class="bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-700">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-700 transition-colors duration-200">
             <div class="text-center mb-6">
-                <div class="w-16 h-16 bg-teal-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <i data-lucide="lock" class="w-8 h-8 text-teal-400"></i>
+                <div class="w-16 h-16 bg-teal-500/10 dark:bg-teal-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="lock" class="w-8 h-8 text-teal-655 dark:text-teal-400"></i>
                 </div>
-                <h2 class="text-xl font-bold text-white mb-1" id="auth-title">Vincular Equipo</h2>
-                <p class="text-xs text-slate-400" id="auth-desc">El equipo detectado es nuevo. Crea una contraseña de acceso.</p>
+                <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-1" id="auth-title">Vincular Equipo</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400" id="auth-desc">El equipo detectado es nuevo. Crea una contraseña de acceso.</p>
             </div>
             
             <div class="relative mb-4">
-                <input type="password" id="auth-password" placeholder="Contraseña segura" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-teal-500 pr-10">
-                <button type="button" onclick="const p=document.getElementById('auth-password'); const i=this.querySelector('i'); if(p.type==='password'){p.type='text';i.setAttribute('data-lucide','eye-off');}else{p.type='password';i.setAttribute('data-lucide','eye');} lucide.createIcons();" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300">
+                <input type="password" id="auth-password" placeholder="Contraseña segura" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm focus:outline-none focus:border-teal-500 pr-10 text-slate-800 dark:text-slate-200">
+                <button type="button" onclick="const p=document.getElementById('auth-password'); const i=this.querySelector('i'); if(p.type==='password'){p.type='text';i.setAttribute('data-lucide','eye-off');}else{p.type='password';i.setAttribute('data-lucide','eye');} lucide.createIcons();" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
                     <i data-lucide="eye" class="w-4 h-4"></i>
                 </button>
             </div>
             
-            <button id="btn-auth-submit" class="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-medium transition-colors">
+            <button id="btn-auth-submit" class="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-medium transition-colors shadow-md">
                 Autorizar
             </button>
         </div>
     </div>
     <!-- Generic Alert/Confirm/Prompt Modal -->
     <div id="modal-generic" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-center items-center p-4">
-        <div class="bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-700">
-            <h2 class="text-lg font-bold text-white mb-2" id="generic-title">Alerta</h2>
-            <p class="text-sm text-slate-300 mb-4" id="generic-msg">Mensaje</p>
-            <input type="text" id="generic-input" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-4 text-sm focus:outline-none focus:border-teal-500 hidden">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-700 transition-colors duration-200">
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-2" id="generic-title">Alerta</h2>
+            <p class="text-sm text-slate-655 dark:text-slate-300 mb-4" id="generic-msg">Mensaje</p>
+            <input type="text" id="generic-input" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 mb-4 text-sm focus:outline-none focus:border-teal-500 text-slate-800 dark:text-slate-200 hidden">
             <div class="flex justify-end gap-3">
-                <button id="btn-generic-cancel" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition-colors">Cancelar</button>
+                <button id="btn-generic-cancel" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-550 dark:text-slate-400 hover:text-slate-850 dark:hover:text-white transition-colors">Cancelar</button>
                 <button id="btn-generic-ok" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm font-medium transition-colors">Aceptar</button>
             </div>
         </div>
@@ -472,17 +490,17 @@
 
     <!-- Edit Season Modal -->
     <div id="modal-season-edit" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-center items-center p-4">
-        <div class="bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-700">
-            <h2 class="text-lg font-bold text-white mb-4" id="season-edit-title">Editar Temporada</h2>
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-700 transition-colors duration-200">
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-4" id="season-edit-title">Editar Temporada</h2>
             
-            <label class="block text-xs text-slate-400 mb-1">Fecha de Inicio</label>
-            <input type="date" id="season-input-ini" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-4 text-sm focus:outline-none focus:border-teal-500 text-slate-300 [color-scheme:dark]">
+            <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">Fecha de Inicio</label>
+            <input type="date" id="season-input-ini" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 mb-4 text-sm focus:outline-none focus:border-teal-500 text-slate-800 dark:text-slate-200">
             
-            <label class="block text-xs text-slate-400 mb-1">Fecha de Fin</label>
-            <input type="date" id="season-input-fin" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 mb-6 text-sm focus:outline-none focus:border-teal-500 text-slate-300 [color-scheme:dark]">
+            <label class="block text-xs text-slate-550 dark:text-slate-400 mb-1">Fecha de Fin</label>
+            <input type="date" id="season-input-fin" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 mb-6 text-sm focus:outline-none focus:border-teal-500 text-slate-800 dark:text-slate-200">
             
             <div class="flex justify-end gap-3">
-                <button id="btn-season-cancel" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white transition-colors">Cancelar</button>
+                <button id="btn-season-cancel" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-550 dark:text-slate-400 hover:text-slate-850 dark:hover:text-white transition-colors">Cancelar</button>
                 <button id="btn-season-ok" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm font-medium transition-colors">Guardar</button>
             </div>
         </div>
@@ -490,58 +508,58 @@
     
     <!-- Help Modal -->
     <div id="modal-help" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-center items-center p-4">
-        <div class="bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-700 max-h-[85vh] overflow-y-auto">
-            <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <i data-lucide="info" class="w-5 h-5 text-teal-400"></i> Ayuda de Programación
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85vh] overflow-y-auto transition-colors duration-200">
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <i data-lucide="info" class="w-5 h-5 text-teal-655 dark:text-teal-400"></i> Ayuda de Programación
             </h2>
             
-            <div class="space-y-4 text-sm text-slate-300">
+            <div class="space-y-4 text-sm text-slate-655 dark:text-slate-300">
                 <div>
-                    <h3 class="font-semibold text-teal-400 mb-1">¿Qué son los Programas (A, B, C, D)?</h3>
+                    <h3 class="font-semibold text-teal-655 dark:text-teal-400 mb-1">¿Qué son los Programas (A, B, C, D)?</h3>
                     <p>Puedes tener hasta 4 rutinas de riego totalmente independientes. Cada programa tiene sus propios días, horarios de inicio y tiempos para cada zona.</p>
                 </div>
                 
                 <div>
-                    <h3 class="font-semibold text-teal-400 mb-1">Días y Horarios</h3>
+                    <h3 class="font-semibold text-teal-655 dark:text-teal-400 mb-1">Días y Horarios</h3>
                     <p>Selecciona los días de la semana que quieres que riegue. Puedes agregar múltiples horarios (ej: 07:00 y 19:00); el programa completo se ejecutará en cada uno de esos horarios secuencialmente.</p>
                 </div>
                 
                 <div>
-                    <h3 class="font-semibold text-teal-400 mb-1">Ciclo y Remojo (Cycle & Soak)</h3>
+                    <h3 class="font-semibold text-teal-655 dark:text-teal-400 mb-1">Ciclo y Remojo (Cycle & Soak)</h3>
                     <p>Es una función avanzada para evitar que el agua escurra y se desperdicie en terrenos inclinados o arcillosos.</p>
-                    <ul class="list-disc pl-5 mt-2 space-y-1 text-slate-400 text-xs">
-                        <li><strong class="text-slate-300">Tiempo total:</strong> El tiempo que la zona debe recibir agua en total.</li>
-                        <li><strong class="text-slate-300">Ciclo:</strong> El tiempo máximo que la válvula estará abierta de corrido.</li>
-                        <li><strong class="text-slate-300">Remojo:</strong> El tiempo de pausa que esperará para que el agua penetre en la tierra antes de darle el siguiente ciclo.</li>
+                    <ul class="list-disc pl-5 mt-2 space-y-1 text-slate-500 dark:text-slate-400 text-xs">
+                        <li><strong class="text-slate-700 dark:text-slate-350">Tiempo total:</strong> El tiempo que la zona debe recibir agua en total.</li>
+                        <li><strong class="text-slate-700 dark:text-slate-350">Ciclo:</strong> El tiempo máximo que la válvula estará abierta de corrido.</li>
+                        <li><strong class="text-slate-700 dark:text-slate-350">Remojo:</strong> El tiempo de pausa que esperará para que el agua penetre en la tierra antes de darle el siguiente ciclo.</li>
                     </ul>
-                    <p class="text-xs text-slate-400 mt-2 italic">Ejemplo: Si pones 30 min totales, Ciclo de 10 y Remojo de 20, regará 10 min, pausará 20, regará 10, pausará 20, y regará los últimos 10 min.</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 italic">Ejemplo: Si pones 30 min totales, Ciclo de 10 y Remojo de 20, regará 10 min, pausará 20, regará 10, pausará 20, y regará los últimos 10 min.</p>
                 </div>
             </div>
             
             <div class="flex justify-end gap-3 mt-6">
-                <button onclick="document.getElementById('modal-help').classList.add('hidden')" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm font-medium transition-colors w-full">Entendido</button>
+                <button onclick="document.getElementById('modal-help').classList.add('hidden')" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm font-medium transition-colors w-full shadow">Entendido</button>
             </div>
         </div>
     </div>
     
     <!-- Install App Modal -->
     <div id="modal-install" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-end sm:justify-center items-center p-4 pb-8 sm:pb-4 transition-all">
-        <div class="bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl border border-slate-700 animate-[slideUp_0.3s_ease-out]">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-700 animate-[slideUp_0.3s_ease-out] transition-colors duration-200">
             <div class="flex items-center gap-4 mb-4">
                 <img src="icon-192.png" class="w-16 h-16 rounded-2xl shadow-lg" alt="App Icon" onerror="this.src='favicon.ico'; this.onerror=null;">
                 <div>
-                    <h2 class="text-xl font-bold text-white">Smart Riego</h2>
-                    <p class="text-xs text-slate-400">Instala la App para una mejor experiencia</p>
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white">Smart Riego</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Instala la App para una mejor experiencia</p>
                 </div>
             </div>
             
-            <ul class="space-y-2 mb-6 text-sm text-slate-300">
-                <li class="flex items-center gap-2"><i data-lucide="zap" class="w-4 h-4 text-amber-400"></i> Acceso rápido desde el inicio</li>
-                <li class="flex items-center gap-2"><i data-lucide="wifi-off" class="w-4 h-4 text-teal-400"></i> Funciona sin conexión (Bluetooth)</li>
-                <li class="flex items-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-indigo-400"></i> Experiencia de App Nativa</li>
+            <ul class="space-y-2 mb-6 text-sm text-slate-600 dark:text-slate-300">
+                <li class="flex items-center gap-2"><i data-lucide="zap" class="w-4 h-4 text-amber-500 dark:text-amber-400"></i> Acceso rápido desde el inicio</li>
+                <li class="flex items-center gap-2"><i data-lucide="wifi-off" class="w-4 h-4 text-teal-600 dark:text-teal-400"></i> Funciona sin conexión (Bluetooth)</li>
+                <li class="flex items-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-indigo-500 dark:text-indigo-400"></i> Experiencia de App Nativa</li>
             </ul>
             
-            <div id="install-instructions-ios" class="hidden bg-slate-900 rounded-xl p-3 text-xs text-slate-400 mb-4 border border-slate-700">
+            <div id="install-instructions-ios" class="hidden bg-slate-50 dark:bg-slate-900 rounded-xl p-3 text-xs text-slate-550 dark:text-slate-400 mb-4 border border-slate-200 dark:border-slate-700">
                 Para instalar en iPhone/iPad:<br>
                 1. Toca el botón Compartir <i data-lucide="share" class="w-3 h-3 inline"></i><br>
                 2. Selecciona "Agregar a inicio" <i data-lucide="plus-square" class="w-3 h-3 inline"></i>
@@ -551,7 +569,7 @@
                 <button id="btn-install-app" class="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-teal-500/20">
                     Instalar Aplicación
                 </button>
-                <button onclick="document.getElementById('modal-install').classList.add('hidden')" class="w-full py-2 text-slate-400 hover:text-slate-300 text-sm font-medium transition-colors">
+                <button onclick="document.getElementById('modal-install').classList.add('hidden')" class="w-full py-2 text-slate-500 dark:text-slate-400 hover:text-slate-750 dark:hover:text-slate-300 text-sm font-medium transition-colors">
                     Ahora no
                 </button>
             </div>
@@ -582,15 +600,15 @@
     
     <!-- Modal de Ayuda Genérico -->
     <div id="help-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 relative">
-            <button id="btn-close-help" class="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 relative transition-colors duration-200">
+            <button id="btn-close-help" class="absolute top-4 right-4 text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">
                 <i data-lucide="x" class="w-6 h-6"></i>
             </button>
-            <div class="flex items-center gap-3 mb-4 text-teal-400">
+            <div class="flex items-center gap-3 mb-4 text-teal-655 dark:text-teal-400">
                 <i data-lucide="info" class="w-6 h-6"></i>
-                <h2 id="help-title" class="text-lg font-bold text-white">Ayuda</h2>
+                <h2 id="help-title" class="text-lg font-bold text-slate-900 dark:text-white">Ayuda</h2>
             </div>
-            <p id="help-body" class="text-sm text-slate-300 leading-relaxed">...</p>
+            <p id="help-body" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">...</p>
         </div>
     </div>
 

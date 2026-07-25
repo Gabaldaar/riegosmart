@@ -3,6 +3,7 @@ import aioble
 import bluetooth
 import json
 import gc
+from utils import AsyncQueue  # Fix #3: Cola asíncrona centralizada en utils.py
 
 # UUIDs de Nordic UART Service
 _UART_SERVICE_UUID = bluetooth.UUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -15,21 +16,6 @@ _uart_rx = aioble.Characteristic(_uart_service, _UART_RX_CHAR_UUID, write=True, 
 _uart_tx = aioble.Characteristic(_uart_service, _UART_TX_CHAR_UUID, read=True, notify=True)
 
 aioble.register_services(_uart_service)
-
-class AsyncQueue:
-    def __init__(self):
-        self._queue = []
-        self._event = asyncio.Event()
-
-    async def put(self, item):
-        self._queue.append(item)
-        self._event.set()
-
-    async def get(self):
-        while not self._queue:
-            self._event.clear()
-            await self._event.wait()
-        return self._queue.pop(0)
 
 # Cola asíncrona para comandos entrantes
 rx_queue = AsyncQueue()
@@ -88,9 +74,12 @@ async def send_json_async(datos_dict):
         print(f"[BLE_TX] Error serializando JSON: {e}")
         return
 
-    # Limitar de forma estricta los bytes transmitidos para evitar inestabilidades
-    if len(json_str) > 150:
-        print(f"[BLE_TX] Error: Payload excedió límite BLE ({len(json_str)} bytes > 150)")
+    # Fix #1: Límite TX aumentado a 500 bytes (solo afecta el canal de envío).
+    # El límite de RX se mantiene en 150 bytes (ver ble_rx_task buffer).
+    # 500 bytes es seguro: aioble fragmenta en chunks de MTU internamente,
+    # y el string JSON ya está en memoria al llegar a esta línea.
+    if len(json_str) > 500:
+        print(f"[BLE_TX] Error: Payload excedió límite TX ({len(json_str)} bytes > 500)")
         return
 
     # Esperar a que el envío anterior termine (máx ~2s)
