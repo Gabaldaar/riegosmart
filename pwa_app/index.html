@@ -124,19 +124,31 @@
                     <!-- Datos del Riego -->
                     <div class="flex-1 flex flex-col gap-2 text-xs">
                         <div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-1">
-                            <span class="text-slate-500 dark:text-slate-400">Total Programado:</span>
+                            <span class="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                                <i data-lucide="clock" class="w-3.5 h-3.5 text-teal-600 dark:text-teal-400"></i>
+                                Total Programado:
+                            </span>
                             <span id="info-tiempo-prog" class="font-bold text-slate-800 dark:text-slate-300">-</span>
                         </div>
                         <div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-1">
-                            <span class="text-slate-500 dark:text-slate-400">Ajuste Estacional:</span>
+                            <span class="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                                <i data-lucide="sun-dim" class="w-3.5 h-3.5 text-amber-500 dark:text-amber-400"></i>
+                                Ajuste Estacional:
+                            </span>
                             <span id="info-ajuste" class="font-bold text-slate-800 dark:text-slate-300">-</span>
                         </div>
                         <div class="flex justify-between border-b border-slate-100 dark:border-slate-700 pb-1">
-                            <span class="text-slate-500 dark:text-slate-400">Ciclo (Riego):</span>
+                            <span class="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                                <i data-lucide="play" class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400"></i>
+                                Ciclo (Riego):
+                            </span>
                             <span id="info-ciclo" class="font-bold text-slate-800 dark:text-slate-300">-</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-slate-500 dark:text-slate-400">Remojo (Pausa):</span>
+                            <span class="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                                <i data-lucide="pause" class="w-3.5 h-3.5 text-slate-400 dark:text-slate-500"></i>
+                                Remojo (Pausa):
+                            </span>
                             <span id="info-remojo" class="font-bold text-slate-800 dark:text-slate-300">-</span>
                         </div>
                     </div>
@@ -212,35 +224,6 @@
                         <button id="btn-cancel-rain" class="px-3 py-1 bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-900 text-red-600 dark:text-red-400 rounded transition-colors border border-red-200 dark:border-red-900/50">Cancelar Retraso</button>
                     </p>
                 </div>
-
-                <!-- Ajustes por Temporada (Collapsible) -->
-                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
-                    <div class="flex items-center justify-between cursor-pointer group" id="btn-toggle-seasons">
-                        <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
-                            <i data-lucide="sun" class="w-4 h-4 text-amber-500 dark:text-amber-400"></i> Ajustes por Temporada
-                        </h2>
-                        <div class="flex items-center gap-2">
-                            <button class="text-slate-400 dark:text-slate-500 hover:text-teal-500 dark:hover:text-teal-400 transition-colors btn-help" data-help="seasonal" onclick="event.stopPropagation();">
-                                <i data-lucide="help-circle" class="w-5 h-5"></i>
-                            </button>
-                            <i data-lucide="chevron-down" id="icon-seasons-collapse" class="w-5 h-5 text-slate-400 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-white transition-transform duration-300"></i>
-                        </div>
-                    </div>
-                    
-                    <div id="seasons-collapsible-content" class="hidden overflow-hidden mt-4">
-                        <div class="flex justify-between items-center mb-3">
-                            <span class="text-xs text-slate-550 dark:text-slate-400">Preestablecer Fechas:</span>
-                            <div class="flex gap-2">
-                                <button id="btn-hemi-sur" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-xs text-slate-655 dark:text-slate-400 transition-colors border border-transparent">Sur</button>
-                                <button id="btn-hemi-norte" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-xs text-slate-655 dark:text-slate-400 transition-colors border border-transparent">Norte</button>
-                            </div>
-                        </div>
-                        
-                        <div id="seasons-container" class="space-y-3">
-                            <div class="text-[10px] text-slate-500 text-center">App: v12.7 | ESP32: v3.1</div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </section>
 
@@ -310,6 +293,35 @@
                 <i data-lucide="upload-cloud" class="w-5 h-5"></i>
                 Aplicar Cambios al Equipo
             </button>
+
+            <!-- Ajustes por Temporada (Collapsible) -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200 mt-4">
+                <div class="flex items-center justify-between cursor-pointer group" id="btn-toggle-seasons">
+                    <h2 class="text-sm font-semibold text-slate-555 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
+                        <i data-lucide="sun" class="w-4 h-4 text-amber-500 dark:text-amber-400"></i> Ajustes por Temporada
+                    </h2>
+                    <div class="flex items-center gap-2">
+                        <button class="text-slate-400 dark:text-slate-500 hover:text-teal-500 dark:hover:text-teal-400 transition-colors btn-help" data-help="seasonal" onclick="event.stopPropagation();">
+                            <i data-lucide="help-circle" class="w-5 h-5"></i>
+                        </button>
+                        <i data-lucide="chevron-down" id="icon-seasons-collapse" class="w-5 h-5 text-slate-400 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-white transition-transform duration-300"></i>
+                    </div>
+                </div>
+                
+                <div id="seasons-collapsible-content" class="hidden overflow-hidden mt-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-xs text-slate-555 dark:text-slate-400">Preestablecer Fechas:</span>
+                        <div class="flex gap-2">
+                            <button id="btn-hemi-sur" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-xs text-slate-655 dark:text-slate-400 transition-colors border border-transparent">Sur</button>
+                            <button id="btn-hemi-norte" class="px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-xs text-slate-655 dark:text-slate-400 transition-colors border border-transparent">Norte</button>
+                        </div>
+                    </div>
+                    
+                    <div id="seasons-container" class="space-y-3">
+                        <div class="text-[10px] text-slate-500 text-center">Cargando temporadas...</div>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- HISTORY VIEW -->

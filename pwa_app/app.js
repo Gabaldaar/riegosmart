@@ -68,6 +68,21 @@ function obtenerNombreZona(zonaId) {
     return state.deviceConfig.nombres_zonas[zKey] || state.deviceConfig.nombres_zonas[zonaId] || `Zona ${zonaId}`;
 }
 
+// Helper para dar formato DD/MM a las fechas de las temporadas (almacenadas como MM-DD)
+function formatSeasonDate(dateStr) {
+    if (!dateStr || !dateStr.includes('-')) return dateStr;
+    const parts = dateStr.split('-');
+    return `${parts[1]}/${parts[0]}`; // DD/MM
+}
+
+// Iconos y colores representativos de cada temporada
+const seasonIconMap = {
+    "Verano": { icon: "sun", color: "text-amber-500 dark:text-amber-400" },
+    "Otono": { icon: "leaf", color: "text-orange-500 dark:text-orange-400" },
+    "Invierno": { icon: "snowflake", color: "text-blue-500 dark:text-blue-400" },
+    "Primavera": { icon: "sprout", color: "text-emerald-500 dark:text-emerald-400" }
+};
+
 function escucharConfiguracionFirestore(chipId) {
     if (!db) {
         console.warn("[FIRESTORE] Firebase no inicializado. Operando en modo local (BLE/MQTT directo).");
@@ -642,13 +657,21 @@ function refreshUIFromConfig() {
             seasonsContainer.innerHTML = `<div class="text-center text-slate-500 text-xs py-4">No hay temporadas configuradas.</div>`;
         } else {
             temporadas.forEach((temp, idx) => {
+                const formattedStart = formatSeasonDate(temp.inicio);
+                const formattedEnd = formatSeasonDate(temp.fin);
+                const seasonName = temp.nombre || 'Temporada';
+                const mapping = seasonIconMap[seasonName] || { icon: "calendar", color: "text-teal-500" };
+
                 const card = document.createElement('div');
                 card.className = "bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-xl transition-colors duration-200";
                 card.innerHTML = `
                     <div class="flex justify-between items-center mb-2">
-                        <div>
-                            <div class="text-sm font-bold text-slate-800 dark:text-slate-200">${temp.nombre || 'Temporada'}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">${temp.inicio} al ${temp.fin}</div>
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="${mapping.icon}" class="w-4 h-4 ${mapping.color}"></i>
+                            <div>
+                                <div class="text-sm font-bold text-slate-800 dark:text-slate-200">${seasonName}</div>
+                                <div class="text-xs text-slate-550 dark:text-slate-400">${formattedStart} al ${formattedEnd}</div>
+                            </div>
                         </div>
                         <button class="text-slate-400 dark:text-slate-500 hover:text-teal-605 dark:hover:text-teal-400 transition-colors btn-edit-season" data-idx="${idx}">
                             <i data-lucide="edit-3" class="w-4 h-4"></i>
@@ -890,6 +913,8 @@ document.getElementById('btn-hemi-sur')?.addEventListener('click', () => {
         {"nombre": "Invierno", "inicio": "06-21", "fin": "09-20", "porcentaje": 100},
         {"nombre": "Primavera", "inicio": "09-21", "fin": "12-20", "porcentaje": 100}
     ];
+    state.deviceConfig.ajustes_estacionales = defaultSur;
+    refreshUIFromConfig();
     sendCmd({ comando: "UPDATE_CONFIG", config: { ajustes_estacionales: defaultSur } });
     pendingCommand = true;
 });
@@ -901,6 +926,8 @@ document.getElementById('btn-hemi-norte')?.addEventListener('click', () => {
         {"nombre": "Invierno", "inicio": "12-21", "fin": "03-20", "porcentaje": 100},
         {"nombre": "Primavera", "inicio": "03-21", "fin": "06-20", "porcentaje": 100}
     ];
+    state.deviceConfig.ajustes_estacionales = defaultNorte;
+    refreshUIFromConfig();
     sendCmd({ comando: "UPDATE_CONFIG", config: { ajustes_estacionales: defaultNorte } });
     pendingCommand = true;
 });
