@@ -491,6 +491,65 @@ function updateActiveWidget(data) {
         document.getElementById('info-ajuste').textContent = (data.ajuste || 100) + "%";
         document.getElementById('info-ciclo').textContent = (data.ciclo || 0) + " min";
         document.getElementById('info-remojo').textContent = (data.remojo || 0) + " min";
+
+        // Actualizar animación de fuente de agua (izquierda) y válvula de zona (derecha)
+        const sourceContainer = document.getElementById('pump-or-main-status');
+        const valveContainer = document.getElementById('zone-valve-status');
+        if (sourceContainer && valveContainer) {
+            const modoBomba = state.deviceConfig && state.deviceConfig.modo_bomba !== false; // por defecto true
+            
+            // 1. Fuente de agua (Izquierda)
+            if (modoBomba) {
+                // Bomba: Hélice (fan)
+                // Se enciende si el estado es REGANDO (o presurizando)
+                const isPumpOn = (data.estado === "REGANDO" || data.estado === "PRESURIZANDO");
+                if (isPumpOn) {
+                    sourceContainer.innerHTML = `<i data-lucide="fan" class="w-6 h-6 text-teal-600 dark:text-teal-400 animate-spin-fast"></i>`;
+                } else {
+                    sourceContainer.innerHTML = `<i data-lucide="fan" class="w-6 h-6 text-slate-400 opacity-40"></i>`;
+                }
+            } else {
+                // Agua de red: Válvula animada (faucet)
+                // Se activa si el estado es REGANDO
+                const isFlowing = (data.estado === "REGANDO");
+                if (isFlowing) {
+                    sourceContainer.innerHTML = `
+                        <div class="relative flex flex-col items-center">
+                            <i data-lucide="faucet" class="w-6 h-6 text-teal-600 dark:text-teal-400"></i>
+                            <i data-lucide="droplet" class="w-3 h-3 text-blue-500 absolute bottom-[-8px] animate-drip"></i>
+                        </div>
+                    `;
+                } else {
+                    sourceContainer.innerHTML = `
+                        <div class="relative flex flex-col items-center opacity-40">
+                            <i data-lucide="faucet" class="w-6 h-6 text-slate-400"></i>
+                        </div>
+                    `;
+                }
+            }
+            
+            // 2. Válvula de Zona (Derecha)
+            // Se activa si el estado es REGANDO
+            const isZoneWatering = (data.estado === "REGANDO");
+            if (isZoneWatering) {
+                valveContainer.innerHTML = `
+                    <div class="relative flex flex-col items-center">
+                        <i data-lucide="faucet" class="w-6 h-6 text-teal-600 dark:text-teal-400"></i>
+                        <i data-lucide="droplet" class="w-3 h-3 text-blue-500 absolute bottom-[-8px] animate-drip"></i>
+                    </div>
+                `;
+            } else {
+                valveContainer.innerHTML = `
+                    <div class="relative flex flex-col items-center opacity-40">
+                        <i data-lucide="faucet" class="w-6 h-6 text-slate-400"></i>
+                    </div>
+                `;
+            }
+            
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        }
         
         currentRemainingSecs = data.tiempo_restante || 0; 
         currentTotalSecs = data.tiempo_total || 1;
