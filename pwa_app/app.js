@@ -516,7 +516,7 @@ function updateActiveWidget(data) {
                     sourceContainer.innerHTML = `
                         <div class="relative flex flex-col items-center">
                             <i data-lucide="faucet" class="w-8 h-8 stroke-[2.5] text-teal-655 dark:text-teal-400"></i>
-                            <i data-lucide="droplet" class="w-3.5 h-3.5 stroke-[3] text-blue-500 absolute bottom-[-9px] animate-drip"></i>
+                            <i data-lucide="droplet" class="w-3.5 h-3.5 stroke-[2] fill-blue-500 text-blue-500 absolute bottom-[-9px] anim-drop"></i>
                         </div>
                     `;
                 } else {
@@ -535,7 +535,7 @@ function updateActiveWidget(data) {
                 valveContainer.innerHTML = `
                     <div class="relative flex flex-col items-center">
                         <i data-lucide="faucet" class="w-8 h-8 stroke-[2.5] text-teal-655 dark:text-teal-400"></i>
-                        <i data-lucide="droplet" class="w-3.5 h-3.5 stroke-[3] text-blue-500 absolute bottom-[-9px] animate-drip"></i>
+                        <i data-lucide="droplet" class="w-3.5 h-3.5 stroke-[2] fill-blue-500 text-blue-500 absolute bottom-[-9px] anim-drop"></i>
                     </div>
                 `;
             } else {

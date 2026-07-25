@@ -37,6 +37,7 @@ current_state = STATE_INIT
 wifi_conectado = False
 mqtt_client = None
 mqtt_loop_task = None
+mqtt_lock = asyncio.Lock()
 ventana_fallback_ble_s = 180  # 3 minutos de ventana de BLE offline antes de reintentar WiFi
 
 # Constantes Red
@@ -122,12 +123,13 @@ async def conectar_mqtt_async():
         return False
         
     try:
-        if mqtt_client:
-            try:
-                mqtt_client.disconnect()
-            except:
-                pass
-            mqtt_client = None
+        async with mqtt_lock:
+            if mqtt_client:
+                try:
+                    mqtt_client.disconnect()
+                except:
+                    pass
+                mqtt_client = None
             
         import urandom
         client_id = f"riego_{riego_core.chip_id}_{urandom.getrandbits(16)}"
@@ -186,7 +188,8 @@ async def conectar_mqtt_async():
         topic_hash = riego_core.calcular_hash_seguro()
         if topic_hash:
             topic_sub = f"riego/{topic_hash}/cmd"
-            mqtt_client.subscribe(topic_sub)
+            async with mqtt_lock:
+                mqtt_client.subscribe(topic_sub)
             print(f"[MQTT] Conectado y Suscrito a {topic_sub}")
             
             if mqtt_loop_task:
@@ -209,11 +212,15 @@ async def loop_mqtt_escucha():
     last_ping = time.time()
     while wifi_conectado and mqtt_client is not None:
         try:
-            mqtt_client.sock.setblocking(False)
-            mqtt_client.check_msg()
+            async with mqtt_lock:
+                if mqtt_client is not None:
+                    mqtt_client.sock.setblocking(False)
+                    mqtt_client.check_msg()
             
             if time.time() - last_ping >= 30:
-                mqtt_client.ping()
+                async with mqtt_lock:
+                    if mqtt_client is not None:
+                        mqtt_client.ping()
                 last_ping = time.time()
         except OSError as e:
             err_code = e.args[0] if e.args else None
@@ -396,12 +403,14 @@ async def tarea_tx_queue():
                         if topic_hash:
                             topic_pub = f"riego/{topic_hash}/telemetry".encode('utf-8')
                             json_bytes = json.dumps(msg_dict).encode('utf-8')
-                            mqtt_client.publish(topic_pub, json_bytes)
+                            async with mqtt_lock:
+                                if mqtt_client is not None:
+                                    mqtt_client.publish(topic_pub, json_bytes)
                     except Exception as e:
                         print("[MAIN_TX] Error publicando MQTT:", e)
                         mqtt_client = None
                     
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep_ms(50)
         except Exception as e:
             print("[MAIN_TX] Error general en tarea_tx_queue:", e)
         await asyncio.sleep(0.1)
