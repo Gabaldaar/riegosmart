@@ -472,7 +472,13 @@ function updateActiveWidget(data) {
         document.getElementById('next-watering-info').classList.add('hidden');
         document.getElementById('btn-manual-stop').classList.add('hidden');
     } else {
-        badge.textContent = data.estado;
+        let label = data.estado;
+        if (data.estado === "REGANDO" && data.ciclo_actual && data.ciclos_totales) {
+            label = `REGANDO (Ciclo ${data.ciclo_actual}/${data.ciclos_totales})`;
+        } else if (data.estado === "REMOJANDO" && data.remojo_actual && data.remojos_totales) {
+            label = `REMOJANDO (Remojo ${data.remojo_actual}/${data.remojos_totales})`;
+        }
+        badge.textContent = label;
         badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-teal-500/20 text-teal-400 border border-teal-500/30";
         infoPanel.classList.remove('hidden');
         document.getElementById('next-watering-info').classList.add('hidden');

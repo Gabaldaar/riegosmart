@@ -239,7 +239,10 @@ async def ejecutar_riego():
             ts_inicio_ciclo = time.time()
             duracion_ciclo_actual = 2
             zona_actual_idx = ""
-            telemetria_extra = {"t_prog": 0, "ajuste": 100, "t_real": 0, "ciclo": 0, "remojo": 0}
+            telemetria_extra = {
+                "t_prog": 0, "ajuste": 100, "t_real": 0, "ciclo": 0, "remojo": 0,
+                "ciclo_actual": 0, "ciclos_totales": 0, "remojo_actual": 0, "remojos_totales": 0
+            }
             await sys_log.log_event({"tipo": "inicio_prog", "prog": programa_activo.get("nombre", "Manual")})
             await enviar_telemetria()
             
@@ -296,17 +299,20 @@ async def ejecutar_riego():
                 if c_min > min_reales or c_min <= 0: c_min = min_reales
                 s_min = z_config.get("soak_min", 0)
                 
+                ciclos = (min_reales // c_min) + (1 if min_reales % c_min != 0 else 0)
+                soak = z_config.get("soak_min", 0)
+                
                 telemetria_extra = {
                     "t_prog": min_base,
                     "ajuste": int(ajuste * 100) if programa_activo.get("nombre") != "Manual" else 100,
                     "t_real": min_reales,
                     "ciclo": c_min,
-                    "remojo": s_min
+                    "remojo": s_min,
+                    "ciclo_actual": 0,
+                    "ciclos_totales": ciclos,
+                    "remojo_actual": 0,
+                    "remojos_totales": max(0, ciclos - 1) if soak > 0 else 0
                 }
-
-                ciclos = (min_reales // c_min) + (1 if min_reales % c_min != 0 else 0)
-                
-                soak = z_config.get("soak_min", 0)
                 
                 for c in range(ciclos):
                     t_ciclo = c_min if c < ciclos - 1 else min_reales - (c_min * c)
@@ -320,6 +326,10 @@ async def ejecutar_riego():
                     duracion_ciclo_actual = int(t_ciclo * 60)
                     ts_inicio_ciclo = time.time()
                     estado_riego = "REGANDO"
+                    telemetria_extra.update({
+                        "ciclo_actual": c + 1,
+                        "remojo_actual": 0
+                    })
                     await sys_log.log_event({"tipo": "inicio_zona", "zona": str_z, "duracion": round(t_ciclo, 1), "prog": programa_activo.get("nombre", "Manual")})
                     await enviar_telemetria()
                     
@@ -339,6 +349,9 @@ async def ejecutar_riego():
                         estado_riego = "REMOJANDO"
                         duracion_ciclo_actual = int(soak * 60)
                         ts_inicio_ciclo = time.time()
+                        telemetria_extra.update({
+                            "remojo_actual": c + 1
+                        })
                         await enviar_telemetria()
                         try:
                             await asyncio.wait_for(abort_event.wait(), timeout=soak * 60.0)
