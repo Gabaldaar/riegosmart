@@ -112,12 +112,7 @@ async def guardar_configuracion():
             print("Error guardando config:", e)
 
 def get_time():
-    """Retorna tiempo (año, mes, dia, hora, min, seg, diasemana)"""
-    try:
-        if reloj_rtc:
-            return reloj_rtc.get_time()
-    except:
-        pass
+    """Retorna tiempo (año, mes, dia, hora, min, seg, diasemana) a partir del reloj interno UTC"""
     return time.localtime()[:7]
 
 async def init_hardware():
@@ -473,6 +468,17 @@ async def tarea_planificador():
                 
         await asyncio.sleep(10)
 
+async def tarea_actualizar_temperatura():
+    global _cached_temp
+    while True:
+        if reloj_rtc:
+            try:
+                _cached_temp = round(reloj_rtc.temperature(), 1)
+            except Exception as e:
+                print("[CORE] Error leyendo temp RTC en background:", e)
+        # Actualizar cada 5 minutos
+        await asyncio.sleep(300)
+
 async def iniciar_tareas():
     global abort_event
     if abort_event is None:
@@ -482,6 +488,7 @@ async def iniciar_tareas():
     asyncio.create_task(tarea_reset_emergencia())
     asyncio.create_task(ejecutar_riego())
     asyncio.create_task(tarea_planificador())
+    asyncio.create_task(tarea_actualizar_temperatura())
     print("Core Riego Inicializado.")
 
 async def procesar_comando(cmd_dict):
@@ -554,15 +561,7 @@ async def procesar_comando(cmd_dict):
             await tx_queue.put({"tipo": "CONFIG", "data": resp, "_destino": origen})
         
     elif cmd == "GET_TEMP":
-        global _cached_temp, _cached_temp_ts
-        now_ts = time.time()
-        # Actualizar caché si expiró (60 segundos) o si no tenemos valor
-        if reloj_rtc and (now_ts - _cached_temp_ts > 60 or _cached_temp == "N/A"):
-            try:
-                _cached_temp = round(reloj_rtc.temperature(), 1)
-                _cached_temp_ts = now_ts
-            except Exception as e:
-                print("[CORE] Error leyendo temp RTC, usando caché:", e)
+        # Devolver inmediatamente el valor cacheado en RAM sin bloquear la cola de comandos
         await tx_queue.put({"tipo": "TEMP", "data": _cached_temp, "_destino": origen})
         
     elif cmd == "GET_LOGS":
