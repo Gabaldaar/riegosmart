@@ -1,10 +1,12 @@
-const CACHE_NAME = 'riego-pwa-v30';
+const CACHE_NAME = 'riego-pwa-v31';
 const ASSETS = [
   './index.html',
   './styles.css',
   './comms.js',
   './app.js',
-  './manifest.json'
+  './manifest.json',
+  './favicon.ico',
+  './icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -23,6 +25,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
+            console.log('[Service Worker] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -33,26 +36,26 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Solo interceptar peticiones locales GET (ignorar POST, Firestore, APIs externas)
+  if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request)
+    fetch(event.request)
       .then((response) => {
-        if (response) {
-          return response; // Cache hit
+        // Si la respuesta es válida, clonarla y guardarla en cache
+        if (response && response.status === 200 && response.type === 'basic') {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
         }
-        return fetch(event.request).then(
-          (response) => {
-            // Check if we received a valid response
-            if(!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
-            var responseToCache = response.clone();
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseToCache);
-              });
-            return response;
-          }
-        );
+        return response;
+      })
+      .catch(() => {
+        // Si falla la red (offline), buscar en la cache
+        return caches.match(event.request);
       })
   );
 });
