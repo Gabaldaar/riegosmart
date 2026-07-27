@@ -2,12 +2,38 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /dispositivos/{chipId} {
-      // Regla de seguridad: Permite lectura y escritura si el usuario está autenticado
-      allow read, write: if request.auth != null;
-      
-      // Regla para la subcolección de logs de eventos
+
+      // Helpers
+      function estaAutenticado() {
+        return request.auth != null;
+      }
+      function esElPropietario() {
+        return estaAutenticado() &&
+               resource.data.owner_uid == request.auth.uid;
+      }
+      function sinPropietario() {
+        return !('owner_uid' in resource.data) ||
+               resource.data.owner_uid == null;
+      }
+
+      // Lectura: propietario del equipo O equipo aún sin reclamar
+      allow read: if estaAutenticado() && (sinPropietario() || esElPropietario());
+
+      // Creación de documento nuevo: cualquier usuario autenticado
+      // (primer setup: el documento no existe aún)
+      allow create: if estaAutenticado();
+
+      // Modificación: propietario existente O equipo sin propietario (para reclamarlo)
+      allow update: if estaAutenticado() && (sinPropietario() || esElPropietario());
+
+      // Borrado: sólo el propietario
+      allow delete: if esElPropietario();
+
+      // Sub-colección de logs: sólo el propietario del equipo padre
       match /logs/{logId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if estaAutenticado() &&
+          get(/databases/$(database)/documents/dispositivos/$(chipId)).data.owner_uid
+            == request.auth.uid;
       }
     }
   }

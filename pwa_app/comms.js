@@ -87,10 +87,10 @@ class CommsManager {
                 const dbg = document.getElementById('debug-banner');
                 if (dbg) dbg.textContent = "DEBUG: Conectado a broker. Suscribiendo...";
                 
-                this.mqttClient.subscribe(`riego/${hash}/telemetry`, (err) => {
+                this.mqttClient.subscribe(`riego/${hash}/+`, (err) => {
                     if (dbg) {
                         if (err) dbg.textContent = "DEBUG: Error suscribiendo " + err.message;
-                        else dbg.textContent = "DEBUG: Suscrito OK a " + `riego/${hash.substring(0,6)}...`;
+                        else dbg.textContent = "DEBUG: Suscrito OK a " + `riego/${hash.substring(0,6)}/+[wildcard]`;
                     }
                 });
                 resolve(true);

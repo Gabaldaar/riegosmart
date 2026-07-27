@@ -10,21 +10,17 @@ const firebaseConfig = {
   appId: "1:127532086869:web:b3a1a142e9fd4f9dc186dc"
 };
 
-let db = null;
+let db   = null;
+let auth = null;
+let currentUser = null;
 let firestoreUnsubscribe = null;
 
-// Inicializar Firebase
+// Inicializar Firebase (Auth + Firestore)
 if (typeof firebase !== 'undefined' && firebaseConfig.apiKey !== "TU_API_KEY_AQUI") {
     try {
         firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore();
-        
-        // Autenticación anónima para cumplir con las reglas de seguridad
-        firebase.auth().signInAnonymously().then(() => {
-            console.log("[FIREBASE] Autenticado de forma anónima.");
-        }).catch(err => {
-            console.error("[FIREBASE] Error de autenticación anónima:", err);
-        });
+        db   = firebase.firestore();
+        auth = firebase.auth();
     } catch (e) {
         console.error("Error inicializando Firebase SDK:", e);
     }
@@ -118,6 +114,11 @@ function escucharConfiguracionFirestore(chipId) {
             state.deviceConfig.programas = data.programas || state.deviceConfig.programas;
             state.deviceConfig.config_version = data.config_version || state.deviceConfig.config_version;
             
+            // Sincronizar el retraso por lluvia desde la nube (Firestore usa epoch 1970, la app usa epoch 2000 internamente)
+            if (data.timestamp_rain_delay !== undefined) {
+                state.deviceConfig.timestamp_rain_delay = data.timestamp_rain_delay > 0 ? (data.timestamp_rain_delay - 946684800) : 0;
+            }
+            
             refreshUIFromConfig();
         } else {
             console.log("[FIRESTORE] Registrando nuevo equipo en Firestore...");
@@ -130,7 +131,8 @@ function escucharConfiguracionFirestore(chipId) {
                 ajustes_estacionales: state.deviceConfig.ajustes_estacionales || [],
                 programas: state.deviceConfig.programas,
                 timestamp_rain_delay: 0,
-                token_acceso: state.token || "token_por_defecto_1234"
+                token_acceso: state.token || "token_por_defecto_1234",
+                owner_uid: currentUser ? currentUser.uid : null
             }).catch(err => {
                 console.error("[FIRESTORE] Error inicializando regador en la nube:", err);
             });
@@ -189,16 +191,119 @@ document.addEventListener("DOMContentLoaded", async () => {
     initSettingsUI();
     initSchedulerUI();
     initHelpModals();
-    
-    // Cargar UI inicial con config por defecto para evitar vacío
+    initAuthUI();
+
+    // UI inicial con config por defecto (sin esperar auth)
     refreshUIFromConfig();
-    
+
     // Bindings de comunicación
     comms.onConnectionChange = updateConnectionUI;
     comms.onMessage = handleIncomingMessage;
 
-    // Intentar inicio dual
+    startHeaderTimers();
+    startLEDSimulator();
+
+    // ── Auth gate: la conexión al dispositivo espera identidad Firebase ──
+    if (auth) {
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                await iniciarSesionApp(user);
+            } else {
+                mostrarPantallaLogin();
+            }
+        });
+    } else {
+        // Firebase no disponible (offline o API key sin configurar)
+        document.getElementById('login-overlay')?.classList.add('hidden');
+        await iniciarConectarDispositivo();
+    }
+});
+
+// ==========================================
+// AUTH — AUTENTICACIÓN FIREBASE
+// ==========================================
+
+function initAuthUI() {
+    let modoRegistro = false;
+
+    document.getElementById('btn-login-google')?.addEventListener('click', loginConGoogle);
+
+    document.getElementById('btn-register-toggle')?.addEventListener('click', () => {
+        modoRegistro = !modoRegistro;
+        const btnEmail  = document.getElementById('btn-login-email');
+        const btnToggle = document.getElementById('btn-register-toggle');
+        if (btnEmail)  btnEmail.textContent = modoRegistro ? 'Registrarse' : 'Iniciar sesión';
+        if (btnToggle) btnToggle.innerHTML  = modoRegistro
+            ? '¿Ya tenés cuenta? <span class="underline">Iniciar sesión</span>'
+            : '¿No tenés cuenta? <span class="underline">Registrarse</span>';
+        document.getElementById('login-error')?.classList.add('hidden');
+    });
+
+    document.getElementById('btn-login-email')?.addEventListener('click', () => {
+        const email = document.getElementById('login-email')?.value.trim();
+        const pass  = document.getElementById('login-password')?.value;
+        if (!email || !pass) { mostrarErrorLogin('Completá todos los campos.'); return; }
+        loginConEmail(email, pass, modoRegistro);
+    });
+
+    document.getElementById('login-password')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('btn-login-email')?.click();
+    });
+
+    document.getElementById('btn-logout')?.addEventListener('click', cerrarSesion);
+    document.getElementById('btn-logout-settings')?.addEventListener('click', cerrarSesion);
+}
+
+async function iniciarSesionApp(user) {
+    currentUser = user;
+    console.log(`[AUTH] Sesión iniciada: ${user.displayName || user.email}`);
+
+    // Ocultar pantalla de login
+    document.getElementById('login-overlay')?.classList.add('hidden');
+
+    // Mostrar nombre de usuario en el header
+    const displayEl = document.getElementById('user-display-name');
+    if (displayEl) {
+        const nombre = user.displayName
+            ? user.displayName.split(' ')[0]
+            : (user.email ? user.email.split('@')[0] : 'Usuario');
+        displayEl.textContent = nombre;
+        displayEl.classList.remove('hidden');
+    }
+    document.getElementById('btn-logout')?.classList.remove('hidden');
+
+    // Tarjeta Cuenta en la pestaña Ajustes
+    const settingsName = document.getElementById('settings-user-name');
+    if (settingsName) settingsName.textContent = user.displayName || user.email || 'Usuario';
+    document.getElementById('card-cuenta')?.classList.remove('hidden');
+
+    await iniciarConectarDispositivo();
+}
+
+async function iniciarConectarDispositivo() {
     if (state.chipId && state.token) {
+        // Verificar propiedad del equipo en Firestore
+        if (db && currentUser) {
+            try {
+                const doc = await db.collection("dispositivos").doc(state.chipId).get();
+                if (doc.exists) {
+                    const ownerUid = doc.data().owner_uid;
+                    if (ownerUid && ownerUid !== currentUser.uid) {
+                        mostrarPantallaLogin('Este equipo está vinculado a otra cuenta de usuario.');
+                        return;
+                    }
+                    // Equipo sin propietario registrado → reclamar automáticamente
+                    if (!ownerUid) {
+                        await db.collection("dispositivos").doc(state.chipId)
+                            .update({ owner_uid: currentUser.uid });
+                        console.log('[AUTH] Equipo reclamado por el usuario actual.');
+                    }
+                }
+            } catch (err) {
+                console.warn('[AUTH] No se pudo verificar propiedad (sin conexión?):', err.message);
+            }
+        }
+
         await comms.initConnection(state.chipId, state.token);
         escucharConfiguracionFirestore(state.chipId);
         setTimeout(() => {
@@ -207,48 +312,159 @@ document.addEventListener("DOMContentLoaded", async () => {
             sendCmd({comando: "GET_TEMP"});
         }, 1000);
     } else {
-        // Obliga a configurar por BLE primero llevandolo a ajustes
-        document.querySelector('.nav-btn[data-target="view-settings"]').click();
+        // Sin dispositivo vinculado → ir a Ajustes para configurar por BLE
+        document.querySelector('.nav-btn[data-target="view-settings"]')?.click();
     }
-    
-    startHeaderTimers();
-    startLEDSimulator();
-});
+}
+
+function mostrarPantallaLogin(error) {
+    document.getElementById('login-overlay')?.classList.remove('hidden');
+    if (error) mostrarErrorLogin(error);
+}
+
+function mostrarErrorLogin(msg) {
+    const errEl = document.getElementById('login-error');
+    if (!errEl) return;
+    errEl.textContent = msg;
+    errEl.classList.remove('hidden');
+}
+
+async function loginConGoogle() {
+    if (!auth) return;
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try {
+        document.getElementById('login-error')?.classList.add('hidden');
+        await auth.signInWithPopup(provider);
+        // onAuthStateChanged maneja el resto automáticamente
+    } catch (err) {
+        console.error('[AUTH] Error Google Sign-In:', err);
+        mostrarErrorLogin(traducirErrorAuth(err.code));
+    }
+}
+
+async function loginConEmail(email, password, isRegister) {
+    if (!auth) return;
+    try {
+        document.getElementById('login-error')?.classList.add('hidden');
+        if (isRegister) {
+            await auth.createUserWithEmailAndPassword(email, password);
+        } else {
+            await auth.signInWithEmailAndPassword(email, password);
+        }
+        // onAuthStateChanged maneja el resto automáticamente
+    } catch (err) {
+        console.error('[AUTH] Error Email Sign-In:', err);
+        mostrarErrorLogin(traducirErrorAuth(err.code));
+    }
+}
+
+function cerrarSesion() {
+    showGenericModal({
+        title: "Cerrar Sesión",
+        msg: "¿Estás seguro de que deseas cerrar sesión?",
+        onOk: async () => {
+            if (!auth) return;
+            try {
+                if (comms && typeof comms.disconnect === 'function') comms.disconnect();
+                await auth.signOut();
+                currentUser = null;
+                document.getElementById('btn-logout')?.classList.add('hidden');
+                const displayEl = document.getElementById('user-display-name');
+                if (displayEl) { displayEl.textContent = ''; displayEl.classList.add('hidden'); }
+                // onAuthStateChanged dispara mostrarPantallaLogin automáticamente
+            } catch (err) {
+                console.error('[AUTH] Error al cerrar sesión:', err);
+            }
+        }
+    });
+}
+
+function traducirErrorAuth(code) {
+    const errores = {
+        'auth/user-not-found':         'No existe una cuenta con ese email.',
+        'auth/wrong-password':         'Contraseña incorrecta.',
+        'auth/invalid-email':          'El formato del email no es válido.',
+        'auth/email-already-in-use':   'Ese email ya está registrado. Intentá iniciar sesión.',
+        'auth/weak-password':          'La contraseña debe tener al menos 6 caracteres.',
+        'auth/popup-closed-by-user':   'Se cerró la ventana de Google antes de completar.',
+        'auth/network-request-failed': 'Sin conexión a internet.',
+        'auth/too-many-requests':      'Demasiados intentos fallidos. Intentá más tarde.',
+        'auth/invalid-credential':     'Email o contraseña incorrectos.',
+    };
+    return errores[code] || `Error de autenticación: ${code}`;
+}
 
 // ==========================================
 // INTERFAZ GENERAL (TABS & HEADER)
 // ==========================================
 function initTabs() {
     const navBtns = document.querySelectorAll('.nav-btn');
-    const views = document.querySelectorAll('.tab-view');
 
     navBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
             const target = btn.getAttribute('data-target');
             
-            // Actualizar botones nav
-            navBtns.forEach(b => {
-                b.classList.remove('text-teal-655', 'dark:text-teal-400');
-                b.classList.add('text-slate-400', 'dark:text-slate-500');
-            });
-            btn.classList.add('text-teal-655', 'dark:text-teal-400');
-            btn.classList.remove('text-slate-400', 'dark:text-slate-500');
-
-            // Mostrar vista
-            views.forEach(v => {
-                if (v.id === target) {
-                    v.classList.remove('hidden');
-                } else {
-                    v.classList.add('hidden');
-                }
-            });
-
-            // Si es historial, pedimos logs
-            if (target === 'view-history') {
-                requestLogs();
+            // Obtener la vista actual activa
+            const activeView = document.querySelector('.tab-view:not(.hidden)');
+            const activeTarget = activeView ? activeView.id : null;
+            
+            if (activeTarget === target) return;
+            
+            if (state.hasUnsavedChanges) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                showGenericModal({
+                    title: "Cambios sin guardar",
+                    msg: "Tienes cambios sin guardar. ¿Deseas descartarlos?",
+                    onOk: () => {
+                        state.hasUnsavedChanges = false;
+                        cambiarSeccionApp(btn, target);
+                    }
+                });
+            } else {
+                cambiarSeccionApp(btn, target);
             }
         });
     });
+}
+
+function cambiarSeccionApp(btn, target) {
+    const navBtns = document.querySelectorAll('.nav-btn');
+    const views = document.querySelectorAll('.tab-view');
+
+    // Actualizar botones nav
+    navBtns.forEach(b => {
+        b.classList.remove('text-teal-655', 'dark:text-teal-400');
+        b.classList.add('text-slate-400', 'dark:text-slate-500');
+    });
+    btn.classList.add('text-teal-655', 'dark:text-teal-400');
+    btn.classList.remove('text-slate-400', 'dark:text-slate-500');
+
+    // Mostrar vista
+    views.forEach(v => {
+        if (v.id === target) {
+            v.classList.remove('hidden');
+        } else {
+            v.classList.add('hidden');
+        }
+    });
+
+    // Si es historial, pedimos logs
+    if (target === 'view-history') {
+        requestLogs();
+    }
+    
+    // Si ingresamos a programas, seleccionar el programa A por defecto
+    if (target === 'view-programs') {
+        const tabA = document.querySelector('.prog-tab[data-prog="A"]');
+        if (tabA) {
+            const hasChanges = state.hasUnsavedChanges;
+            state.hasUnsavedChanges = false;
+            tabA.click();
+            state.hasUnsavedChanges = hasChanges;
+        }
+    }
 }
 
 function startHeaderTimers() {
@@ -287,23 +503,23 @@ function updateConnectionUI(status) {
     }
 
     if (status === 'MQTT') {
-        statusText.textContent = `WiFi (${netName})`;
-        statusText.className = "text-[10px] font-medium px-2 py-1 bg-green-900/40 text-green-400 rounded-full truncate max-w-[100px]";
+        statusText.textContent = `(${netName})`;
+        statusText.className = "text-[10px] font-medium px-2 py-1 bg-green-900/40 text-green-400 rounded-full truncate max-w-[130px]";
         iconDiv.innerHTML = '<i data-lucide="wifi" class="w-5 h-5 text-green-400"></i>';
         btnReconnect.classList.add('hidden');
     } else if (status === 'BLE') {
-        statusText.textContent = `Bluetooth`;
-        statusText.className = "text-[10px] font-medium px-2 py-1 bg-blue-900/40 text-blue-400 rounded-full truncate max-w-[100px]";
+        statusText.textContent = `(Bluetooth)`;
+        statusText.className = "text-[10px] font-medium px-2 py-1 bg-blue-900/40 text-blue-400 rounded-full truncate max-w-[130px]";
         iconDiv.innerHTML = '<i data-lucide="bluetooth" class="w-5 h-5 text-blue-400"></i>';
         btnReconnect.classList.add('hidden');
     } else if (status === 'CONNECTING_MQTT' || status === 'CONNECTING_BLE') {
         iconDiv.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 text-yellow-400 animate-spin"></i>';
         statusText.textContent = "Conectando...";
-        statusText.className = "text-[10px] font-medium px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 truncate max-w-[100px]";
+        statusText.className = "text-[10px] font-medium px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 truncate max-w-[130px]";
         btnReconnect.classList.add('hidden');
     } else {
         statusText.textContent = `Desconectado`;
-        statusText.className = "text-[10px] font-medium px-2 py-1 bg-red-900/40 text-red-400 rounded-full truncate max-w-[100px]";
+        statusText.className = "text-[10px] font-medium px-2 py-1 bg-red-900/40 text-red-400 rounded-full truncate max-w-[130px]";
         iconDiv.innerHTML = '<i data-lucide="wifi-off" class="w-5 h-5 text-red-400"></i>';
         btnReconnect.classList.remove('hidden');
     }
@@ -650,8 +866,37 @@ function calculateNextWatering() {
                         nextProgStr = `${dNames[dayIdx]} a las ${hora_inicio}h - ${pName}`;
                     }
 
-                    // Calcular el desglose de zonas, duración y ciclo/remojo
+                    // Calcular el desglose de zonas con ajuste estacional del mes actual
                     let zonesDetail = [];
+                    // Misma lógica que ejecutar_riego() en riego_core.py:
+                    // comparar "MM-DD" actual contra rangos {inicio, fin, porcentaje}
+                    // con soporte de rangos que cruzan año (ej: 12-21 a 03-20).
+                    let factorEst = 1.0;
+                    let pctEst = 100;
+                    const temporadasEst = state.deviceConfig.ajustes_estacionales || [];
+                    if (temporadasEst.length > 0) {
+                        const hoy = new Date();
+                        const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+                        const dd = String(hoy.getDate()).padStart(2, '0');
+                        const mmdd = `${mm}-${dd}`;
+                        for (const temp of temporadasEst) {
+                            const ini = temp.inicio || '01-01';
+                            const fin = temp.fin   || '12-31';
+                            let enRango = false;
+                            if (ini <= fin) {
+                                enRango = (mmdd >= ini && mmdd <= fin);
+                            } else {
+                                // Rango que cruza año (ej: 12-21 → 03-20)
+                                enRango = (mmdd >= ini || mmdd <= fin);
+                            }
+                            if (enRango) {
+                                pctEst = temp.porcentaje || 100;
+                                factorEst = pctEst / 100;
+                                break;
+                            }
+                        }
+                    }
+
                     if (pObj.zonas) {
                         const zKeys = Object.keys(pObj.zonas).sort((a,b) => {
                             const numA = parseInt(a.replace(/\D/g, '')) || 0;
@@ -662,9 +907,12 @@ function calculateNextWatering() {
                             const z = pObj.zonas[zKey];
                             if (z.minutos > 0) {
                                 const zName = obtenerNombreZona(zKey);
-                                let detail = `${zName} (${z.minutos} min`;
+                                const minReales = Math.max(1, Math.round(z.minutos * factorEst));
+                                let detail = `${zName} (${minReales} min`;
+                                if (pctEst !== 100) detail += ` ·${pctEst}%`;
                                 if (z.cycle_min && z.cycle_min > 0 && z.cycle_min < z.minutos) {
-                                    detail += ` - Ciclos: ${z.cycle_min}/${z.soak_min || 0} min`;
+                                    const cycleReales = Math.max(1, Math.round(z.cycle_min * factorEst));
+                                    detail += ` · Ciclos: ${cycleReales}/${z.soak_min || 0} min`;
                                 }
                                 detail += `)`;
                                 zonesDetail.push(detail);
@@ -672,6 +920,7 @@ function calculateNextWatering() {
                         }
                     }
                     nextProgDetails = zonesDetail.join(" | ");
+
                 }
             }
         }
@@ -783,7 +1032,7 @@ function refreshUIFromConfig() {
                         <span class="text-xs text-slate-500 dark:text-slate-400">Porcentaje</span>
                         <span id="pct-val-${idx}" class="text-xs font-bold ${temp.porcentaje !== 100 ? 'text-yellow-600 dark:text-yellow-500' : 'text-teal-655 dark:text-teal-400'}">${temp.porcentaje}%</span>
                     </div>
-                    <input type="range" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500 season-slider" data-idx="${idx}" min="10" max="250" step="10" value="${temp.porcentaje}">
+                    <input type="range" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500 season-slider" data-idx="${idx}" min="0" max="100" step="10" value="${temp.porcentaje}">
                 `;
                 seasonsContainer.appendChild(card);
             });
@@ -1207,75 +1456,106 @@ function loadProgramIntoUI(progId) {
         const zoneId = `Z${i}`;
         const zName = obtenerNombreZona(i);
         const zData = prog.zonas[zoneId] || prog.zonas[i] || { minutos: 0, cycle_min: 0, soak_min: 0 };
-        
+        const isEnabled = zData.minutos > 0;
+        // Si la zona estaba deshabilitada (minutos=0), mostrar 10 min como valor por defecto
+        // para cuando el usuario la vuelva a habilitar.
+        const displayMins = zData.minutos > 0 ? zData.minutos : 10;
+
         const div = document.createElement('div');
-        div.className = "bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 transition-colors duration-200";
+        div.className = "bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 transition-all duration-200";
+        div.style.opacity = isEnabled ? '1' : '0.45';
         div.innerHTML = `
-            <div class="flex justify-between items-center mb-2">
-                <div class="flex items-center flex-1 pr-2">
-                    <span class="text-xs font-bold text-teal-655 dark:text-teal-400 mr-2 whitespace-nowrap">ZONA ${i}:</span>
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center flex-1 pr-2 min-w-0">
+                    <span class="text-xs font-bold text-teal-655 dark:text-teal-400 mr-2 whitespace-nowrap">Z${i}:</span>
                     <input type="text" class="bg-transparent text-sm font-medium w-full focus:outline-none focus:border-b focus:border-teal-500 z-name-input text-slate-800 dark:text-slate-200" data-zidx="${i}" value="${zName}" placeholder="Nombre...">
                 </div>
-                <div class="flex items-center gap-2">
-                    <input type="number" min="0" max="240" class="w-16 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-center text-sm text-slate-800 dark:text-slate-100 z-min-input" data-zidx="${i}" value="${zData.minutos}">
+                <!-- Toggle habilitado/deshabilitado -->
+                <label class="flex items-center gap-1.5 cursor-pointer flex-shrink-0 ml-3" title="${isEnabled ? 'Zona activa en este programa' : 'Zona deshabilitada en este programa'}">
+                    <span class="text-[11px] font-semibold w-6 text-right z-enable-label" style="color:${isEnabled ? '#14b8a6' : '#94a3b8'}">${isEnabled ? 'ON' : 'OFF'}</span>
+                    <div class="relative w-10 h-5 flex-shrink-0">
+                        <input type="checkbox" class="sr-only z-enable-toggle" data-zidx="${i}" ${isEnabled ? 'checked' : ''}>
+                        <div class="w-10 h-5 rounded-full transition-colors duration-200 z-toggle-bg" style="background-color:${isEnabled ? '#14b8a6' : '#cbd5e1'}"></div>
+                        <div class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 z-toggle-knob" style="transform:translateX(${isEnabled ? '20px' : '0'})"></div>
+                    </div>
+                </label>
+            </div>
+            <!-- Campos visibles solo cuando la zona está habilitada -->
+            <div class="z-zone-fields ${isEnabled ? '' : 'hidden'}">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-xs text-slate-500 dark:text-slate-400 flex-1">Duración</span>
+                    <input type="number" min="1" max="240" class="w-16 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-center text-sm text-slate-800 dark:text-slate-100 z-min-input" data-zidx="${i}" value="${displayMins}">
                     <span class="text-xs text-slate-500 dark:text-slate-400">min</span>
                 </div>
-            </div>
-            <label class="flex items-center gap-2 text-xs text-slate-550 dark:text-slate-400 cursor-pointer select-none">
-                <input type="checkbox" class="rounded border-slate-300 dark:border-slate-600 text-teal-655 dark:text-teal-500 bg-white dark:bg-slate-800 z-cycle-check" data-zidx="${i}" ${zData.cycle_min > 0 && zData.cycle_min < zData.minutos ? 'checked' : ''}>
-                Activar Ciclo y Remojo
-            </label>
-            <div class="z-cycle-opts mt-2 grid grid-cols-2 gap-2 ${zData.cycle_min > 0 && zData.cycle_min < zData.minutos ? '' : 'hidden'}">
-                <div>
-                    <span class="text-[10px] text-slate-500 dark:text-slate-400">Ciclo (min)</span>
-                    <input type="number" min="1" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-sm text-slate-800 dark:text-slate-100 z-c-input" data-zidx="${i}" value="${zData.cycle_min || 5}">
-                </div>
-                <div>
-                    <span class="text-[10px] text-slate-500 dark:text-slate-400">Remojo (min)</span>
-                    <input type="number" min="1" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-sm text-slate-800 dark:text-slate-100 z-s-input" data-zidx="${i}" value="${zData.soak_min || 10}">
+                <label class="flex items-center gap-2 text-xs text-slate-550 dark:text-slate-400 cursor-pointer select-none">
+                    <input type="checkbox" class="rounded border-slate-300 dark:border-slate-600 text-teal-655 dark:text-teal-500 bg-white dark:bg-slate-800 z-cycle-check" data-zidx="${i}" ${zData.cycle_min > 0 && zData.cycle_min < zData.minutos ? 'checked' : ''}>
+                    Activar Ciclo y Remojo
+                </label>
+                <div class="z-cycle-opts mt-2 grid grid-cols-2 gap-2 ${zData.cycle_min > 0 && zData.cycle_min < zData.minutos ? '' : 'hidden'}">
+                    <div>
+                        <span class="text-[10px] text-slate-500 dark:text-slate-400">Ciclo (min)</span>
+                        <input type="number" min="1" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-sm text-slate-800 dark:text-slate-100 z-c-input" data-zidx="${i}" value="${zData.cycle_min || 5}">
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-500 dark:text-slate-400">Remojo (min)</span>
+                        <input type="number" min="1" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-sm text-slate-800 dark:text-slate-100 z-s-input" data-zidx="${i}" value="${zData.soak_min || 10}">
+                    </div>
                 </div>
             </div>
         `;
         contZones.appendChild(div);
-        
-        // Bindings de UI zona
+
+        // ── Toggle ON/OFF de zona ──────────────────────────────────────────────
+        const enableToggle = div.querySelector('.z-enable-toggle');
+        const zoneFields   = div.querySelector('.z-zone-fields');
+        const enableLabel  = div.querySelector('.z-enable-label');
+        const toggleBg     = div.querySelector('.z-toggle-bg');
+        const toggleKnob   = div.querySelector('.z-toggle-knob');
+        const minInput     = div.querySelector('.z-min-input');
+
+        enableToggle.addEventListener('change', () => {
+            const on = enableToggle.checked;
+            // Al deshabilitar: los campos se ocultan pero el input mantiene su valor
+            // en el DOM — cuando se rehabilite, se restaura automáticamente.
+            zoneFields.classList.toggle('hidden', !on);
+            div.style.opacity = on ? '1' : '0.45';
+            enableLabel.textContent = on ? 'ON' : 'OFF';
+            enableLabel.style.color = on ? '#14b8a6' : '#94a3b8';
+            toggleBg.style.backgroundColor = on ? '#14b8a6' : '#cbd5e1';
+            toggleKnob.style.transform = on ? 'translateX(20px)' : 'translateX(0)';
+            updateTempProgData();
+        });
+
+        // ── Nombre de zona ────────────────────────────────────────────────────
         div.querySelector('.z-name-input').addEventListener('change', (e) => {
             if (!state.deviceConfig.nombres_zonas) state.deviceConfig.nombres_zonas = {};
             const zoneId = `Z${i}`;
             state.deviceConfig.nombres_zonas[zoneId] = e.target.value;
-            
-            // Backup local inmediato en localStorage
             if (state.chipId) {
                 localStorage.setItem(`NOMBRES_ZONAS_${state.chipId}`, JSON.stringify(state.deviceConfig.nombres_zonas));
             }
-            
             if (db && state.chipId) {
                 db.collection("dispositivos").doc(state.chipId).update({
                     nombres_zonas: state.deviceConfig.nombres_zonas
-                }).then(() => {
-                    showToast("Nombre guardado en la nube.");
-                }).catch(err => {
-                    console.error("Error actualizando nombre en Firestore:", err);
-                });
-            } else {
-                showToast("Guardado localmente en navegador.");
+                }).then(() => showToast("Nombre guardado en la nube."))
+                  .catch(err => console.error("Error actualizando nombre en Firestore:", err));
             }
             refreshUIFromConfig();
         });
-        
+
+        // ── Ciclo y Remojo ────────────────────────────────────────────────────
         const check = div.querySelector('.z-cycle-check');
-        const opts = div.querySelector('.z-cycle-opts');
+        const opts  = div.querySelector('.z-cycle-opts');
         check.addEventListener('change', () => {
-            if (check.checked) opts.classList.remove('hidden');
-            else opts.classList.add('hidden');
+            opts.classList.toggle('hidden', !check.checked);
             updateTempProgData();
         });
-        
+
         div.querySelectorAll('input[type="number"]').forEach(inp => {
             inp.addEventListener('change', updateTempProgData);
         });
     }
-    
+
     lucide.createIcons();
 }
 
@@ -1294,11 +1574,18 @@ function updateTempProgData() {
     const zonas = {};
     const maxZ = state.deviceConfig.max_zonas || 4;
     for(let i=1; i<=maxZ; i++) {
+        // Respetar el toggle ON/OFF de zona: si está OFF, la zona no se incluye
+        // (equivale a minutos:0, pero preserva los campos sin borrarlos del DOM).
+        const toggleEl = document.querySelector(`.z-enable-toggle[data-zidx="${i}"]`);
+        const isOn = toggleEl ? toggleEl.checked : false;
+        if (!isOn) continue;  // zona deshabilitada → no incluir en el programa
+
         const minInp = document.querySelector(`.z-min-input[data-zidx="${i}"]`);
         if(minInp) {
             const mins = parseInt(minInp.value) || 0;
             if(mins > 0) {
-                const checked = document.querySelector(`.z-cycle-check[data-zidx="${i}"]`).checked;
+                const cycleCheck = document.querySelector(`.z-cycle-check[data-zidx="${i}"]`);
+                const checked = cycleCheck ? cycleCheck.checked : false;
                 const cInp = document.querySelector(`.z-c-input[data-zidx="${i}"]`);
                 const sInp = document.querySelector(`.z-s-input[data-zidx="${i}"]`);
                 zonas[i] = {
@@ -1308,7 +1595,6 @@ function updateTempProgData() {
                 };
             }
         }
-        state.tempProgData.zonas[i] = zonas[i];
     }
     state.tempProgData.zonas = zonas;
     
@@ -1346,47 +1632,63 @@ function renderLogs(logsArray) {
         return;
     }
     
-    const mesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    // Filtrar los eventos requeridos:
+    // 1. Reinicio del equipo (log.msg === "Sistema iniciado")
+    // 2. Ejecución de programa de riego (log.tipo === "inicio_zona")
+    const filteredLogs = logsArray.filter(log => {
+        return (log.msg === 'Sistema iniciado') || (log.tipo === 'inicio_zona');
+    });
     
-    logsArray.reverse().forEach(log => {
+    if(filteredLogs.length === 0) {
+        cont.innerHTML = '<div class="text-center text-slate-500 text-sm mt-10">No hay eventos registrados.</div>';
+        return;
+    }
+    
+    filteredLogs.reverse().forEach(log => {
         const div = document.createElement('div');
         div.className = "flex gap-3 text-sm p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 transition-colors duration-200";
         
         let icon = '<i data-lucide="info" class="w-4 h-4 text-slate-500 dark:text-slate-400"></i>';
-        if (log.tipo === 'error' || log.tipo === 'alerta') icon = '<i data-lucide="alert-triangle" class="w-4 h-4 text-red-550 dark:text-red-400"></i>';
-        else if (log.tipo === 'inicio_prog') icon = '<i data-lucide="play-circle" class="w-4 h-4 text-teal-655 dark:text-teal-400"></i>';
-        else if (log.tipo === 'fin_prog') icon = '<i data-lucide="check-circle" class="w-4 h-4 text-green-600 dark:text-green-400"></i>';
-        else if (log.tipo === 'inicio_zona') icon = '<i data-lucide="droplets" class="w-4 h-4 text-blue-600 dark:text-blue-400"></i>';
+        let desc = "";
         
-        let desc = log.msg || "";
-        if (log.tipo === 'inicio_prog') desc = `Inicio de Programa: ${log.prog}`;
-        else if (log.tipo === 'fin_prog') desc = `Fin de Programa: ${log.prog}`;
-        else if (log.tipo === 'inicio_zona') desc = `Regando Zona ${log.zona} durante ${log.duracion} min (Prog: ${log.prog})`;
-        else if (log.tipo === 'fin_zona') desc = `Fin de riego en Zona ${log.zona}`;
-        else if (!desc) desc = JSON.stringify(log);
+        if (log.msg === 'Sistema iniciado') {
+            icon = '<i data-lucide="refresh-cw" class="w-4 h-4 text-amber-500 dark:text-amber-400"></i>';
+            desc = "Reinicio del equipo";
+        } else if (log.tipo === 'inicio_zona') {
+            icon = '<i data-lucide="droplets" class="w-4 h-4 text-teal-655 dark:text-teal-400"></i>';
+            const zoneName = obtenerNombreZona(log.zona);
+            const duracion = log.duracion || 0;
+            const ajuste = log.ajuste !== undefined ? log.ajuste : 100;
+            const cicloAct = log.ciclo_actual || 1;
+            const ciclosTot = log.ciclos_totales || 1;
+            desc = `${log.prog} - ${zoneName} (${duracion} min · ${ajuste}% · Ciclos: ${cicloAct}/${ciclosTot} min)`;
+        }
 
         let timeStr = "";
         if (log.ts) {
             // Convertir ts (MicroPython Y2K epoch) a JS Date (1970 epoch)
             const date = new Date((log.ts + 946684800) * 1000);
-            const d = String(date.getDate()).padStart(2, '0');
-            const m = mesNombres[date.getMonth()];
-            const y = date.getFullYear();
+            const dd = String(date.getDate()).padStart(2, '0');
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const yyyy = date.getFullYear();
             const hh = String(date.getHours()).padStart(2, '0');
-            const mm = String(date.getMinutes()).padStart(2, '0');
-            timeStr = `<span class="text-xs text-slate-500 dark:text-slate-500 mr-2">[${d} ${m} ${y} - ${hh}:${mm}]</span>`;
+            const min = String(date.getMinutes()).padStart(2, '0');
+            timeStr = `${dd}/${mm}/${yyyy} - ${hh}:${min}`;
         }
 
         div.innerHTML = `
             <div class="mt-0.5">${icon}</div>
             <div>
-                <span class="font-medium text-slate-800 dark:text-slate-300 block mb-0.5">${timeStr}${log.tipo.toUpperCase()}</span>
-                <span class="text-slate-600 dark:text-slate-400 text-xs">${desc}</span>
+                <span class="font-medium text-slate-800 dark:text-slate-300 block mb-0.5">${desc}</span>
+                <span class="text-slate-500 dark:text-slate-500 text-xs">${timeStr}</span>
             </div>
         `;
         cont.appendChild(div);
     });
-    lucide.createIcons();
+    
+    if (window.lucide) {
+        window.lucide.createIcons();
+    }
 }
 
 // ==========================================

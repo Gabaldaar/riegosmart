@@ -136,6 +136,21 @@ async def init_hardware():
         i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21))
         reloj_rtc = ds3231.DS3231(i2c)
         print("DS3231 RTC Detectado y cargado.")
+        
+        # Sincronizar el reloj interno del ESP32 con la hora del DS3231 convertido a UTC (Argentina es UTC-3)
+        try:
+            t_local = reloj_rtc.get_time()
+            # Convertir tupla local a segundos desde Y2K
+            sec_local = time.mktime((t_local[0], t_local[1], t_local[2], t_local[3], t_local[4], t_local[5], t_local[6], 0))
+            # Sumar 3 horas (10800 segundos) para pasarlo a UTC
+            sec_utc = sec_local + 10800
+            t_utc = time.localtime(sec_utc)
+            
+            rtc_int = machine.RTC()
+            rtc_int.datetime((t_utc[0], t_utc[1], t_utc[2], t_utc[6], t_utc[3], t_utc[4], t_utc[5], 0))
+            print("[CORE] Reloj interno sincronizado en UTC con RTC externo:", time.localtime())
+        except Exception as e_sync:
+            print("Error sincronizando reloj interno con RTC:", e_sync)
     except Exception as e:
         print("Error inicializando RTC:", e)
         reloj_rtc = None
@@ -331,7 +346,15 @@ async def ejecutar_riego():
                         "ciclo_actual": c + 1,
                         "remojo_actual": 0
                     })
-                    await sys_log.log_event({"tipo": "inicio_zona", "zona": str_z, "duracion": round(t_ciclo, 1), "prog": programa_activo.get("nombre", "Manual")})
+                    await sys_log.log_event({
+                        "tipo": "inicio_zona",
+                        "zona": str_z,
+                        "duracion": round(t_ciclo, 1),
+                        "prog": programa_activo.get("nombre", "Manual"),
+                        "ajuste": int(ajuste * 100) if programa_activo.get("nombre") != "Manual" else 100,
+                        "ciclo_actual": c + 1,
+                        "ciclos_totales": ciclos
+                    })
                     await enviar_telemetria()
                     
                     try:
@@ -615,7 +638,17 @@ async def procesar_comando(cmd_dict):
         
         if estado_riego != "IDLE":
             abort_event.set()
-        await procesar_comando({"comando": "GET_CONFIG", "token": token_recibido, "_origen": origen})
+            await asyncio.sleep_ms(200)
+        
+        # Enviar respuesta CONFIG compacta al origen para ahorrar memoria y evitar recursividad
+        await tx_queue.put({
+            "tipo": "CONFIG",
+            "data": {
+                "config_version": config_data["config_version"],
+                "timestamp_rain_delay": config_data["timestamp_rain_delay"]
+            },
+            "_destino": origen
+        })
         await enviar_telemetria()
             
     elif cmd == "RIEGO_MANUAL":
@@ -686,5 +719,13 @@ async def procesar_comando(cmd_dict):
             # Incremento local de versión
             config_data["config_version"] = config_data.get("config_version", 0) + 1
             await guardar_configuracion()
-            await procesar_comando({"comando": "GET_CONFIG", "token": token_recibido, "_origen": origen})
+            # Enviar respuesta CONFIG compacta al origen para ahorrar memoria y evitar recursividad
+            await tx_queue.put({
+                "tipo": "CONFIG",
+                "data": {
+                    "config_version": config_data["config_version"],
+                    "programas": config_data.get("programas", {})
+                },
+                "_destino": origen
+            })
 
