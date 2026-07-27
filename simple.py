@@ -129,8 +129,8 @@ class MQTTClient:
             pkt.append((sz & 0x7F) | 0x80)
             sz >>= 7
         pkt.append(sz)
-        pkt.append(topic[0] >> 8)
-        pkt.append(topic[0] & 0xFF)
+        pkt.append(len(topic) >> 8)
+        pkt.append(len(topic) & 0xFF)
         pkt.write(topic)
         if qos:
             pkt.append(self.pid >> 8)
@@ -151,8 +151,8 @@ class MQTTClient:
         pkt.append(sz)
         pkt.append(self.pid >> 8)
         pkt.append(self.pid & 0xFF)
-        pkt.append(topic[0] >> 8)
-        pkt.append(topic[0] & 0xFF)
+        pkt.append(len(topic) >> 8)
+        pkt.append(len(topic) & 0xFF)
         pkt.write(topic)
         pkt.append(qos)
         self.sock.write(pkt)
@@ -196,11 +196,11 @@ class MQTTClient:
         except OSError as e:
             # EAGAIN
             if e.args[0] == 11:
-                self.sock.setblocking(True)
+                self.sock.settimeout(3.0)
                 return
-            self.sock.setblocking(True)
+            self.sock.settimeout(3.0)
             raise
-        self.sock.setblocking(True)
+        self.sock.settimeout(3.0)
         if res is None or len(res) == 0:
             return
         if res == b"\xd0":

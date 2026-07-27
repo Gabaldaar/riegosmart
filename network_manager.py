@@ -11,10 +11,8 @@ import riego_core
 import sys_log
 import ble_service
 
-try:
-    from umqtt.simple import MQTTClient
-except ImportError:
-    from simple import MQTTClient
+# Usar la versión local corregida de simple.py para evitar bloqueos síncronos en el socket
+from simple import MQTTClient
 
 # ── Estados de Red ────────────────────────────────────────────────────────────
 STATE_INIT            = 0

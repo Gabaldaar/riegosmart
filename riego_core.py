@@ -285,9 +285,9 @@ async def ejecutar_riego():
             zonas_prog.sort(key=obtener_num_zona)
             
             ajuste = 1.0
-            if programa_activo.get("nombre") != "Manual" and reloj_rtc:
+            if programa_activo.get("nombre") != "Manual":
                 try:
-                    t = reloj_rtc.get_time() # YYYY, MM, DD, HH, MM, SS, WD, YD
+                    t = time.localtime()
                     current_mm_dd = f"{t[1]:02d}-{t[2]:02d}"
                     temporadas = config_data.get("ajustes_estacionales", [])
                     for temp in temporadas:
