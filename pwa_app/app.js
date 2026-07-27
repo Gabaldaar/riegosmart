@@ -714,10 +714,15 @@ function updateActiveWidget(data) {
         if (sourceContainer && valveContainer) {
             const modoBomba = state.deviceConfig && state.deviceConfig.modo_bomba !== false; // por defecto true
             
+            // Actualizar etiqueta dinámica
+            const labelSource = document.getElementById('pump-or-main-label');
+            if (labelSource) {
+                labelSource.textContent = modoBomba ? "Bomba" : "Master valv.";
+            }
+
             // 1. Fuente de agua (Izquierda)
             if (modoBomba) {
                 // Bomba: Hélice (fan)
-                // Se enciende si el estado es REGANDO (o presurizando)
                 const isPumpOn = (data.estado === "REGANDO" || data.estado === "PRESURIZANDO");
                 if (isPumpOn) {
                     sourceContainer.innerHTML = `<i data-lucide="fan" class="w-8 h-8 stroke-[2.5] text-teal-655 dark:text-teal-400 animate-spin-fast"></i>`;
@@ -725,39 +730,28 @@ function updateActiveWidget(data) {
                     sourceContainer.innerHTML = `<i data-lucide="fan" class="w-8 h-8 stroke-[2] text-slate-400 opacity-40"></i>`;
                 }
             } else {
-                // Agua de red: Válvula animada (faucet)
-                // Se activa si el estado es REGANDO
-                const isFlowing = (data.estado === "REGANDO");
+                // Master Válvula: Válvula de Red (faucet)
+                const isFlowing = (data.estado === "REGANDO" || data.estado === "PRESURIZANDO");
                 if (isFlowing) {
-                    sourceContainer.innerHTML = `
-                        <div class="relative flex flex-col items-center">
-                            <i data-lucide="faucet" class="w-8 h-8 stroke-[2.5] text-teal-655 dark:text-teal-400"></i>
-                            <i data-lucide="droplet" class="w-3.5 h-3.5 stroke-[2] fill-blue-500 text-blue-500 absolute bottom-[-9px] anim-drop"></i>
-                        </div>
-                    `;
+                    sourceContainer.innerHTML = `<i data-lucide="faucet" class="w-8 h-8 stroke-[2.5] text-teal-655 dark:text-teal-400"></i>`;
                 } else {
-                    sourceContainer.innerHTML = `
-                        <div class="relative flex flex-col items-center opacity-40">
-                            <i data-lucide="faucet" class="w-8 h-8 stroke-[2] text-slate-400"></i>
-                        </div>
-                    `;
+                    sourceContainer.innerHTML = `<i data-lucide="faucet" class="w-8 h-8 stroke-[2] text-slate-400 opacity-40"></i>`;
                 }
             }
             
             // 2. Válvula de Zona (Derecha)
-            // Se activa si el estado es REGANDO
             const isZoneWatering = (data.estado === "REGANDO");
             if (isZoneWatering) {
                 valveContainer.innerHTML = `
-                    <div class="relative flex flex-col items-center">
-                        <i data-lucide="faucet" class="w-8 h-8 stroke-[2.5] text-teal-655 dark:text-teal-400"></i>
-                        <i data-lucide="droplet" class="w-3.5 h-3.5 stroke-[2] fill-blue-500 text-blue-500 absolute bottom-[-9px] anim-drop"></i>
+                    <div class="relative flex items-center justify-center w-full h-full">
+                        <i data-lucide="droplet" class="w-7 h-7 text-teal-655 dark:text-teal-400 fill-teal-500/20 anim-dripping-droplet"></i>
+                        <span class="absolute w-1.5 h-1.5 bg-teal-500 dark:bg-teal-400 rounded-full anim-dripping-drop bottom-1.5"></span>
                     </div>
                 `;
             } else {
                 valveContainer.innerHTML = `
-                    <div class="relative flex flex-col items-center opacity-40">
-                        <i data-lucide="faucet" class="w-8 h-8 stroke-[2] text-slate-400"></i>
+                    <div class="relative flex items-center justify-center w-full h-full opacity-40">
+                        <i data-lucide="droplet" class="w-7 h-7 text-slate-400"></i>
                     </div>
                 `;
             }
