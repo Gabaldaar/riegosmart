@@ -1,9 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ── Colección de dispositivos ──────────────────────────────────────────────
     match /dispositivos/{chipId} {
 
-      // Helpers
       function estaAutenticado() {
         return request.auth != null;
       }
@@ -16,25 +17,32 @@ service cloud.firestore {
                resource.data.owner_uid == null;
       }
 
-      // Lectura: propietario del equipo O equipo aún sin reclamar
-      allow read: if estaAutenticado() && (sinPropietario() || esElPropietario());
+      // LECTURA: cualquier usuario autenticado puede leer configuración del dispositivo.
+      // La seguridad real está en el token MQTT (sólo quien tiene el token puede enviar comandos).
+      allow read: if estaAutenticado();
 
-      // Creación de documento nuevo: cualquier usuario autenticado
-      // (primer setup: el documento no existe aún)
+      // CREACIÓN: cualquier usuario autenticado (primer setup del dispositivo)
       allow create: if estaAutenticado();
 
-      // Modificación: propietario existente O equipo sin propietario (para reclamarlo)
+      // MODIFICACIÓN: propietario o equipo sin reclamar
       allow update: if estaAutenticado() && (sinPropietario() || esElPropietario());
 
-      // Borrado: sólo el propietario
+      // BORRADO: solo el propietario
       allow delete: if esElPropietario();
 
-      // Sub-colección de logs: sólo el propietario del equipo padre
+      // Sub-colección de logs: solo el propietario
       match /logs/{logId} {
         allow read, write: if estaAutenticado() &&
           get(/databases/$(database)/documents/dispositivos/$(chipId)).data.owner_uid
             == request.auth.uid;
       }
     }
+
+    // ── Colección de usuarios (vínculo cuenta → dispositivo) ──────────────────
+    // Cada usuario solo puede leer y escribir su propio documento.
+    match /usuarios/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
   }
 }

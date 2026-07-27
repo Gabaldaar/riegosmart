@@ -101,11 +101,12 @@
                     <span id="status-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">IDLE</span>
                 </div>
                 
-                <div id="next-watering-info" class="flex flex-col items-center justify-center py-6 relative">
+                <div id="next-watering-info" class="flex flex-col items-center justify-center py-6 relative text-center">
                     <i data-lucide="calendar-clock" class="w-8 h-8 text-slate-400 dark:text-slate-600 mb-2"></i>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Siguiente Riego</p>
-                    <p id="next-watering-time" class="text-lg font-bold text-slate-800 dark:text-slate-300">Calculando...</p>
-                    <p id="next-watering-details" class="text-xs text-slate-500 dark:text-slate-400 mt-1 text-center max-w-[90%]"></p>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Siguiente Riego</p>
+                    <p id="next-watering-time" class="text-base font-bold text-slate-800 dark:text-slate-300"></p>
+                    <p id="next-watering-prog" class="text-sm font-semibold text-teal-655 dark:text-teal-400 mt-0.5"></p>
+                    <p id="next-watering-details" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 max-w-[90%]"></p>
                     <button id="btn-next-start" class="mt-4 px-6 py-2 bg-teal-600 hover:bg-teal-500 rounded-xl text-white text-sm font-bold transition-colors shadow-lg shadow-teal-500/20 hidden">
                         Iniciar Ahora
                     </button>

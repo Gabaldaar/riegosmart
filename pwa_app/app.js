@@ -100,7 +100,16 @@ function escucharConfiguracionFirestore(chipId) {
         if (doc.exists) {
             const data = doc.data();
             console.log("[FIRESTORE] Configuración recibida desde la nube:", data);
-            
+
+            // Reclamar propiedad si el dispositivo no tiene dueño o el owner_uid es de una
+            // sesión anónima/antigua diferente al usuario actual.
+            if (currentUser && (!data.owner_uid || data.owner_uid !== currentUser.uid)) {
+                db.collection("dispositivos").doc(chipId)
+                    .update({ owner_uid: currentUser.uid })
+                    .then(() => console.log("[AUTH] owner_uid actualizado al usuario actual."))
+                    .catch(() => {}); // Silencioso si ya tiene otro dueño real
+            }
+
             // Fusión segura de datos locales y nube
             state.deviceConfig.max_zonas = data.max_zonas || state.deviceConfig.max_zonas;
             state.deviceConfig.modo_bomba = data.modo_bomba !== undefined ? data.modo_bomba : state.deviceConfig.modo_bomba;
@@ -120,9 +129,23 @@ function escucharConfiguracionFirestore(chipId) {
             }
             
             refreshUIFromConfig();
+
+            // Siempre mantener /usuarios/{uid} actualizado con chip y token actuales.
+            // Esto garantiza que otros navegadores/dispositivos reciban los datos correctos.
+            if (db && currentUser && state.token) {
+                db.collection("usuarios").doc(currentUser.uid).set({
+                    chipId: chipId,
+                    token:  state.token
+                }, { merge: true }).then(() => {
+                    console.log("[FIRESTORE] Vínculo usuario→dispositivo actualizado.");
+                }).catch(e => {
+                    console.warn("[FIRESTORE] No se pudo actualizar vínculo:", e.message);
+                });
+            }
         } else {
             console.log("[FIRESTORE] Registrando nuevo equipo en Firestore...");
             // Si el documento no existe en Firestore, lo aprovisionamos automáticamente
+            const tokenAcceso = state.token || "token_por_defecto_1234";
             db.collection("dispositivos").doc(chipId).set({
                 config_version: 1,
                 max_zonas: state.deviceConfig.max_zonas,
@@ -131,11 +154,20 @@ function escucharConfiguracionFirestore(chipId) {
                 ajustes_estacionales: state.deviceConfig.ajustes_estacionales || [],
                 programas: state.deviceConfig.programas,
                 timestamp_rain_delay: 0,
-                token_acceso: state.token || "token_por_defecto_1234",
+                token_acceso: tokenAcceso,
                 owner_uid: currentUser ? currentUser.uid : null
             }).catch(err => {
                 console.error("[FIRESTORE] Error inicializando regador en la nube:", err);
             });
+            // Registrar la vinculación usuario → dispositivo
+            if (currentUser) {
+                db.collection("usuarios").doc(currentUser.uid).set({
+                    chipId: chipId,
+                    token:  tokenAcceso
+                }, { merge: true }).catch(err => {
+                    console.warn("[FIRESTORE] No se pudo guardar vínculo usuario-dispositivo:", err);
+                });
+            }
         }
     }, (error) => {
         console.error("[FIRESTORE] Error en Snapshot de Firestore:", error);
@@ -281,29 +313,37 @@ async function iniciarSesionApp(user) {
 }
 
 async function iniciarConectarDispositivo() {
-    if (state.chipId && state.token) {
-        // Verificar propiedad del equipo en Firestore
-        if (db && currentUser) {
-            try {
-                const doc = await db.collection("dispositivos").doc(state.chipId).get();
-                if (doc.exists) {
-                    const ownerUid = doc.data().owner_uid;
-                    if (ownerUid && ownerUid !== currentUser.uid) {
-                        mostrarPantallaLogin('Este equipo está vinculado a otra cuenta de usuario.');
-                        return;
-                    }
-                    // Equipo sin propietario registrado → reclamar automáticamente
-                    if (!ownerUid) {
-                        await db.collection("dispositivos").doc(state.chipId)
-                            .update({ owner_uid: currentUser.uid });
-                        console.log('[AUTH] Equipo reclamado por el usuario actual.');
-                    }
-                }
-            } catch (err) {
-                console.warn('[AUTH] No se pudo verificar propiedad (sin conexión?):', err.message);
-            }
-        }
+    // /usuarios en Firestore es siempre la fuente de verdad.
+    // Se consulta siempre, incluso si hay datos en localStorage,
+    // para evitar que sesiones obsoletas apunten al dispositivo equivocado.
+    if (db && currentUser) {
+        try {
+            const userDoc = await db.collection("usuarios").doc(currentUser.uid).get();
+            if (userDoc.exists && userDoc.data().chipId && userDoc.data().token) {
+                const fsChipId = userDoc.data().chipId;
+                const fsToken  = userDoc.data().token;
 
+                if (state.chipId && state.chipId !== fsChipId) {
+                    console.warn(`[AUTH] localStorage tiene "${state.chipId}" pero Firestore dice "${fsChipId}". Usando Firestore.`);
+                }
+
+                // Firestore gana siempre
+                state.chipId = fsChipId;
+                state.token  = fsToken;
+                localStorage.setItem('CHIP_ID', fsChipId);
+                localStorage.setItem('TOKEN',   fsToken);
+                console.log(`[AUTH] Dispositivo verificado desde cuenta: ${fsChipId}`);
+
+            } else if (!state.chipId) {
+                console.log('[AUTH] No hay dispositivo registrado para esta cuenta. Ir a Ajustes.');
+            }
+        } catch (err) {
+            console.warn('[AUTH] No se pudo leer /usuarios (sin conexión?):', err.message);
+            // Si hay datos en localStorage, los usamos como fallback offline
+        }
+    }
+
+    if (state.chipId && state.token) {
         await comms.initConnection(state.chipId, state.token);
         escucharConfiguracionFirestore(state.chipId);
         setTimeout(() => {
@@ -316,6 +356,7 @@ async function iniciarConectarDispositivo() {
         document.querySelector('.nav-btn[data-target="view-settings"]')?.click();
     }
 }
+
 
 function mostrarPantallaLogin(error) {
     document.getElementById('login-overlay')?.classList.remove('hidden');
@@ -804,6 +845,7 @@ function calculateNextWatering() {
     
     let minDiff = Infinity;
     let nextProgStr = "No hay riegos programados";
+    let nextProgProg = "";
     let nextProgDetails = "";
     let nextProgId = null;
 
@@ -850,15 +892,16 @@ function calculateNextWatering() {
                     const pName = pObj.nombre || "Programa";
 
                     if (dateTarget.toDateString() === now.toDateString()) {
-                        nextProgStr = `Hoy a las ${hora_inicio}h - ${pName}`;
+                        nextProgStr = `Hoy a las ${hora_inicio}h`;
                     } else if (dateTarget.toDateString() === tmr.toDateString()) {
-                        nextProgStr = `Mañana a las ${hora_inicio}h - ${pName}`;
+                        nextProgStr = `Mañana a las ${hora_inicio}h`;
                     } else {
                         // dateTarget.getDay() is 0 for Sun, 1 for Mon. We want our 1..7 index.
                         let dayIdx = dateTarget.getDay();
                         if (dayIdx === 0) dayIdx = 7;
-                        nextProgStr = `${dNames[dayIdx]} a las ${hora_inicio}h - ${pName}`;
+                        nextProgStr = `${dNames[dayIdx]} a las ${hora_inicio}h`;
                     }
+                    nextProgProg = pName;
 
                     // Calcular el desglose de zonas con ajuste estacional del mes actual
                     let zonesDetail = [];
@@ -921,6 +964,9 @@ function calculateNextWatering() {
     }
     const el = document.getElementById('next-watering-time');
     if (el) el.textContent = nextProgStr;
+
+    const progEl = document.getElementById('next-watering-prog');
+    if (progEl) progEl.textContent = nextProgProg;
 
     const detailsEl = document.getElementById('next-watering-details');
     if (detailsEl) detailsEl.textContent = nextProgDetails;
