@@ -34,6 +34,10 @@ reinicio_pendiente = False
 
 _config_lock = asyncio.Lock()
 
+# Caché de temperatura para proteger el bus I2C
+_cached_temp = "N/A"
+_cached_temp_ts = 0
+
 # Mapado de Hardware
 MV_PIN = 25
 ZONAS_PINS = [18, 23, 26, 27, 19, 32, 33, 14]
@@ -133,7 +137,15 @@ async def init_hardware():
     boot_button = machine.Pin(BOOT_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
     
     try:
-        i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21))
+        try:
+            # Intentar SoftI2C primero para evitar bloqueos del driver de hardware I2C del ESP32
+            i2c = machine.SoftI2C(scl=machine.Pin(22), sda=machine.Pin(21))
+            print("SoftI2C cargado para RTC.")
+        except (AttributeError, ValueError):
+            # Fallback a hardware I2C si SoftI2C no está soportado en la build de MicroPython
+            i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21))
+            print("Hardware I2C(0) cargado para RTC.")
+            
         reloj_rtc = ds3231.DS3231(i2c)
         print("DS3231 RTC Detectado y cargado.")
         
@@ -542,13 +554,16 @@ async def procesar_comando(cmd_dict):
             await tx_queue.put({"tipo": "CONFIG", "data": resp, "_destino": origen})
         
     elif cmd == "GET_TEMP":
-        temp = "N/A"
-        if reloj_rtc:
+        global _cached_temp, _cached_temp_ts
+        now_ts = time.time()
+        # Actualizar caché si expiró (60 segundos) o si no tenemos valor
+        if reloj_rtc and (now_ts - _cached_temp_ts > 60 or _cached_temp == "N/A"):
             try:
-                temp = round(reloj_rtc.temperature(), 1)
-            except:
-                pass
-        await tx_queue.put({"tipo": "TEMP", "data": temp, "_destino": origen})
+                _cached_temp = round(reloj_rtc.temperature(), 1)
+                _cached_temp_ts = now_ts
+            except Exception as e:
+                print("[CORE] Error leyendo temp RTC, usando caché:", e)
+        await tx_queue.put({"tipo": "TEMP", "data": _cached_temp, "_destino": origen})
         
     elif cmd == "GET_LOGS":
         lines = []
