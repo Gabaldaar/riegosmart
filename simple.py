@@ -76,22 +76,22 @@ class MQTTClient:
         premsg = bytearray(b"\x10\0\0\4MQTT\x04\x02\0\0")
         msg = bytearray()
         if clean_session:
-            premsg[10] |= 0x02
+            premsg[9] |= 0x02
         if self.user is not None:
-            premsg[10] |= 0x80
+            premsg[9] |= 0x80
             msg += struct.pack("!H", len(self.user)) + self.user.encode("utf-8")
             if self.pswd is not None:
-                premsg[10] |= 0x40
+                premsg[9] |= 0x40
                 msg += struct.pack("!H", len(self.pswd)) + self.pswd.encode("utf-8")
         if self.keepalive:
             assert self.keepalive < 65536
-            premsg[11] |= self.keepalive >> 8
-            premsg[12] |= self.keepalive & 0xFF
+            premsg[10] |= self.keepalive >> 8
+            premsg[11] |= self.keepalive & 0xFF
         if self.lw_topic is not None:
-            premsg[10] |= 0x04
+            premsg[9] |= 0x04
             if self.lw_retain:
-                premsg[10] |= 0x20
-            premsg[10] |= self.lw_qos << 3
+                premsg[9] |= 0x20
+            premsg[9] |= self.lw_qos << 3
             msg += struct.pack("!H", len(self.lw_topic)) + self.lw_topic.encode("utf-8")
             msg += struct.pack("!H", len(self.lw_msg)) + self.lw_msg.encode("utf-8")
         premsg[1] = len(premsg) - 2 + len(msg) + len(self.client_id) + 2
