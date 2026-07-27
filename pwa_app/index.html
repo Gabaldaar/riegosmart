@@ -44,7 +44,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="styles.css?v=32">
+    <link rel="stylesheet" href="styles.css?v=33">
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30 transition-colors duration-200">
     <!-- Top Header -->
@@ -668,16 +668,61 @@
         // Init Lucide
         lucide.createIcons();
         
-        // PWA Service Worker Registration
+        // PWA Service Worker Registration con detección de actualizaciones
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').then(reg => {
-                    console.log('SW registrado', reg.scope);
+                    console.log('SW registrado:', reg.scope);
+                    
+                    // Forzar comprobación de actualización
+                    reg.update();
+
+                    // Detectar si ya hay un Service Worker esperando
+                    if (reg.waiting) {
+                        showUpdateBanner();
+                    }
+
+                    // Escuchar si se encuentra un nuevo Service Worker
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
+                        if (newWorker) {
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    showUpdateBanner();
+                                }
+                            });
+                        }
+                    });
                 }).catch(err => {
-                    console.log('SW registro fallo', err);
+                    console.warn('SW registro falló:', err);
+                });
+
+                // Escuchar cambio de controlador (cuando se activa el nuevo SW)
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (!refreshing) {
+                        refreshing = true;
+                        showUpdateBanner();
+                    }
                 });
             });
         }
+
+        function showUpdateBanner() {
+            const banner = document.getElementById('update-banner');
+            if (banner) {
+                banner.classList.remove('translate-y-24', 'opacity-0');
+                banner.classList.add('translate-y-0', 'opacity-100');
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            }
+        }
+
+        // Listener para recargar la página al presionar el botón de actualizar
+        document.getElementById('btn-update-reload')?.addEventListener('click', () => {
+            window.location.reload();
+        });
     </script>
     
     <!-- Modal de Ayuda Genérico -->
@@ -758,8 +803,19 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
+    <!-- Banner de Notificación de Actualización -->
+    <div id="update-banner" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-teal-600 dark:bg-teal-500 text-white px-5 py-3.5 rounded-2xl shadow-2xl z-50 flex items-center gap-4 border border-teal-500/30 transition-all duration-300 transform translate-y-24 opacity-0">
+        <div class="flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-5 h-5 text-amber-300 animate-pulse"></i>
+            <span class="text-xs font-semibold">¡Nueva versión disponible!</span>
+        </div>
+        <button id="btn-update-reload" class="bg-white text-teal-800 dark:text-teal-900 text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-transform">
+            Actualizar
+        </button>
+    </div>
+
     <!-- PWA y App Scripts con versión forzada -->
-    <script src="comms.js?v=32"></script>
-    <script src="app.js?v=32"></script>
+    <script src="comms.js?v=33"></script>
+    <script src="app.js?v=33"></script>
 </body>
 </html>
