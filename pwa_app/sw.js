@@ -1,4 +1,4 @@
-const CACHE_NAME = 'riego-pwa-v31';
+const CACHE_NAME = 'riego-pwa-v32';
 const ASSETS = [
   './index.html',
   './styles.css',

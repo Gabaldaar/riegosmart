@@ -740,6 +740,14 @@ function updateActiveWidget(data) {
         infoPanel.classList.remove('hidden');
         document.getElementById('next-watering-info').classList.add('hidden');
         document.getElementById('btn-manual-stop').classList.remove('hidden');
+
+        // Expandir el card de control manual automáticamente si hay un riego activo
+        const content = document.getElementById('manual-control-content');
+        const chevron = document.getElementById('manual-toggle-chevron');
+        if (content && content.classList.contains('hidden')) {
+            content.classList.remove('hidden');
+            if (chevron) chevron.classList.add('rotate-180');
+        }
         
         let zname = data.zona ? obtenerNombreZona(data.zona) : "Preparando...";
         zoneName.textContent = zname;
@@ -1208,6 +1216,22 @@ document.getElementById('manual-cycle-check')?.addEventListener('change', (e) =>
     if (opts) {
         if (e.target.checked) opts.classList.remove('hidden');
         else opts.classList.add('hidden');
+    }
+});
+
+// Listener para colapsar/desplegar la tarjeta de Riego Manual
+document.getElementById('btn-toggle-manual')?.addEventListener('click', () => {
+    const content = document.getElementById('manual-control-content');
+    const chevron = document.getElementById('manual-toggle-chevron');
+    if (content && chevron) {
+        const isHidden = content.classList.contains('hidden');
+        if (isHidden) {
+            content.classList.remove('hidden');
+            chevron.classList.add('rotate-180');
+        } else {
+            content.classList.add('hidden');
+            chevron.classList.remove('rotate-180');
+        }
     }
 });
 
