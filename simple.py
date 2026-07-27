@@ -141,22 +141,15 @@ class MQTTClient:
     def subscribe(self, topic, qos=0):
         if isinstance(topic, str):
             topic = topic.encode("utf-8")
-        pkt = bytearray(b"\x82\0\0\0\0")
+        pkt = bytearray(b"\x82\0\0\0")
         self.pid += 1
-        struct.pack_into("!H", pkt, 2, self.pid)
-        sz = len(topic) + 2 + 1 + 2
-        while sz > 0x7F:
-            pkt.append((sz & 0x7F) | 0x80)
-            sz >>= 7
-        pkt.append(sz)
-        pkt.append(self.pid >> 8)
-        pkt.append(self.pid & 0xFF)
-        pkt.append(len(topic) >> 8)
-        pkt.append(len(topic) & 0xFF)
-        pkt.extend(topic)
-        pkt.append(qos)
+        struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic) + 1, self.pid)
         self.sock.write(pkt)
+        self._send_str(topic)
+        self.sock.write(struct.pack("B", qos))
         res = self.sock.read(5)
+        if len(res) < 5:
+            raise MQTTException("Respuesta de suscripción inválida o incompleta")
         assert res[0] == 0x90 and res[1] == 0x03
         assert struct.unpack("!H", res[2:4])[0] == self.pid
         assert res[4] == qos
