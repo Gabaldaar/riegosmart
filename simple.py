@@ -131,11 +131,11 @@ class MQTTClient:
         pkt.append(sz)
         pkt.append(len(topic) >> 8)
         pkt.append(len(topic) & 0xFF)
-        pkt.write(topic)
+        pkt.extend(topic)
         if qos:
             pkt.append(self.pid >> 8)
             pkt.append(self.pid & 0xFF)
-        pkt.write(msg)
+        pkt.extend(msg)
         self.sock.write(pkt)
 
     def subscribe(self, topic, qos=0):
@@ -153,7 +153,7 @@ class MQTTClient:
         pkt.append(self.pid & 0xFF)
         pkt.append(len(topic) >> 8)
         pkt.append(len(topic) & 0xFF)
-        pkt.write(topic)
+        pkt.extend(topic)
         pkt.append(qos)
         self.sock.write(pkt)
         res = self.sock.read(5)
