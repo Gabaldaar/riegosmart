@@ -1,4 +1,4 @@
-const CACHE_NAME = 'riego-pwa-v38';
+const CACHE_NAME = 'riego-pwa-v39';
 const ASSETS = [
   './index.html',
   './styles.css',
@@ -6,7 +6,7 @@ const ASSETS = [
   './app.js',
   './manifest.json',
   './favicon.ico',
-  './icon-512.png?v=38'
+  './icon-512.png?v=39'
 ];
 
 self.addEventListener('install', (event) => {

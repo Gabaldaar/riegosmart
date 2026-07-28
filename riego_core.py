@@ -186,7 +186,9 @@ async def enviar_telemetria():
         "estado": est,
         "zona": zona_actual_idx,
         "tiempo_restante": t_rest,
-        "tiempo_total": t_tot
+        "tiempo_total": t_tot,
+        "timestamp_rain_delay": config_data.get("timestamp_rain_delay", 0),
+        "timestamp_sensor_lluvia_clear": config_data.get("timestamp_sensor_lluvia_clear", 0)
     }
     payload_data.update(telemetria_extra)
     

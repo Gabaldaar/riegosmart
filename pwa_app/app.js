@@ -647,6 +647,14 @@ function handleIncomingMessage(msg) {
         }
     } else if (msg.tipo === "TELEMETRIA") {
         state.telemetria = msg.data;
+        if (msg.data) {
+            if (msg.data.timestamp_rain_delay !== undefined) {
+                state.deviceConfig.timestamp_rain_delay = msg.data.timestamp_rain_delay;
+            }
+            if (msg.data.timestamp_sensor_lluvia_clear !== undefined) {
+                state.deviceConfig.timestamp_sensor_lluvia_clear = msg.data.timestamp_sensor_lluvia_clear;
+            }
+        }
         updateActiveWidget(msg.data);
         if (window._startupSeq === 2) {
             window._startupSeq = 0;
@@ -720,6 +728,48 @@ let countdownTimer = null;
 let currentRemainingSecs = 0;
 let currentTotalSecs = 1;
 
+function updateRainDelayBanner() {
+    const txtRain = document.getElementById('rain-delay-status');
+    if (!txtRain) return;
+    
+    let delayActive = false;
+    let delayUnix = 0;
+    let labelPrefix = "";
+    const nowSecs = Math.floor(Date.now() / 1000);
+    
+    // Priorizar el retraso manual
+    if (state.deviceConfig.timestamp_rain_delay) {
+        const manualDelayUnix = state.deviceConfig.timestamp_rain_delay + 946684800; // Y2K a Unix
+        if (manualDelayUnix > nowSecs) {
+            delayActive = true;
+            delayUnix = manualDelayUnix;
+            labelPrefix = "Retraso manual activo hasta: ";
+        }
+    }
+    
+    // Si no hay manual, verificar el del sensor de lluvia
+    if (!delayActive && state.deviceConfig.timestamp_sensor_lluvia_clear) {
+        const sensorDelayUnix = state.deviceConfig.timestamp_sensor_lluvia_clear + 946684800; // Y2K a Unix
+        if (sensorDelayUnix > nowSecs) {
+            delayActive = true;
+            delayUnix = sensorDelayUnix;
+            labelPrefix = "Secado de sensor activo hasta: ";
+        }
+    }
+    
+    if (delayActive && delayUnix > 0) {
+        const futureDate = new Date(delayUnix * 1000);
+        const mm = String(futureDate.getMonth()+1).padStart(2,'0');
+        const dd = String(futureDate.getDate()).padStart(2,'0');
+        const hh = String(futureDate.getHours()).padStart(2,'0');
+        const mn = String(futureDate.getMinutes()).padStart(2,'0');
+        txtRain.querySelector('span').innerHTML = `${labelPrefix}<strong>${dd}/${mm} a las ${hh}:${mn}h</strong>`;
+        txtRain.classList.remove('hidden');
+    } else {
+        txtRain.classList.add('hidden');
+    }
+}
+
 function updateActiveWidget(data) {
     const badge = document.getElementById('status-badge');
     const infoPanel = document.getElementById('active-watering-info');
@@ -761,6 +811,7 @@ function updateActiveWidget(data) {
             }
             if (window.lucide) window.lucide.createIcons();
         }
+        updateRainDelayBanner();
     } else if (data.estado === "FALLO_CORRIENTE") {
         badge.textContent = "FALLO HARDWARE";
         badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-red-900 text-red-300 animate-pulse";
@@ -1183,50 +1234,17 @@ function refreshUIFromConfig() {
     }
     
     // 2.5 Dashboard: Rain Delay Status (Manual & Sensor Delay)
-    const txtRain = document.getElementById('rain-delay-status');
-    if (txtRain) {
-        let delayActive = false;
-        let delayUnix = 0;
-        let labelPrefix = "";
-        const nowSecs = Math.floor(Date.now() / 1000);
-        
-        // Priorizar el retraso manual
-        if (state.deviceConfig.timestamp_rain_delay) {
-            const manualDelayUnix = state.deviceConfig.timestamp_rain_delay + 946684800; // Y2K a Unix
-            if (manualDelayUnix > nowSecs) {
-                delayActive = true;
-                delayUnix = manualDelayUnix;
-                labelPrefix = "Retraso manual activo hasta: ";
-            }
-        }
-        
-        // Si no hay manual, verificar el del sensor de lluvia
-        if (!delayActive && state.deviceConfig.timestamp_sensor_lluvia_clear) {
-            const sensorDelayUnix = state.deviceConfig.timestamp_sensor_lluvia_clear + 946684800; // Y2K a Unix
-            if (sensorDelayUnix > nowSecs) {
-                delayActive = true;
-                delayUnix = sensorDelayUnix;
-                labelPrefix = "Secado de sensor activo hasta: ";
-            }
-        }
-        
-        if (delayActive && delayUnix > 0) {
-            const futureDate = new Date(delayUnix * 1000);
-            const mm = String(futureDate.getMonth()+1).padStart(2,'0');
-            const dd = String(futureDate.getDate()).padStart(2,'0');
-            const hh = String(futureDate.getHours()).padStart(2,'0');
-            const mn = String(futureDate.getMinutes()).padStart(2,'0');
-            txtRain.querySelector('span').innerHTML = `${labelPrefix}<strong>${dd}/${mm} a las ${hh}:${mn}h</strong>`;
-            txtRain.classList.remove('hidden');
-        } else {
-            txtRain.classList.add('hidden');
-        }
-    }
+    updateRainDelayBanner();
 
     // Cargar horas de retraso del sensor de lluvia en Ajustes
     const rainDelayHoursInput = document.getElementById('settings-rain-delay-hours');
+    const rainDelayHoursVal = document.getElementById('rain-delay-hours-val');
     if (rainDelayHoursInput && state.deviceConfig.sensor_lluvia_delay_horas !== undefined) {
-        rainDelayHoursInput.value = state.deviceConfig.sensor_lluvia_delay_horas;
+        const val = state.deviceConfig.sensor_lluvia_delay_horas;
+        rainDelayHoursInput.value = val;
+        if (rainDelayHoursVal) {
+            rainDelayHoursVal.textContent = `${val} ${val === 1 ? 'hora' : 'horas'}`;
+        }
     }
 
     // 3. Hardware Settings
@@ -1955,6 +1973,15 @@ function initSettingsUI() {
             hideCancel: true
         });
     });
+
+    const rainDelayHoursSld = document.getElementById('settings-rain-delay-hours');
+    const rainDelayHoursLbl = document.getElementById('rain-delay-hours-val');
+    if (rainDelayHoursSld && rainDelayHoursLbl) {
+        rainDelayHoursSld.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value) || 0;
+            rainDelayHoursLbl.textContent = `${val} ${val === 1 ? 'hora' : 'horas'}`;
+        });
+    }
 
     document.getElementById('btn-ble-pair').addEventListener('click', async () => {
         const res = await comms.connectBLE();
