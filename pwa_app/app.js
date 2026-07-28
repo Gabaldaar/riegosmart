@@ -127,6 +127,12 @@ function escucharConfiguracionFirestore(chipId) {
             if (data.timestamp_rain_delay !== undefined) {
                 state.deviceConfig.timestamp_rain_delay = data.timestamp_rain_delay > 0 ? (data.timestamp_rain_delay - 946684800) : 0;
             }
+            if (data.sensor_lluvia_delay_horas !== undefined) {
+                state.deviceConfig.sensor_lluvia_delay_horas = data.sensor_lluvia_delay_horas;
+            }
+            if (data.timestamp_sensor_lluvia_clear !== undefined) {
+                state.deviceConfig.timestamp_sensor_lluvia_clear = data.timestamp_sensor_lluvia_clear > 0 ? (data.timestamp_sensor_lluvia_clear - 946684800) : 0;
+            }
             
             refreshUIFromConfig();
 
@@ -633,6 +639,7 @@ function handleIncomingMessage(msg) {
                     config: {
                         max_zonas: state.deviceConfig.max_zonas,
                         modo_bomba: state.deviceConfig.modo_bomba,
+                        sensor_lluvia_delay_horas: state.deviceConfig.sensor_lluvia_delay_horas || 0,
                         programas: state.deviceConfig.programas,
                         ajustes_estacionales: state.deviceConfig.ajustes_estacionales
                     }
@@ -1946,7 +1953,8 @@ function initSettingsUI() {
             comando: "UPDATE_CONFIG", 
             config: { 
                 max_zonas: state.deviceConfig.max_zonas, 
-                modo_bomba: state.deviceConfig.modo_bomba 
+                modo_bomba: state.deviceConfig.modo_bomba,
+                sensor_lluvia_delay_horas: state.deviceConfig.sensor_lluvia_delay_horas || 0
             } 
         });
         pendingCommand = true;
@@ -2183,6 +2191,10 @@ function sendCmd(obj) {
             payload.programas = state.deviceConfig.programas;
         } else if (obj.comando === "RAIN_DELAY") {
             payload.timestamp_rain_delay = obj.dias > 0 ? (Math.floor(Date.now() / 1000) + obj.dias * 86400) : 0;
+            if (obj.dias <= 0) {
+                payload.timestamp_sensor_lluvia_clear = 0;
+                state.deviceConfig.timestamp_sensor_lluvia_clear = 0;
+            }
         }
         
         // Sincronizar en Firestore
