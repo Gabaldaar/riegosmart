@@ -4,7 +4,7 @@ import uasyncio as asyncio
 
 LOG_FILE = "sys_log.jsonl"
 LOG_FILE_OLD = "sys_log.old"
-MAX_FILE_SIZE_BYTES = 4096  # Límite de 4 KB para evitar sobrecarga de Flash y RAM
+MAX_FILE_SIZE_BYTES = 8192  # Límite de 8 KB para asegurar holgura de al menos 40-50 registros
 
 # Lock para evitar colisiones al escribir/leer
 _log_lock = asyncio.Lock()
@@ -69,6 +69,19 @@ async def get_logs(incluir_ram=True):
         logs.extend(logs_ram)
         
     async with _log_lock:
+        # 1. Leer de sys_log.old si existe
+        try:
+            with open(LOG_FILE_OLD, "r") as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            logs.append(json.loads(line))
+                        except ValueError:
+                            pass
+        except OSError:
+            pass
+            
+        # 2. Leer de sys_log.jsonl
         try:
             with open(LOG_FILE, "r") as f:
                 for line in f:
@@ -79,7 +92,9 @@ async def get_logs(incluir_ram=True):
                             pass
         except OSError:
             pass
-    return logs
+            
+    # Retornar los últimos 30 logs para no sobrecargar
+    return logs[-30:]
 
 async def limpiar_historial():
     """Borra el archivo de logs y limpia el buffer en RAM."""

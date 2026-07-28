@@ -198,6 +198,7 @@ function sincronizarConfigTecnicaAFirestore(nuevaConfigParcial) {
 }
 
 let pendingCommand = false;
+let _pendingLogEntries = []; // Buffer para streaming de LOG_ENTRY
 let toastTimeout = null;
 
 function showToast(msg) {
@@ -580,8 +581,11 @@ document.getElementById('btn-reconnect').addEventListener('click', () => {
 // RECEPCIÓN DE MENSAJES Y TELEMETRIA
 // ==========================================
 function handleIncomingMessage(msg) {
+    // Limpiar flag de comando pendiente. El feedback al usuario viene de los
+    // handlers específicos (ACK_CFG, cambio de estado en TELEMETRIA, etc.)
+    // No mostramos un toast genérico aquí porque podría corresponder a
+    // una respuesta de un comando anterior, no del último enviado.
     if (pendingCommand) {
-        showToast("Comando recibido por la placa");
         pendingCommand = false;
     }
 
@@ -661,7 +665,21 @@ function handleIncomingMessage(msg) {
         refreshUIFromConfig();
 
     } else if (msg.tipo === "LOGS") {
-        renderLogs(msg.data);
+        // Formato legado (BLE compacto o CLEAR_HISTORY): renderizar directo
+        renderLogs(msg.data || []);
+    } else if (msg.tipo === "LOG_ENTRY") {
+        // Streaming MQTT: acumular entradas hasta recibir LOGS_END
+        if (msg.data) _pendingLogEntries.push(msg.data);
+    } else if (msg.tipo === "LOGS_END") {
+        // Fin del streaming: renderizar todo lo acumulado
+        if (msg.data && Array.isArray(msg.data)) {
+            // BLE: viene con data directamente en LOGS_END
+            renderLogs(msg.data);
+        } else {
+            // MQTT: renderizar buffer acumulado y limpiarlo
+            renderLogs(_pendingLogEntries);
+            _pendingLogEntries = [];
+        }
     } else if (msg.tipo === "TEMP") {
         const tempEl = document.getElementById('header-temp');
         if (tempEl && msg.data !== "N/A") {

@@ -183,25 +183,36 @@ class MQTTClient:
             assert 0
 
     def check_msg(self):
+        """Lee un mensaje entrante sin bloquear.
+        Retorna True si se procesó algún dato (PINGRESP, PUBLISH, otro paquete).
+        Retorna False si no hay datos pendientes (condición normal).
+        Lanza MQTTException si el broker cerró la conexión TCP.
+        """
         self.sock.setblocking(False)
         try:
             res = self.sock.read(1)
         except OSError as e:
-            # EAGAIN
+            # EAGAIN (11) = sin datos, normal en modo no-bloqueante
             if e.args[0] == 11:
                 self.sock.settimeout(3.0)
-                return
+                return False
             self.sock.settimeout(3.0)
             raise
         self.sock.settimeout(3.0)
-        if res is None or len(res) == 0:
-            return
+        if res is None:
+            # None en modo no-bloqueante = sin datos (equiv. EAGAIN)
+            return False
+        if len(res) == 0:
+            # b"" = broker cerró la conexión TCP limpiamente
+            raise MQTTException("conexion_cerrada")
         if res == b"\xd0":
+            # PINGRESP recibido: consumir el segundo byte e indicar datos recibidos
             self.sock.read(1)
-            return
+            return True
         op = res[0]
         if op & 0xF0 != 0x30:
-            return op
+            # Paquete no-PUBLISH (SUBACK, UNSUBACK, etc.): datos recibidos
+            return True
         sz = self._recv_len()
         topic_len = self._readexactly(2)
         topic_len = (topic_len[0] << 8) | topic_len[1]
@@ -219,3 +230,4 @@ class MQTTClient:
             self.sock.write(pkt)
         elif op & 0x06 == 4:
             assert 0
+        return True  # PUBLISH procesado

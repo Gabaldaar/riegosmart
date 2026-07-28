@@ -570,23 +570,41 @@ async def procesar_comando(cmd_dict):
         await tx_queue.put({"tipo": "TEMP", "data": _cached_temp, "_destino": origen})
         
     elif cmd == "GET_LOGS":
-        lines = []
         if origen == "BLE":
-            # Devolver logs mínimos en RAM para BLE para no congestionar
+            # BLE: enviar logs RAM compactos en un solo mensaje (canal estrecho)
             lines = sys_log.logs_ram.copy()
+            await tx_queue.put({"tipo": "LOGS_END", "data": lines, "_destino": "BLE"})
         else:
+            # MQTT: streaming entrada por entrada para evitar payloads grandes
+            # que causan MemoryError o desconexión del broker.
             try:
-                with open(sys_log.LOG_FILE, "r") as f:
-                    buffer = []
-                    for line in f:
-                         buffer.append(line)
-                         if len(buffer) > 20:
-                             buffer.pop(0)
-                    lines = [json.loads(l.strip()) for l in buffer]
+                buffer = []
+                # Intentar leer primero del archivo antiguo y luego del activo
+                for file_path in (sys_log.LOG_FILE_OLD, sys_log.LOG_FILE):
+                    try:
+                        with open(file_path, "r") as f:
+                            for line in f:
+                                if line.strip():
+                                    buffer.append(line)
+                                    await asyncio.sleep_ms(0)  # yield al event loop en cada línea
+                                    if len(buffer) > 30:       # Mantener al menos los últimos 30 registros
+                                        buffer.pop(0)
+                    except OSError:
+                        pass
+                
+                # Streaming de logs al origen
+                for line_str in buffer:
+                    try:
+                        entry = json.loads(line_str.strip())
+                        await tx_queue.put({"tipo": "LOG_ENTRY", "data": entry, "_destino": origen})
+                        await asyncio.sleep_ms(0)
+                    except (ValueError, Exception):
+                        pass
             except Exception as e:
                 print("Error GET_LOGS:", e)
-        await tx_queue.put({"tipo": "LOGS", "data": lines, "_destino": origen})
-        
+            # Señal de fin de transmisión (la app acumula entradas hasta recibir esto)
+            await tx_queue.put({"tipo": "LOGS_END", "_destino": origen})
+
     elif cmd == "CLEAR_HISTORY":
         await sys_log.limpiar_historial()
         await tx_queue.put({"tipo": "LOGS", "data": []})
