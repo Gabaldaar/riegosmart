@@ -484,6 +484,40 @@ async def tarea_actualizar_temperatura():
         # Actualizar cada 5 minutos
         await asyncio.sleep(300)
 
+async def tarea_monitoreo_lluvia():
+    global rain_sensor, estado_riego
+    if not rain_sensor:
+        return
+        
+    ultimo_estado = rain_sensor.value()
+    while True:
+        try:
+            val = rain_sensor.value()
+            if val != ultimo_estado:
+                # Debounce: esperar 100ms y reconfirmar
+                await asyncio.sleep_ms(100)
+                val_debounced = rain_sensor.value()
+                if val_debounced == val:
+                    ultimo_estado = val
+                    if val == 0:
+                        print("[RAIN] Lluvia detectada física (GPIO4 = 0).")
+                        await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "detectada"})
+                        # Si está regando, abortar inmediatamente
+                        if estado_riego != "IDLE" and estado_riego != "FALLO_CORRIENTE":
+                            print("[RAIN] Abortando riego por sensor de lluvia activo.")
+                            await sys_log.log_event({"tipo": "error", "msg": "Aborto por lluvia física"})
+                            abort_event.set()
+                        # Forzar envío de telemetría para actualizar la interfaz
+                        await enviar_telemetria()
+                    else:
+                        print("[RAIN] Sensor de lluvia despejado (GPIO4 = 1).")
+                        await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "despejado"})
+                        await enviar_telemetria()
+        except Exception as e:
+            print("[RAIN] Error en tarea_monitoreo_lluvia:", e)
+            
+        await asyncio.sleep(1) # Polling cada segundo
+
 async def iniciar_tareas():
     global abort_event
     if abort_event is None:
@@ -494,6 +528,7 @@ async def iniciar_tareas():
     asyncio.create_task(ejecutar_riego())
     asyncio.create_task(tarea_planificador())
     asyncio.create_task(tarea_actualizar_temperatura())
+    asyncio.create_task(tarea_monitoreo_lluvia())
     print("Core Riego Inicializado.")
 
 async def procesar_comando(cmd_dict):
