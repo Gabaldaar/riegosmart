@@ -37,6 +37,7 @@ _config_lock = asyncio.Lock()
 # Caché de temperatura para proteger el bus I2C
 _cached_temp = "N/A"
 _cached_temp_ts = 0
+ultimo_arranque_minuto = ""
 
 # Mapado de Hardware
 MV_PIN = 25
@@ -437,6 +438,7 @@ async def ejecutar_riego():
 
 
 async def tarea_planificador():
+    global ultimo_arranque_minuto
     while True:
         if estado_riego == "IDLE":
             if rain_sensor.value() == 0 or time.time() < config_data.get("timestamp_rain_delay", 0):
@@ -446,6 +448,7 @@ async def tarea_planificador():
             t = get_time() 
             hora_str = f"{t[3]:02d}:{t[4]:02d}"
             dia_sem = t[6] + 1 
+            id_minuto = f"{t[0]}_{t[1]}_{t[2]}_{t[3]}_{t[4]}"
             
             prog_keys = list(config_data.get("programas", {}).keys())
             prog_keys.sort()
@@ -456,10 +459,12 @@ async def tarea_planificador():
                     continue
                 if dia_sem not in prog.get("dias_semana", []):
                     continue
-                if hora_str in prog.get("horas_arranque", []) and t[5] < 15:
-                    print(f"Lanzando programa {pk}")
-                    await cola_programas.put(prog)
-                    await asyncio.sleep(16)
+                if hora_str in prog.get("horas_arranque", []):
+                    if ultimo_arranque_minuto != id_minuto:
+                        print(f"Lanzando programa {pk}")
+                        ultimo_arranque_minuto = id_minuto
+                        await cola_programas.put(prog)
+                        break # Salir para procesar este programa
         else:
             if rain_sensor.value() == 0:
                 print("LLUVIA DETECTADA, ABORTANDO")
