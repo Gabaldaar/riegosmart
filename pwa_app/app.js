@@ -1717,8 +1717,9 @@ function renderLogs(logsArray) {
     // Filtrar los eventos requeridos:
     // 1. Reinicio del equipo (log.msg === "Sistema iniciado")
     // 2. Ejecución de programa de riego (log.tipo === "inicio_zona")
+    // 3. Estado del sensor de lluvia (log.tipo === "sensor_lluvia")
     const filteredLogs = logsArray.filter(log => {
-        return (log.msg === 'Sistema iniciado') || (log.tipo === 'inicio_zona');
+        return (log.msg === 'Sistema iniciado') || (log.tipo === 'inicio_zona') || (log.tipo === 'sensor_lluvia');
     });
     
     if(filteredLogs.length === 0) {
@@ -1744,6 +1745,13 @@ function renderLogs(logsArray) {
             const cicloAct = log.ciclo_actual || 1;
             const ciclosTot = log.ciclos_totales || 1;
             desc = `${log.prog} - ${zoneName} (${duracion} min · ${ajuste}% · Ciclos: ${cicloAct}/${ciclosTot} min)`;
+        } else if (log.tipo === 'sensor_lluvia') {
+            icon = '<i data-lucide="cloud-rain" class="w-4 h-4 text-sky-500 dark:text-sky-400"></i>';
+            if (log.estado === 'detectada') {
+                desc = "Riego pausado por el sensor de lluvia";
+            } else {
+                desc = "Pausa liberada por el sensor de lluvia";
+            }
         }
 
         let timeStr = "";
