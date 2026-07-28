@@ -112,8 +112,8 @@ async def guardar_configuracion():
             print("Error guardando config:", e)
 
 def get_time():
-    """Retorna tiempo (año, mes, dia, hora, min, seg, diasemana) a partir del reloj interno UTC"""
-    return time.localtime()[:7]
+    """Retorna tiempo (año, mes, dia, hora, min, seg, diasemana) local ajustado a UTC-3 (Argentina)"""
+    return time.localtime(time.time() - 10800)[:7]
 
 async def init_hardware():
     global mv, zonas, rain_sensor, adc, boot_button, reloj_rtc
@@ -287,7 +287,7 @@ async def ejecutar_riego():
             ajuste = 1.0
             if programa_activo.get("nombre") != "Manual":
                 try:
-                    t = time.localtime()
+                    t = get_time()
                     current_mm_dd = f"{t[1]:02d}-{t[2]:02d}"
                     temporadas = config_data.get("ajustes_estacionales", [])
                     for temp in temporadas:
