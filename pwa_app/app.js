@@ -746,7 +746,16 @@ function updateActiveWidget(data) {
         const iconContainer = document.getElementById('status-icon-container');
         if (iconContainer) {
             if (isPausa) {
-                iconContainer.innerHTML = '<i data-lucide="cloud-rain" class="w-8 h-8 text-sky-500 dark:text-sky-400 mb-2 animate-bounce"></i>';
+                iconContainer.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 text-sky-500 dark:text-sky-400 mb-2">
+                        <!-- Nube estática -->
+                        <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+                        <!-- Gotas de lluvia animadas -->
+                        <line class="rain-drop drop-1" x1="16" y1="14" x2="14" y2="20"></line>
+                        <line class="rain-drop drop-2" x1="12" y1="16" x2="10" y2="22"></line>
+                        <line class="rain-drop drop-3" x1="8" y1="14" x2="6" y2="20"></line>
+                    </svg>
+                `;
             } else {
                 iconContainer.innerHTML = '<i data-lucide="calendar-clock" class="w-8 h-8 text-slate-400 dark:text-slate-600 mb-2"></i>';
             }

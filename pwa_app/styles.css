@@ -164,3 +164,31 @@ input[type="date"] {
 .anim-dripping-droplet {
     animation: dripping-droplet 1.6s infinite ease-in-out;
 }
+
+/* Animación de gotas de lluvia cayendo en diagonal */
+@keyframes rain-fall {
+    0% {
+        transform: translate(0, -4px);
+        opacity: 0;
+    }
+    30% {
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-2px, 4px);
+        opacity: 0;
+    }
+}
+.rain-drop {
+    animation: rain-fall 1.5s ease-in-out infinite;
+    transform-origin: center;
+}
+.drop-1 {
+    animation-delay: 0s;
+}
+.drop-2 {
+    animation-delay: 0.5s;
+}
+.drop-3 {
+    animation-delay: 1.0s;
+}
