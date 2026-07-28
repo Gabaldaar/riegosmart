@@ -734,12 +734,24 @@ function updateActiveWidget(data) {
     }
 
     if (!data.estado || data.estado === "IDLE" || data.estado.startsWith("PAUSA")) {
-        badge.textContent = data.estado && data.estado.startsWith("PAUSA") ? data.estado : "EN REPOSO";
-        badge.className = data.estado && data.estado.startsWith("PAUSA") ? "px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-900 text-yellow-300" : "px-2.5 py-1 rounded-full text-xs font-bold bg-slate-700 text-slate-300";
+        const isPausa = data.estado && data.estado.startsWith("PAUSA");
+        badge.textContent = isPausa ? data.estado : "EN REPOSO";
+        badge.className = isPausa ? "px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-900 text-yellow-300" : "px-2.5 py-1 rounded-full text-xs font-bold bg-slate-700 text-slate-300";
         infoPanel.classList.add('hidden');
         document.getElementById('next-watering-info').classList.remove('hidden');
         calculateNextWatering();
         document.getElementById('btn-manual-stop').classList.add('hidden');
+        
+        // Actualizar el icono de estado de reposo / lluvia
+        const iconContainer = document.getElementById('status-icon-container');
+        if (iconContainer) {
+            if (isPausa) {
+                iconContainer.innerHTML = '<i data-lucide="cloud-rain" class="w-8 h-8 text-sky-500 dark:text-sky-400 mb-2 animate-bounce"></i>';
+            } else {
+                iconContainer.innerHTML = '<i data-lucide="calendar-clock" class="w-8 h-8 text-slate-400 dark:text-slate-600 mb-2"></i>';
+            }
+            if (window.lucide) window.lucide.createIcons();
+        }
     } else if (data.estado === "FALLO_CORRIENTE") {
         badge.textContent = "FALLO HARDWARE";
         badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-red-900 text-red-300 animate-pulse";
