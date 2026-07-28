@@ -653,6 +653,7 @@ function handleIncomingMessage(msg) {
             setTimeout(() => sendCmd({comando: "GET_STATE"}), 200);
         }
     } else if (msg.tipo === "TELEMETRIA") {
+        const estadoAnterior = state.telemetria ? state.telemetria.estado : "";
         state.telemetria = msg.data;
         if (msg.data) {
             if (msg.data.timestamp_rain_delay !== undefined) {
@@ -660,6 +661,11 @@ function handleIncomingMessage(msg) {
             }
             if (msg.data.timestamp_sensor_lluvia_clear !== undefined) {
                 state.deviceConfig.timestamp_sensor_lluvia_clear = msg.data.timestamp_sensor_lluvia_clear;
+            }
+            
+            // Auto-solicitud de configuración en la transición a secado para asegurar timestamps
+            if (msg.data.estado === "PAUSA: SECADO" && estadoAnterior !== "PAUSA: SECADO") {
+                setTimeout(() => sendCmd({comando: "GET_CONFIG"}), 150);
             }
         }
         updateActiveWidget(msg.data);
