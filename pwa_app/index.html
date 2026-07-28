@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Smart Riego</title>
-    <link rel="manifest" href="manifest.json?v=37">
+    <link rel="manifest" href="manifest.json?v=38">
     <meta name="theme-color" content="#1e293b">
     
     <!-- Iconos de la aplicación -->
-    <link rel="icon" type="image/png" href="icon-512.png?v=37">
-    <link rel="apple-touch-icon" href="icon-512.png?v=37">
+    <link rel="icon" type="image/png" href="icon-512.png?v=38">
+    <link rel="apple-touch-icon" href="icon-512.png?v=38">
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -44,7 +44,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="styles.css?v=37">
+    <link rel="stylesheet" href="styles.css?v=38">
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30 transition-colors duration-200">
     <!-- Top Header -->
@@ -473,6 +473,25 @@
                 </button>
             </div>
 
+            <!-- Sensor de Lluvia Config -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+                <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <i data-lucide="cloud-rain" class="w-4 h-4 text-sky-500 dark:text-sky-400"></i> Sensor de Lluvia
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Retraso post-lluvia (horas)</label>
+                        <input type="number" id="settings-rain-delay-hours" min="0" max="99" step="1" placeholder="Ej. 12" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-teal-500 text-slate-800 dark:text-slate-200">
+                        <p class="text-[10px] text-slate-500 dark:text-slate-500 mt-1.5 leading-relaxed">
+                            Evita regar inmediatamente después de que el sensor se seque. Prolonga la suspensión durante el tiempo configurado para permitir que la tierra absorba el agua. Coloca 0 para desactivar.
+                        </p>
+                    </div>
+                    <button id="btn-save-rain-delay" class="w-full py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-medium transition-colors border border-slate-200 dark:border-transparent">
+                        Guardar Retraso
+                    </button>
+                </div>
+            </div>
+
             <!-- WiFi Config -->
             <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
                 <div class="flex items-center justify-between mb-4">
@@ -815,7 +834,7 @@
     </div>
 
     <!-- PWA y App Scripts con versión forzada -->
-    <script src="comms.js?v=37"></script>
-    <script src="app.js?v=37"></script>
+    <script src="comms.js?v=38"></script>
+    <script src="app.js?v=38"></script>
 </body>
 </html>

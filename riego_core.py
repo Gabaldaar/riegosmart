@@ -168,6 +168,8 @@ async def enviar_telemetria():
     if estado_riego == "IDLE":
         if rain_sensor and rain_sensor.value() == 0:
             est = "PAUSA: SENSOR"
+        elif config_data.get("timestamp_sensor_lluvia_clear", 0) > time.time():
+            est = "PAUSA: SECADO"
         elif config_data.get("timestamp_rain_delay", 0) > time.time():
             est = "PAUSA: MANUAL"
         else:
@@ -441,7 +443,11 @@ async def tarea_planificador():
     global ultimo_arranque_minuto
     while True:
         if estado_riego == "IDLE":
-            if rain_sensor.value() == 0 or time.time() < config_data.get("timestamp_rain_delay", 0):
+            tiene_lluvia = (rain_sensor.value() == 0)
+            tiene_secado = (time.time() < config_data.get("timestamp_sensor_lluvia_clear", 0))
+            tiene_retraso_manual = (time.time() < config_data.get("timestamp_rain_delay", 0))
+            
+            if tiene_lluvia or tiene_secado or tiene_retraso_manual:
                 await asyncio.sleep(10)
                 continue
                 
@@ -501,6 +507,9 @@ async def tarea_monitoreo_lluvia():
                     ultimo_estado = val
                     if val == 0:
                         print("[RAIN] Lluvia detectada física (GPIO4 = 0).")
+                        config_data["timestamp_sensor_lluvia_clear"] = 0
+                        await guardar_configuracion()
+                        
                         await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "detectada"})
                         # Si está regando, abortar inmediatamente
                         if estado_riego != "IDLE" and estado_riego != "FALLO_CORRIENTE":
@@ -511,7 +520,16 @@ async def tarea_monitoreo_lluvia():
                         await enviar_telemetria()
                     else:
                         print("[RAIN] Sensor de lluvia despejado (GPIO4 = 1).")
-                        await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "despejado"})
+                        delay_horas = config_data.get("sensor_lluvia_delay_horas", 0)
+                        if delay_horas > 0:
+                            config_data["timestamp_sensor_lluvia_clear"] = time.time() + (delay_horas * 3600)
+                            print(f"[RAIN] Iniciando retraso de secado por {delay_horas} horas.")
+                            await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "secado", "horas": delay_horas})
+                        else:
+                            config_data["timestamp_sensor_lluvia_clear"] = 0
+                            await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "despejado"})
+                            
+                        await guardar_configuracion()
                         await enviar_telemetria()
         except Exception as e:
             print("[RAIN] Error en tarea_monitoreo_lluvia:", e)
@@ -585,7 +603,8 @@ async def procesar_comando(cmd_dict):
             # para no superar el límite de 500 bytes por mensaje del canal BLE.
             # Parte 1 — Campos técnicos básicos (config_version, max_zonas, etc.)
             campos_basicos = ["config_version", "max_zonas", "modo_bomba",
-                              "timestamp_rain_delay", "ssid"]
+                              "timestamp_rain_delay", "ssid", "sensor_lluvia_delay_horas",
+                              "timestamp_sensor_lluvia_clear"]
             resp_base = {k: resp[k] for k in campos_basicos if k in resp}
             await tx_queue.put({"tipo": "CONFIG", "data": resp_base, "_destino": "BLE"})
 
@@ -701,6 +720,7 @@ async def procesar_comando(cmd_dict):
         dias = cmd_dict.get("dias", 1)
         if dias <= 0:
             config_data["timestamp_rain_delay"] = 0
+            config_data["timestamp_sensor_lluvia_clear"] = 0
         else:
             config_data["timestamp_rain_delay"] = time.time() + (dias * 86400)
             
@@ -717,7 +737,8 @@ async def procesar_comando(cmd_dict):
             "tipo": "CONFIG",
             "data": {
                 "config_version": config_data["config_version"],
-                "timestamp_rain_delay": config_data["timestamp_rain_delay"]
+                "timestamp_rain_delay": config_data["timestamp_rain_delay"],
+                "timestamp_sensor_lluvia_clear": config_data.get("timestamp_sensor_lluvia_clear", 0)
             },
             "_destino": origen
         })

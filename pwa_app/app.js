@@ -1182,27 +1182,51 @@ function refreshUIFromConfig() {
         }
     }
     
-    // 2.5 Dashboard: Rain Delay Status
+    // 2.5 Dashboard: Rain Delay Status (Manual & Sensor Delay)
     const txtRain = document.getElementById('rain-delay-status');
     if (txtRain) {
+        let delayActive = false;
+        let delayUnix = 0;
+        let labelPrefix = "";
+        const nowSecs = Math.floor(Date.now() / 1000);
+        
+        // Priorizar el retraso manual
         if (state.deviceConfig.timestamp_rain_delay) {
-            const nowSecs = Math.floor(Date.now() / 1000);
-            const rainDelayUnix = state.deviceConfig.timestamp_rain_delay + 946684800; // Y2K a Unix
-            
-            if (rainDelayUnix > nowSecs) {
-                const futureDate = new Date(rainDelayUnix * 1000);
-                const mm = String(futureDate.getMonth()+1).padStart(2,'0');
-                const dd = String(futureDate.getDate()).padStart(2,'0');
-                const hh = String(futureDate.getHours()).padStart(2,'0');
-                const mn = String(futureDate.getMinutes()).padStart(2,'0');
-                txtRain.querySelector('strong').textContent = `${dd}/${mm} a las ${hh}:${mn}`;
-                txtRain.classList.remove('hidden');
-            } else {
-                txtRain.classList.add('hidden');
+            const manualDelayUnix = state.deviceConfig.timestamp_rain_delay + 946684800; // Y2K a Unix
+            if (manualDelayUnix > nowSecs) {
+                delayActive = true;
+                delayUnix = manualDelayUnix;
+                labelPrefix = "Retraso manual activo hasta: ";
             }
+        }
+        
+        // Si no hay manual, verificar el del sensor de lluvia
+        if (!delayActive && state.deviceConfig.timestamp_sensor_lluvia_clear) {
+            const sensorDelayUnix = state.deviceConfig.timestamp_sensor_lluvia_clear + 946684800; // Y2K a Unix
+            if (sensorDelayUnix > nowSecs) {
+                delayActive = true;
+                delayUnix = sensorDelayUnix;
+                labelPrefix = "Secado de sensor activo hasta: ";
+            }
+        }
+        
+        if (delayActive && delayUnix > 0) {
+            const futureDate = new Date(delayUnix * 1000);
+            const mm = String(futureDate.getMonth()+1).padStart(2,'0');
+            const dd = String(futureDate.getDate()).padStart(2,'0');
+            const hh = String(futureDate.getHours()).padStart(2,'0');
+            const mn = String(futureDate.getMinutes()).padStart(2,'0');
+            txtRain.querySelector('span').innerHTML = `${labelPrefix}<strong>${dd}/${mm} a las ${hh}:${mn}h</strong>`;
+            txtRain.classList.remove('hidden');
         } else {
             txtRain.classList.add('hidden');
         }
+    }
+
+    // Cargar horas de retraso del sensor de lluvia en Ajustes
+    const rainDelayHoursInput = document.getElementById('settings-rain-delay-hours');
+    if (rainDelayHoursInput && state.deviceConfig.sensor_lluvia_delay_horas !== undefined) {
+        rainDelayHoursInput.value = state.deviceConfig.sensor_lluvia_delay_horas;
     }
 
     // 3. Hardware Settings
@@ -1770,6 +1794,8 @@ function renderLogs(logsArray) {
             icon = '<i data-lucide="cloud-rain" class="w-4 h-4 text-sky-500 dark:text-sky-400"></i>';
             if (log.estado === 'detectada') {
                 desc = "Riego pausado por el sensor de lluvia";
+            } else if (log.estado === 'secado') {
+                desc = `Pausa prolongada por secado (${log.horas} h)`;
             } else {
                 desc = "Pausa liberada por el sensor de lluvia";
             }
@@ -1909,6 +1935,23 @@ function initSettingsUI() {
         showGenericModal({
             title: "Configuración Guardada",
             msg: "Configuración de hardware guardada en la placa.",
+            hideCancel: true
+        });
+    });
+
+    document.getElementById('btn-save-rain-delay').addEventListener('click', () => {
+        const inputVal = parseInt(document.getElementById('settings-rain-delay-hours').value) || 0;
+        sendCmd({
+            comando: "UPDATE_CONFIG",
+            config: {
+                sensor_lluvia_delay_horas: inputVal
+            }
+        });
+        pendingCommand = true;
+        state.deviceConfig.sensor_lluvia_delay_horas = inputVal;
+        showGenericModal({
+            title: "Configuración Guardada",
+            msg: `Se configuró un retraso de ${inputVal} horas para el sensor de lluvia.`,
             hideCancel: true
         });
     });
