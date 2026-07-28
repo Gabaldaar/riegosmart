@@ -744,9 +744,13 @@ function updateRainDelayBanner() {
     let labelPrefix = "";
     const nowSecs = Math.floor(Date.now() / 1000);
     
+    // Obtener timestamps de config o de la telemetría más reciente
+    const tsRainDelay = state.deviceConfig.timestamp_rain_delay || (state.telemetria && state.telemetria.timestamp_rain_delay) || 0;
+    const tsSensorDelay = state.deviceConfig.timestamp_sensor_lluvia_clear || (state.telemetria && state.telemetria.timestamp_sensor_lluvia_clear) || 0;
+    
     // Priorizar el retraso manual
-    if (state.deviceConfig.timestamp_rain_delay) {
-        const manualDelayUnix = state.deviceConfig.timestamp_rain_delay + 946684800; // Y2K a Unix
+    if (tsRainDelay > 0) {
+        const manualDelayUnix = tsRainDelay + 946684800; // Y2K a Unix
         if (manualDelayUnix > nowSecs) {
             delayActive = true;
             delayUnix = manualDelayUnix;
@@ -755,8 +759,8 @@ function updateRainDelayBanner() {
     }
     
     // Si no hay manual, verificar el del sensor de lluvia
-    if (!delayActive && state.deviceConfig.timestamp_sensor_lluvia_clear) {
-        const sensorDelayUnix = state.deviceConfig.timestamp_sensor_lluvia_clear + 946684800; // Y2K a Unix
+    if (!delayActive && tsSensorDelay > 0) {
+        const sensorDelayUnix = tsSensorDelay + 946684800; // Y2K a Unix
         if (sensorDelayUnix > nowSecs) {
             delayActive = true;
             delayUnix = sensorDelayUnix;
@@ -2194,6 +2198,11 @@ function sendCmd(obj) {
             if (obj.dias <= 0) {
                 payload.timestamp_sensor_lluvia_clear = 0;
                 state.deviceConfig.timestamp_sensor_lluvia_clear = 0;
+                state.deviceConfig.timestamp_rain_delay = 0;
+                if (state.telemetria) {
+                    state.telemetria.timestamp_sensor_lluvia_clear = 0;
+                    state.telemetria.timestamp_rain_delay = 0;
+                }
             }
         }
         
