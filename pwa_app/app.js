@@ -1831,6 +1831,8 @@ function renderLogs(logsArray) {
                 desc = "Riego pausado por el sensor de lluvia";
             } else if (log.estado === 'secado') {
                 desc = `Pausa prolongada por secado (${log.horas} h)`;
+            } else if (log.estado === 'fin_secado') {
+                desc = "Fin de secado por el sensor de lluvia";
             } else {
                 desc = "Pausa liberada por el sensor de lluvia";
             }

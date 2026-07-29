@@ -509,7 +509,7 @@ async def tarea_monitoreo_lluvia():
                 print("[RAIN] Retraso de secado expirado naturalmente. Liberando pausa.")
                 config_data["timestamp_sensor_lluvia_clear"] = 0
                 await guardar_configuracion()
-                await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "liberado"})
+                await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "fin_secado"})
                 await enviar_telemetria()
 
             val = rain_sensor.value()
@@ -754,7 +754,7 @@ async def procesar_comando(cmd_dict):
         if dias <= 0:
             config_data["timestamp_rain_delay"] = 0
             if config_data.get("timestamp_sensor_lluvia_clear", 0) > 0:
-                await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "liberado"})
+                await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "fin_secado"})
             config_data["timestamp_sensor_lluvia_clear"] = 0
         else:
             config_data["timestamp_rain_delay"] = time.time() + (dias * 86400)
