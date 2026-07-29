@@ -102,11 +102,17 @@ async def conectar_mqtt_async():
                     if args: buf = buf[:args[0]]
                     if type(buf) is str: buf = buf.encode()
                     t = 0
-                    while t < len(buf):
+                    # Límite de 5 intentos: con settimeout(3s), máximo 15s de bloqueo.
+                    # Sin límite, el loop podría correr minutos con backpressure TCP
+                    # y disparar el WDT (30s) antes de terminar.
+                    for _ in range(5):
+                        if t >= len(buf): break
                         r = self.s.write(buf[t:])
                         if r is None or r <= 0:
                             raise OSError("[SockWrapper] write retornó None/0")
                         t += r
+                    if t < len(buf):
+                        raise OSError(f"[SockWrapper] escritura incompleta {t}/{len(buf)}")
                     return t
                 def setblocking(self, b): self.s.setblocking(b)
                 def settimeout(self, to):
@@ -160,33 +166,41 @@ async def loop_mqtt_escucha():
     """Polling no bloqueante de mensajes MQTT con keep-alive por PING y watchdog de silencio."""
     global mqtt_client
     last_ping = time.time()
-    last_recv = time.time()   # Timestamp del último dato recibido del broker
-    # Si no recibimos nada en 65s (> 2 ciclos de PING), la conexión está muerta en silencio.
-    # Esto cubre el caso half-open donde el broker cortó sin FIN/RST (EAGAIN permanente).
+    last_recv = time.time()
     MAX_SILENCE_S = 65
 
     while wifi_conectado and mqtt_client is not None:
         try:
+            # Tomar referencia LOCAL sin mantener el lock durante check_msg().
+            # check_msg() es síncrono (sin await), por lo que en asyncio cooperativo
+            # ninguna otra tarea puede modificar mqtt_client mientras corre.
+            _mc = mqtt_client
             got_data = False
-            async with mqtt_lock:
-                if mqtt_client is not None:
-                    got_data = mqtt_client.check_msg()  # True si recibió algo, False si no
-            if got_data:
-                last_recv = time.time()
+            if _mc is not None:
+                if wdt_ref: wdt_ref.feed()   # Alimentar WDT antes de posible bloqueo
+                got_data = _mc.check_msg()
+                if wdt_ref: wdt_ref.feed()   # Alimentar WDT tras check_msg
+                if got_data:
+                    last_recv = time.time()
 
             now = time.time()
             if now - last_ping >= 30:
-                async with mqtt_lock:
-                    if mqtt_client is not None:
-                        mqtt_client.ping()
+                _mc2 = mqtt_client
+                if _mc2 is not None:
+                    try:
+                        if wdt_ref: wdt_ref.feed()
+                        _mc2.ping()
+                    except Exception as ep:
+                        print("[MQTT] Error enviando PING:", ep)
+                        mqtt_client = None
+                        break
                 last_ping = now
                 print("[MQTT] PING enviado al broker.")
 
             # Watchdog: sin datos por MAX_SILENCE_S → conexión silenciosamente muerta
             if now - last_recv > MAX_SILENCE_S:
                 print(f"[MQTT] Sin respuesta por {MAX_SILENCE_S}s. Forzando reconexión.")
-                async with mqtt_lock:
-                    mqtt_client = None
+                mqtt_client = None
                 break
 
         except OSError as e:
@@ -440,8 +454,9 @@ async def tarea_tx_queue():
 
             # — Canal MQTT ────────────────────────────────────────────────────
             if destino in ("ALL", "MQTT"):
-                async with mqtt_lock:
-                    _mc = mqtt_client
+                # Referencia local sin lock: check_msg() y publish() no pueden
+                # interleavearse en asyncio cooperativo (ambos son síncronos).
+                _mc = mqtt_client
                 if _mc and wifi_conectado:
                     try:
                         topic_hash = riego_core.calcular_hash_seguro()
@@ -459,13 +474,11 @@ async def tarea_tx_queue():
                             json_bytes = json.dumps(msg_dict).encode('utf-8')
 
                             # Guardia de tamaño: payload > 8KB podría bloquear el socket
-                            # y causar desconexión del broker (HiveMQ free = 4KB típico).
                             MAX_MQTT_PAYLOAD = 8192
                             if len(json_bytes) > MAX_MQTT_PAYLOAD:
                                 print(f"[NET_TX] Payload {len(json_bytes)}B excede límite. Descartando.")
                                 gc.collect()
                             else:
-                                async with mqtt_lock:
                                     if mqtt_client is not None:
                                         mqtt_client.publish(topic_pub, json_bytes)
 
