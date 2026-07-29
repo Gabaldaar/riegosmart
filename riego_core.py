@@ -496,25 +496,55 @@ async def tarea_monitoreo_lluvia():
     global rain_sensor, estado_riego
     if not rain_sensor:
         return
-        
+
     ultimo_estado = rain_sensor.value()
+    ultimo_evento_ts = 0        # Timestamp del último evento que generó I/O (flash + MQTT)
+    MIN_INTERVALO_EVENTO_S = 5  # Mínimo 5s entre eventos para evitar avalancha
+
     while True:
         try:
+            # Comprobar si el retraso de secado activo ha expirado naturalmente
+            ts_clear = config_data.get("timestamp_sensor_lluvia_clear", 0)
+            if ts_clear > 0 and time.time() >= ts_clear:
+                print("[RAIN] Retraso de secado expirado naturalmente. Liberando pausa.")
+                config_data["timestamp_sensor_lluvia_clear"] = 0
+                await guardar_configuracion()
+                await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "liberado"})
+                await enviar_telemetria()
+
             val = rain_sensor.value()
             if val != ultimo_estado:
-                # Debounce: esperar 100ms y reconfirmar
-                await asyncio.sleep_ms(100)
+                # Debounce: esperar 2s y reconfirmar.
+                # 100ms era demasiado corto: sensores físicos con ruido o
+                # simulación manual generaban múltiples eventos por segundo
+                # → avalancha de flash writes → WDT.
+                await asyncio.sleep_ms(2000)
                 val_debounced = rain_sensor.value()
                 if val_debounced == val:
                     ultimo_estado = val
+                    ahora = time.time()
+
+                    # Si el sensor cambió muy rápido, actualizar el estado interno
+                    # pero NO hacer I/O (flash + MQTT) hasta que pase el intervalo mínimo.
+                    if ahora - ultimo_evento_ts < MIN_INTERVALO_EVENTO_S:
+                        print(f"[RAIN] Cambio de sensor ignorado (demasiado rápido, esperar {MIN_INTERVALO_EVENTO_S}s).")
+                        # Abortar riego inmediatamente si llovió, aunque sea evento rápido
+                        if val == 0 and estado_riego not in ("IDLE", "FALLO_CORRIENTE"):
+                            print("[RAIN] Abortando riego por lluvia (evento rápido).")
+                            abort_event.set()
+                        await asyncio.sleep(1)
+                        continue
+
+                    ultimo_evento_ts = ahora
+
                     if val == 0:
                         print("[RAIN] Lluvia detectada física (GPIO4 = 0).")
                         config_data["timestamp_sensor_lluvia_clear"] = 0
                         await guardar_configuracion()
-                        
+
                         await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "detectada"})
                         # Si está regando, abortar inmediatamente
-                        if estado_riego != "IDLE" and estado_riego != "FALLO_CORRIENTE":
+                        if estado_riego not in ("IDLE", "FALLO_CORRIENTE"):
                             print("[RAIN] Abortando riego por sensor de lluvia activo.")
                             await sys_log.log_event({"tipo": "error", "msg": "Aborto por lluvia física"})
                             abort_event.set()
@@ -530,13 +560,14 @@ async def tarea_monitoreo_lluvia():
                         else:
                             config_data["timestamp_sensor_lluvia_clear"] = 0
                             await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "despejado"})
-                            
+
                         await guardar_configuracion()
                         await enviar_telemetria()
         except Exception as e:
             print("[RAIN] Error en tarea_monitoreo_lluvia:", e)
-            
-        await asyncio.sleep(1) # Polling cada segundo
+
+        await asyncio.sleep(1)  # Polling cada segundo
+
 
 async def iniciar_tareas():
     global abort_event
@@ -722,6 +753,8 @@ async def procesar_comando(cmd_dict):
         dias = cmd_dict.get("dias", 1)
         if dias <= 0:
             config_data["timestamp_rain_delay"] = 0
+            if config_data.get("timestamp_sensor_lluvia_clear", 0) > 0:
+                await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "liberado"})
             config_data["timestamp_sensor_lluvia_clear"] = 0
         else:
             config_data["timestamp_rain_delay"] = time.time() + (dias * 86400)

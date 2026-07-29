@@ -473,22 +473,23 @@ async def tarea_tx_queue():
                             topic_pub = f"riego/{topic_hash}/{suffix}".encode('utf-8')
                             json_bytes = json.dumps(msg_dict).encode('utf-8')
 
-                            # Guardia de tamaño: payload > 8KB podría bloquear el socket
                             MAX_MQTT_PAYLOAD = 8192
                             if len(json_bytes) > MAX_MQTT_PAYLOAD:
                                 print(f"[NET_TX] Payload {len(json_bytes)}B excede límite. Descartando.")
                                 gc.collect()
                             else:
-                                    if mqtt_client is not None:
-                                        mqtt_client.publish(topic_pub, json_bytes)
+                                # WDT alimentado antes y después de publish() para evitar crash
+                                # si SockWrapper.write() tarda (máx 5 reintentos × 3s = 15s).
+                                if wdt_ref: wdt_ref.feed()
+                                _mc.publish(topic_pub, json_bytes)
+                                if wdt_ref: wdt_ref.feed()
 
                     except MemoryError:
                         print("[NET_TX] Memoria insuficiente. Reclamando RAM...")
                         gc.collect()
                     except OSError as e:
                         print("[NET_TX] Error de socket publicando MQTT:", e)
-                        async with mqtt_lock:
-                            mqtt_client = None
+                        mqtt_client = None
                     except Exception as e:
                         print("[NET_TX] Error publicando MQTT:", e)
 
