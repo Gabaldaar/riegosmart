@@ -483,6 +483,7 @@ async def tarea_tx_queue():
                                 if wdt_ref: wdt_ref.feed()
                                 _mc.publish(topic_pub, json_bytes)
                                 if wdt_ref: wdt_ref.feed()
+                                gc.collect()
 
                     except MemoryError:
                         print("[NET_TX] Memoria insuficiente. Reclamando RAM...")

@@ -498,9 +498,9 @@ function cambiarSeccionApp(btn, target) {
         }
     });
 
-    // Si es historial, pedimos logs
+    // Evitar pedir logs automáticamente al entrar para no saturar la conexión
     if (target === 'view-history') {
-        requestLogs();
+        // requestLogs(); 
     }
     
     // Si ingresamos a programas, seleccionar el programa A por defecto

@@ -39,6 +39,10 @@ async def ble_rx_task():
             if data:
                 print(f"[BLE_RX] Data cruda: {data}")
                 buffer += data
+                if len(buffer) > 1024:
+                    print("[BLE_RX] Advertencia: Buffer RX excedió 1024 bytes. Limpiando para prevenir desbordamiento.")
+                    buffer = b""
+                    continue
                 while b"\n" in buffer:
                     line, buffer = buffer.split(b"\n", 1)
                     print(f"[BLE_RX] Linea completa: {line}")

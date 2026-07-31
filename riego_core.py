@@ -582,9 +582,40 @@ async def iniciar_tareas():
     asyncio.create_task(tarea_monitoreo_lluvia())
     print("Core Riego Inicializado.")
 
+async def enviar_respuesta_config(origen="ALL"):
+    """Envía la configuración actual al cliente optimizando RAM y fragmentando para BLE."""
+    gc.collect()
+    resp = config_data.copy()
+    resp["ssid"] = "Desconocido"
+    try:
+        with open("wifi_config.json", "r") as f:
+            creds = json.load(f)
+            resp["ssid"] = creds.get("ssid", "Desconocido")
+    except:
+        pass
+
+    if origen == "BLE":
+        campos_basicos = ["config_version", "max_zonas", "modo_bomba",
+                          "timestamp_rain_delay", "ssid", "sensor_lluvia_delay_horas",
+                          "timestamp_sensor_lluvia_clear"]
+        resp_base = {k: resp[k] for k in campos_basicos if k in resp}
+        await tx_queue.put({"tipo": "CONFIG", "data": resp_base, "_destino": "BLE"})
+
+        for prog_id, prog_data in resp.get("programas", {}).items():
+            await tx_queue.put({
+                "tipo": "CONFIG_PROG",
+                "prog_id": prog_id,
+                "data": prog_data,
+                "_destino": "BLE"
+            })
+    else:
+        await tx_queue.put({"tipo": "CONFIG", "data": resp, "_destino": origen})
+    gc.collect()
+
 async def procesar_comando(cmd_dict):
     """Interfaz RX para MQTT y BLE"""
     global reinicio_pendiente
+    gc.collect()
     print(f"[CORE] Procesando comando: {cmd_dict}")
     token_recibido = cmd_dict.get("token")
     origen = cmd_dict.get("_origen", "ALL")  # Asignado aquí para que esté disponible en todos los bloques
@@ -622,35 +653,7 @@ async def procesar_comando(cmd_dict):
         await enviar_telemetria()
         
     elif cmd == "GET_CONFIG":
-        resp = config_data.copy()
-        resp["ssid"] = "Desconocido"
-        try:
-            with open("wifi_config.json", "r") as f:
-                creds = json.load(f)
-                resp["ssid"] = creds.get("ssid", "Desconocido")
-        except:
-            pass
-
-        if origen == "BLE":
-            # Fix #1: Fragmentar respuesta BLE en múltiples mensajes pequeños
-            # para no superar el límite de 500 bytes por mensaje del canal BLE.
-            # Parte 1 — Campos técnicos básicos (config_version, max_zonas, etc.)
-            campos_basicos = ["config_version", "max_zonas", "modo_bomba",
-                              "timestamp_rain_delay", "ssid", "sensor_lluvia_delay_horas",
-                              "timestamp_sensor_lluvia_clear"]
-            resp_base = {k: resp[k] for k in campos_basicos if k in resp}
-            await tx_queue.put({"tipo": "CONFIG", "data": resp_base, "_destino": "BLE"})
-
-            # Parte 2 — Un mensaje CONFIG_PROG por cada programa (la PWA los fusiona)
-            for prog_id, prog_data in resp.get("programas", {}).items():
-                await tx_queue.put({
-                    "tipo": "CONFIG_PROG",
-                    "prog_id": prog_id,
-                    "data": prog_data,
-                    "_destino": "BLE"
-                })
-        else:
-            await tx_queue.put({"tipo": "CONFIG", "data": resp, "_destino": origen})
+        await enviar_respuesta_config(origen)
         
     elif cmd == "GET_TEMP":
         # Devolver inmediatamente el valor cacheado en RAM sin bloquear la cola de comandos
@@ -800,7 +803,7 @@ async def procesar_comando(cmd_dict):
             # Programa no encontrado localmente: responder con la config actual para que
             # la app detecte el desajuste de versión y dispare el re-sync automático.
             print(f"[CORE] Programa '{prog_id}' no encontrado en config local (v{config_data.get('config_version',0)}). Enviando CONFIG para re-sync.")
-            await procesar_comando({"comando": "GET_CONFIG", "token": token_recibido, "_origen": origen})
+            await enviar_respuesta_config(origen)
 
     elif cmd == "CANCELAR_RIEGO":
         if estado_riego != "IDLE":
@@ -822,7 +825,7 @@ async def procesar_comando(cmd_dict):
              await tx_queue.put({"tipo": "ACK_CFG", "v": version_recibida, "_destino": origen})
         else:
              print(f"[CORE] Rechazando config obsoleta {version_recibida} (Local: {version_local})")
-             await procesar_comando({"comando": "GET_CONFIG", "token": token_recibido, "_origen": origen})
+             await enviar_respuesta_config(origen)
  
     elif cmd == "UPDATE_PROGRAMA":
         prog_id = cmd_dict.get("prog_id")
