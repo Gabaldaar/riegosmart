@@ -4,6 +4,7 @@ import os
 import time
 import uasyncio as asyncio
 import sys_log
+import gc
 import ds3231
 import binascii
 import hashlib
