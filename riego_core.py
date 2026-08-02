@@ -584,7 +584,7 @@ async def iniciar_tareas():
     print("Core Riego Inicializado.")
 
 async def enviar_respuesta_config(origen="ALL"):
-    """Envía la configuración actual al cliente optimizando RAM y fragmentando para BLE."""
+    """Envía la configuración actual al cliente optimizando RAM y fragmentando payloads para BLE y MQTT."""
     gc.collect()
     resp = config_data.copy()
     resp["ssid"] = "Desconocido"
@@ -595,22 +595,20 @@ async def enviar_respuesta_config(origen="ALL"):
     except:
         pass
 
-    if origen == "BLE":
-        campos_basicos = ["config_version", "max_zonas", "modo_bomba",
-                          "timestamp_rain_delay", "ssid", "sensor_lluvia_delay_horas",
-                          "timestamp_sensor_lluvia_clear"]
-        resp_base = {k: resp[k] for k in campos_basicos if k in resp}
-        await tx_queue.put({"tipo": "CONFIG", "data": resp_base, "_destino": "BLE"})
+    campos_basicos = ["config_version", "max_zonas", "modo_bomba",
+                      "timestamp_rain_delay", "ssid", "sensor_lluvia_delay_horas",
+                      "timestamp_sensor_lluvia_clear"]
+    resp_base = {k: resp[k] for k in campos_basicos if k in resp}
+    await tx_queue.put({"tipo": "CONFIG", "data": resp_base, "_destino": origen})
 
-        for prog_id, prog_data in resp.get("programas", {}).items():
-            await tx_queue.put({
-                "tipo": "CONFIG_PROG",
-                "prog_id": prog_id,
-                "data": prog_data,
-                "_destino": "BLE"
-            })
-    else:
-        await tx_queue.put({"tipo": "CONFIG", "data": resp, "_destino": origen})
+    for prog_id, prog_data in resp.get("programas", {}).items():
+        await tx_queue.put({
+            "tipo": "CONFIG_PROG",
+            "prog_id": prog_id,
+            "data": prog_data,
+            "_destino": origen
+        })
+        await asyncio.sleep_ms(20)
     gc.collect()
 
 async def procesar_comando(cmd_dict):

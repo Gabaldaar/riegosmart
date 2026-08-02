@@ -102,15 +102,19 @@ async def conectar_mqtt_async():
                     if args: buf = buf[:args[0]]
                     if type(buf) is str: buf = buf.encode()
                     t = 0
-                    # Límite de 5 intentos: con settimeout(3s), máximo 15s de bloqueo.
-                    # Sin límite, el loop podría correr minutos con backpressure TCP
-                    # y disparar el WDT (30s) antes de terminar.
-                    for _ in range(5):
+                    for _ in range(10):
                         if t >= len(buf): break
-                        r = self.s.write(buf[t:])
+                        try:
+                            r = self.s.write(buf[t:])
+                        except OSError as e:
+                            if e.args and e.args[0] in (11, 110, 115, 116): # EAGAIN / ETIMEDOUT
+                                r = 0
+                            else:
+                                raise
                         if r is None or r <= 0:
-                            raise OSError("[SockWrapper] write retornó None/0")
-                        t += r
+                            time.sleep_ms(20)
+                        else:
+                            t += r
                     if t < len(buf):
                         raise OSError(f"[SockWrapper] escritura incompleta {t}/{len(buf)}")
                     return t
