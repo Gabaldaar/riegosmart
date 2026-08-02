@@ -88,43 +88,12 @@ async def conectar_mqtt_async():
 
         if wdt_ref: wdt_ref.feed()
 
-        # Aplicar timeout al socket y agregar SockWrapper para escrituras seguras
+        # Aplicar timeout nativo al socket MQTT
         if hasattr(_client, 'sock') and _client.sock:
             try:
                 _client.sock.settimeout(3.0)
             except:
                 pass
-
-            class SockWrapper:
-                def __init__(self, s): self.s = s
-                def read(self, *a): return self.s.read(*a)
-                def write(self, buf, *args):
-                    if args: buf = buf[:args[0]]
-                    if type(buf) is str: buf = buf.encode()
-                    t = 0
-                    for _ in range(10):
-                        if t >= len(buf): break
-                        try:
-                            r = self.s.write(buf[t:])
-                        except OSError as e:
-                            if e.args and e.args[0] in (11, 110, 115, 116): # EAGAIN / ETIMEDOUT
-                                r = 0
-                            else:
-                                raise
-                        if r is None or r <= 0:
-                            time.sleep_ms(20)
-                        else:
-                            t += r
-                    if t < len(buf):
-                        raise OSError(f"[SockWrapper] escritura incompleta {t}/{len(buf)}")
-                    return t
-                def setblocking(self, b): self.s.setblocking(b)
-                def settimeout(self, to):
-                    if hasattr(self.s, 'settimeout'): self.s.settimeout(to)
-                def close(self): self.s.close()
-
-            _client.sock = SockWrapper(_client.sock)
-            _client.sock.settimeout(3.0)
 
         # Suscribirse al topic de comandos (hash seguro)
         topic_hash = riego_core.calcular_hash_seguro()

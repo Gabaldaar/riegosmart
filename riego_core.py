@@ -103,6 +103,8 @@ async def cargar_configuracion():
 async def guardar_configuracion():
     async with _config_lock:
         try:
+            await asyncio.sleep_ms(10)
+            gc.collect()
             with open(CONFIG_FILE + ".tmp", "w") as f:
                 json.dump(config_data, f)
             try:
@@ -110,6 +112,8 @@ async def guardar_configuracion():
             except OSError:
                 pass
             os.rename(CONFIG_FILE + ".tmp", CONFIG_FILE)
+            gc.collect()
+            await asyncio.sleep_ms(10)
         except Exception as e:
             print("Error guardando config:", e)
 
