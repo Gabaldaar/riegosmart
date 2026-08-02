@@ -346,15 +346,8 @@ async def gestionar_interfaces_network():
             else:
                 # Mantener conexión MQTT activa
                 if mqtt_client is None:
-                    try:
-                        internet_ok = comprobar_internet()
-                    except Exception as e:
-                        print("[NET] Error verificando internet:", e)
-                        internet_ok = False
-                    if internet_ok:
-                        await conectar_mqtt_async()
-                    else:
-                        print("[NET] WiFi OK pero sin salida a Internet.")
+                    print("[NET] Reintentando conexión MQTT...")
+                    await conectar_mqtt_async()
 
             # Polling más frecuente si MQTT no está listo
             await asyncio.sleep(2 if mqtt_client is None else 5)
