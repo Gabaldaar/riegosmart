@@ -171,12 +171,22 @@ async def init_hardware():
         reloj_rtc = None
 
 def es_sensor_lluvia_activo_y_detectando():
-    """Comprueba si el sensor de lluvia físico está habilitado y detectando lluvia (evaluando tipo NA o NC)."""
+    """Comprueba si el sensor de lluvia físico está habilitado y detectando lluvia (evaluando tipo NA o NC con debouncing de 50ms)."""
     if not config_data.get("sensor_lluvia_activo", True):
         return False
     if not rain_sensor:
         return False
-    val = rain_sensor.value()
+    
+    # Debouncing por software (50ms) para filtrar rebotes mecánicos del interruptor o ruido en cables largos
+    val1 = rain_sensor.value()
+    time.sleep_ms(25)
+    val2 = rain_sensor.value()
+    if val1 != val2:
+        time.sleep_ms(25)
+        val = rain_sensor.value()
+    else:
+        val = val1
+
     tipo = str(config_data.get("sensor_lluvia_tipo", "NA")).upper()
     if tipo == "NC":
         return val == 1
