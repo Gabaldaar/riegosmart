@@ -37,23 +37,23 @@ input[type="date"] {
     color-scheme: dark;
 }
 
-/* Active states for program tabs, hw settings buttons, pump buttons */
-.prog-tab.bg-slate-700, .hw-zones-btn.bg-slate-700, .hw-pump-btn.bg-slate-700 {
+/* Active states for program tabs, hw settings buttons, pump buttons, rain sensor buttons */
+.prog-tab.bg-slate-700, .hw-zones-btn.bg-slate-700, .hw-pump-btn.bg-slate-700, .rain-active-btn.bg-slate-700, .rain-type-btn.bg-slate-700 {
     background-color: #ffffff !important;
     color: #0f172a !important; /* slate-900 */
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
 }
-.dark .prog-tab.bg-slate-700, .dark .hw-zones-btn.bg-slate-700, .dark .hw-pump-btn.bg-slate-700 {
+.dark .prog-tab.bg-slate-700, .dark .hw-zones-btn.bg-slate-700, .dark .hw-pump-btn.bg-slate-700, .dark .rain-active-btn.bg-slate-700, .dark .rain-type-btn.bg-slate-700 {
     background-color: #334155 !important; /* slate-700 */
     color: #ffffff !important;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
 }
 
 /* Inactive states */
-.prog-tab.text-slate-400, .hw-zones-btn.text-slate-400, .hw-pump-btn.text-slate-400 {
+.prog-tab.text-slate-400, .hw-zones-btn.text-slate-400, .hw-pump-btn.text-slate-400, .rain-active-btn.text-slate-400, .rain-type-btn.text-slate-400 {
     color: #64748b !important; /* slate-500 */
 }
-.dark .prog-tab.text-slate-400, .dark .hw-zones-btn.text-slate-400, .dark .hw-pump-btn.text-slate-400 {
+.dark .prog-tab.text-slate-400, .dark .hw-zones-btn.text-slate-400, .dark .hw-pump-btn.text-slate-400, .dark .rain-active-btn.text-slate-400, .dark .rain-type-btn.text-slate-400 {
     color: #94a3b8 !important; /* slate-400 */
 }
 

@@ -15,6 +15,8 @@ DEFAULT_CONFIG = {
   "config_version": 0,
   "max_zonas": 4,
   "modo_bomba": True,
+  "sensor_lluvia_activo": True,
+  "sensor_lluvia_tipo": "NA",
   "ajustes_estacionales": [
     {"nombre": "Verano", "inicio": "12-21", "fin": "03-20", "porcentaje": 100},
     {"nombre": "Otono", "inicio": "03-21", "fin": "06-20", "porcentaje": 100},
@@ -168,10 +170,23 @@ async def init_hardware():
         print("Error inicializando RTC:", e)
         reloj_rtc = None
 
+def es_sensor_lluvia_activo_y_detectando():
+    """Comprueba si el sensor de lluvia físico está habilitado y detectando lluvia (evaluando tipo NA o NC)."""
+    if not config_data.get("sensor_lluvia_activo", True):
+        return False
+    if not rain_sensor:
+        return False
+    val = rain_sensor.value()
+    tipo = str(config_data.get("sensor_lluvia_tipo", "NA")).upper()
+    if tipo == "NC":
+        return val == 1
+    else: # NA
+        return val == 0
+
 async def enviar_telemetria():
     """ Encola el estado actual para que se transmita a la app """
     if estado_riego == "IDLE":
-        if rain_sensor and rain_sensor.value() == 0:
+        if es_sensor_lluvia_activo_y_detectando():
             est = "PAUSA: SENSOR"
         elif config_data.get("timestamp_sensor_lluvia_clear", 0) > time.time():
             est = "PAUSA: SECADO"
@@ -450,7 +465,7 @@ async def tarea_planificador():
     global ultimo_arranque_minuto
     while True:
         if estado_riego == "IDLE":
-            tiene_lluvia = (rain_sensor.value() == 0)
+            tiene_lluvia = es_sensor_lluvia_activo_y_detectando()
             tiene_secado = (time.time() < config_data.get("timestamp_sensor_lluvia_clear", 0))
             tiene_retraso_manual = (time.time() < config_data.get("timestamp_rain_delay", 0))
             
@@ -479,7 +494,7 @@ async def tarea_planificador():
                         await cola_programas.put(prog)
                         break # Salir para procesar este programa
         else:
-            if rain_sensor.value() == 0:
+            if es_sensor_lluvia_activo_y_detectando():
                 print("LLUVIA DETECTADA, ABORTANDO")
                 await sys_log.log_event({"tipo": "error", "msg": "Aborto por lluvia física"})
                 abort_event.set()
@@ -502,7 +517,7 @@ async def tarea_monitoreo_lluvia():
     if not rain_sensor:
         return
 
-    ultimo_estado = rain_sensor.value()
+    ultimo_estado_detectado = es_sensor_lluvia_activo_y_detectando()
     ultimo_evento_ts = 0        # Timestamp del último evento que generó I/O (flash + MQTT)
     MIN_INTERVALO_EVENTO_S = 5  # Mínimo 5s entre eventos para evitar avalancha
 
@@ -517,24 +532,20 @@ async def tarea_monitoreo_lluvia():
                 await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "fin_secado"})
                 await enviar_telemetria()
 
-            val = rain_sensor.value()
-            if val != ultimo_estado:
+            estado_actual_detectado = es_sensor_lluvia_activo_y_detectando()
+            if estado_actual_detectado != ultimo_estado_detectado:
                 # Debounce: esperar 2s y reconfirmar.
-                # 100ms era demasiado corto: sensores físicos con ruido o
-                # simulación manual generaban múltiples eventos por segundo
-                # → avalancha de flash writes → WDT.
                 await asyncio.sleep_ms(2000)
-                val_debounced = rain_sensor.value()
-                if val_debounced == val:
-                    ultimo_estado = val
+                debounced = es_sensor_lluvia_activo_y_detectando()
+                if debounced == estado_actual_detectado:
+                    ultimo_estado_detectado = estado_actual_detectado
                     ahora = time.time()
 
                     # Si el sensor cambió muy rápido, actualizar el estado interno
                     # pero NO hacer I/O (flash + MQTT) hasta que pase el intervalo mínimo.
                     if ahora - ultimo_evento_ts < MIN_INTERVALO_EVENTO_S:
                         print(f"[RAIN] Cambio de sensor ignorado (demasiado rápido, esperar {MIN_INTERVALO_EVENTO_S}s).")
-                        # Abortar riego inmediatamente si llovió, aunque sea evento rápido
-                        if val == 0 and estado_riego not in ("IDLE", "FALLO_CORRIENTE"):
+                        if estado_actual_detectado and estado_riego not in ("IDLE", "FALLO_CORRIENTE"):
                             print("[RAIN] Abortando riego por lluvia (evento rápido).")
                             abort_event.set()
                         await asyncio.sleep(1)
@@ -542,8 +553,8 @@ async def tarea_monitoreo_lluvia():
 
                     ultimo_evento_ts = ahora
 
-                    if val == 0:
-                        print("[RAIN] Lluvia detectada física (GPIO4 = 0).")
+                    if estado_actual_detectado:
+                        print(f"[RAIN] Lluvia detectada física (Tipo: {config_data.get('sensor_lluvia_tipo', 'NA')}).")
                         config_data["timestamp_sensor_lluvia_clear"] = 0
                         await guardar_configuracion()
 
@@ -556,7 +567,7 @@ async def tarea_monitoreo_lluvia():
                         # Forzar envío de telemetría para actualizar la interfaz
                         await enviar_telemetria()
                     else:
-                        print("[RAIN] Sensor de lluvia despejado (GPIO4 = 1).")
+                        print("[RAIN] Sensor de lluvia despejado/seco.")
                         delay_horas = config_data.get("sensor_lluvia_delay_horas", 0)
                         if delay_horas > 0:
                             config_data["timestamp_sensor_lluvia_clear"] = time.time() + (delay_horas * 3600)
@@ -601,7 +612,7 @@ async def enviar_respuesta_config(origen="ALL"):
 
     campos_basicos = ["config_version", "max_zonas", "modo_bomba",
                       "timestamp_rain_delay", "ssid", "sensor_lluvia_delay_horas",
-                      "timestamp_sensor_lluvia_clear"]
+                      "timestamp_sensor_lluvia_clear", "sensor_lluvia_activo", "sensor_lluvia_tipo"]
     resp_base = {k: resp[k] for k in campos_basicos if k in resp}
     await tx_queue.put({"tipo": "CONFIG", "data": resp_base, "_destino": origen})
 

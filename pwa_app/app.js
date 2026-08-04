@@ -30,9 +30,12 @@ if (typeof firebase !== 'undefined' && firebaseConfig.apiKey !== "TU_API_KEY_AQU
 const state = {
     chipId: localStorage.getItem('CHIP_ID') || null,
     token: localStorage.getItem('TOKEN') || null,
+    telemetria: null,
     deviceConfig: {
         max_zonas: 8,
         modo_bomba: true,
+        sensor_lluvia_activo: true,
+        sensor_lluvia_tipo: "NA",
         ajuste_estacional: 100,
         ajustes_estacionales: [
             {"nombre": "Verano", "inicio": "12-21", "fin": "03-20", "porcentaje": 100},
@@ -129,6 +132,12 @@ function escucharConfiguracionFirestore(chipId) {
             }
             if (data.sensor_lluvia_delay_horas !== undefined) {
                 state.deviceConfig.sensor_lluvia_delay_horas = data.sensor_lluvia_delay_horas;
+            }
+            if (data.sensor_lluvia_activo !== undefined) {
+                state.deviceConfig.sensor_lluvia_activo = data.sensor_lluvia_activo;
+            }
+            if (data.sensor_lluvia_tipo !== undefined) {
+                state.deviceConfig.sensor_lluvia_tipo = data.sensor_lluvia_tipo;
             }
             if (data.timestamp_sensor_lluvia_clear !== undefined) {
                 state.deviceConfig.timestamp_sensor_lluvia_clear = data.timestamp_sensor_lluvia_clear > 0 ? (data.timestamp_sensor_lluvia_clear - 946684800) : 0;
@@ -1286,6 +1295,38 @@ function refreshUIFromConfig() {
         }
     });
 
+    const isRainActive = state.deviceConfig.sensor_lluvia_activo !== false;
+    document.querySelectorAll('.rain-active-btn').forEach(b => {
+        const boolVal = b.dataset.val === "true";
+        if (boolVal === isRainActive) {
+            b.classList.add('bg-slate-700', 'text-white');
+            b.classList.remove('text-slate-400');
+        } else {
+            b.classList.remove('bg-slate-700', 'text-white');
+            b.classList.add('text-slate-400');
+        }
+    });
+
+    const rainType = (state.deviceConfig.sensor_lluvia_tipo || "NA").toUpperCase();
+    document.querySelectorAll('.rain-type-btn').forEach(b => {
+        if (b.dataset.val === rainType) {
+            b.classList.add('bg-slate-700', 'text-white');
+            b.classList.remove('text-slate-400');
+        } else {
+            b.classList.remove('bg-slate-700', 'text-white');
+            b.classList.add('text-slate-400');
+        }
+    });
+
+    const rainTypeContainer = document.getElementById('container-rain-type');
+    if (rainTypeContainer) {
+        if (isRainActive) {
+            rainTypeContainer.classList.remove('opacity-40', 'pointer-events-none');
+        } else {
+            rainTypeContainer.classList.add('opacity-40', 'pointer-events-none');
+        }
+    }
+
     // 4. Scheduler
     loadProgramIntoUI(state.activeProgTab);
     
@@ -1977,11 +2018,52 @@ function initSettingsUI() {
         });
     });
 
+    document.querySelectorAll('.rain-active-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const val = e.currentTarget.dataset.val === "true";
+            state.deviceConfig.sensor_lluvia_activo = val;
+            document.querySelectorAll('.rain-active-btn').forEach(b => {
+                if ((b.dataset.val === "true") === val) {
+                    b.classList.add('bg-slate-700', 'text-white');
+                    b.classList.remove('text-slate-400');
+                } else {
+                    b.classList.remove('bg-slate-700', 'text-white');
+                    b.classList.add('text-slate-400');
+                }
+            });
+            const rainTypeContainer = document.getElementById('container-rain-type');
+            if (rainTypeContainer) {
+                if (val) rainTypeContainer.classList.remove('opacity-40', 'pointer-events-none');
+                else rainTypeContainer.classList.add('opacity-40', 'pointer-events-none');
+            }
+        });
+    });
+
+    document.querySelectorAll('.rain-type-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const val = e.currentTarget.dataset.val;
+            state.deviceConfig.sensor_lluvia_tipo = val;
+            document.querySelectorAll('.rain-type-btn').forEach(b => {
+                if (b.dataset.val === val) {
+                    b.classList.add('bg-slate-700', 'text-white');
+                    b.classList.remove('text-slate-400');
+                } else {
+                    b.classList.remove('bg-slate-700', 'text-white');
+                    b.classList.add('text-slate-400');
+                }
+            });
+        });
+    });
+
     document.getElementById('btn-save-rain-delay').addEventListener('click', () => {
         const inputVal = parseInt(document.getElementById('settings-rain-delay-hours').value) || 0;
+        const isActive = state.deviceConfig.sensor_lluvia_activo !== false;
+        const sensorType = state.deviceConfig.sensor_lluvia_tipo || "NA";
         sendCmd({
             comando: "UPDATE_CONFIG",
             config: {
+                sensor_lluvia_activo: isActive,
+                sensor_lluvia_tipo: sensorType,
                 sensor_lluvia_delay_horas: inputVal
             }
         });
@@ -1989,7 +2071,7 @@ function initSettingsUI() {
         state.deviceConfig.sensor_lluvia_delay_horas = inputVal;
         showGenericModal({
             title: "Configuración Guardada",
-            msg: `Se configuró un retraso de ${inputVal} horas para el sensor de lluvia.`,
+            msg: `Configuración del sensor de lluvia guardada (${isActive ? 'Habilitado - ' + sensorType : 'Desactivado'}, retraso ${inputVal}h).`,
             hideCancel: true
         });
     });

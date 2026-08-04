@@ -479,6 +479,25 @@
                     <i data-lucide="cloud-rain" class="w-4 h-4 text-sky-500 dark:text-sky-400"></i> Sensor de Lluvia
                 </h2>
                 <div class="space-y-4">
+                    <!-- Habilitar/Desactivar Sensor de Lluvia -->
+                    <div>
+                        <label class="block text-xs text-slate-550 dark:text-slate-400 mb-2">Estado del Sensor (GPIO 4)</label>
+                        <div class="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
+                            <button class="rain-active-btn flex-1 py-1.5 rounded-md text-sm font-medium bg-slate-700 text-white" data-val="true">Habilitado</button>
+                            <button class="rain-active-btn flex-1 py-1.5 rounded-md text-sm font-medium text-slate-400" data-val="false">Desactivado</button>
+                        </div>
+                    </div>
+
+                    <!-- Tipo de Contacto (NA / NC) -->
+                    <div id="container-rain-type">
+                        <label class="block text-xs text-slate-550 dark:text-slate-400 mb-2">Tipo de Contacto</label>
+                        <div class="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
+                            <button class="rain-type-btn flex-1 py-1.5 rounded-md text-sm font-medium bg-slate-700 text-white" data-val="NA">Normal Abierto (NA)</button>
+                            <button class="rain-type-btn flex-1 py-1.5 rounded-md text-sm font-medium text-slate-400" data-val="NC">Normal Cerrado (NC)</button>
+                        </div>
+                    </div>
+
+                    <!-- Retraso Secado -->
                     <div>
                         <div class="flex items-center justify-between mb-2">
                             <label class="text-xs font-semibold text-slate-500 dark:text-slate-400">Retraso post-lluvia (secado)</label>
@@ -486,11 +505,11 @@
                         </div>
                         <input type="range" id="settings-rain-delay-hours" min="0" max="48" step="1" value="0" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500">
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-2.5 leading-relaxed">
-                            Evita regar inmediatamente después de que el sensor se seque. Prolonga la suspensión durante el tiempo configurado para permitir que la tierra absorba el agua. Coloca 0 horas para desactivar.
+                            Evita regar inmediatamente después de que el sensor se seque. Prolonga la suspensión durante el tiempo configurado para permitir que la tierra absorba el agua. Coloca 0 horas para desactivar el retraso de secado.
                         </p>
                     </div>
                     <button id="btn-save-rain-delay" class="w-full py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-medium transition-colors border border-slate-200 dark:border-transparent">
-                        Guardar Retraso
+                        Guardar Configuración de Lluvia
                     </button>
                 </div>
             </div>

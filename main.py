@@ -71,7 +71,7 @@ async def tarea_led():
         wifi_on = network_manager.wifi_conectado
         estado  = riego_core.estado_riego
         retraso = (
-            (riego_core.rain_sensor and riego_core.rain_sensor.value() == 0) or
+            riego_core.es_sensor_lluvia_activo_y_detectando() or
             (time.time() < riego_core.config_data.get("timestamp_rain_delay", 0))
         )
 
