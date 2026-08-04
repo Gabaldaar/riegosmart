@@ -134,7 +134,7 @@ async def init_hardware():
         p = machine.Pin(ZONAS_PINS[i], machine.Pin.OUT, value=1)
         zonas.append(p)
         
-    rain_sensor = machine.Pin(RAIN_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
+    rain_sensor = machine.Pin(RAIN_PIN, machine.Pin.IN)
     adc = machine.ADC(machine.Pin(ADC_PIN))
     adc.atten(machine.ADC.ATTN_11DB)
     boot_button = machine.Pin(BOOT_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
