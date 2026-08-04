@@ -794,6 +794,28 @@ function updateRainDelayBanner() {
     } else {
         txtRain.classList.add('hidden');
     }
+
+    // Actualizar badge de estado del sensor de lluvia en la tarjeta del Panel
+    const rainBadge = document.getElementById('rain-sensor-status-badge');
+    if (rainBadge) {
+        const isSensorActive = state.deviceConfig.sensor_lluvia_activo !== false;
+        const sensorType = (state.deviceConfig.sensor_lluvia_tipo || "NA").toUpperCase();
+        const est = state.telemetria ? state.telemetria.estado : "";
+
+        if (!isSensorActive) {
+            rainBadge.textContent = "Sensor: Desactivado";
+            rainBadge.className = "px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-600";
+        } else if (est === "PAUSA: SENSOR") {
+            rainBadge.textContent = `🌧️ Lluvia (${sensorType})`;
+            rainBadge.className = "px-2 py-0.5 text-[10px] font-bold rounded-full bg-sky-100 dark:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-700 animate-pulse";
+        } else if (est === "PAUSA: SECADO") {
+            rainBadge.textContent = "⏳ Secando";
+            rainBadge.className = "px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700";
+        } else {
+            rainBadge.textContent = `Sensor: Activo (${sensorType})`;
+            rainBadge.className = "px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800";
+        }
+    }
 }
 
 function updateActiveWidget(data) {

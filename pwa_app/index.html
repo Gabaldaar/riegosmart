@@ -240,9 +240,14 @@
                 <!-- Retraso por Lluvia -->
                 <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                            <i data-lucide="cloud-rain" class="w-4 h-4 text-blue-500 dark:text-blue-400"></i> Retraso por Lluvia
-                        </h2>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                <i data-lucide="cloud-rain" class="w-4 h-4 text-blue-500 dark:text-blue-400"></i> Retraso por Lluvia
+                            </h2>
+                            <span id="rain-sensor-status-badge" class="px-2 py-0.5 text-[10px] font-bold rounded-full transition-all duration-200 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600">
+                                Sensor: --
+                            </span>
+                        </div>
                         <button class="text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors btn-help" data-help="rain">
                             <i data-lucide="help-circle" class="w-5 h-5"></i>
                         </button>
