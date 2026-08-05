@@ -641,7 +641,7 @@ async def enviar_respuesta_config(origen="ALL"):
 
 async def procesar_comando(cmd_dict):
     """Interfaz RX para MQTT y BLE"""
-    global reinicio_pendiente
+    global reinicio_pendiente, _cached_temp
     gc.collect()
     print(f"[CORE] Procesando comando: {cmd_dict}")
     token_recibido = cmd_dict.get("token")
