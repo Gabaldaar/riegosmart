@@ -72,17 +72,16 @@ async def conectar_mqtt_async():
                     pass
                 mqtt_client = None
 
+        gc.collect()
+        await asyncio.sleep_ms(300)
+
         import urandom
         client_id = f"riego_{riego_core.chip_id}_{urandom.getrandbits(16)}"
 
-        broker_host = cached_mqtt_ip if cached_mqtt_ip else MQTT_BROKER
-        if cached_mqtt_ip:
-            print(f"[MQTT] Usando IP cacheada: {broker_host}")
-
-        print(f"[MQTT] Conectando a {broker_host}:{MQTT_PORT}...")
+        print(f"[MQTT] Conectando a {MQTT_BROKER}:{MQTT_PORT}...")
         if wdt_ref: wdt_ref.feed()
 
-        _client = MQTTClient(client_id, broker_host, port=MQTT_PORT, keepalive=60)
+        _client = MQTTClient(client_id, MQTT_BROKER, port=MQTT_PORT, keepalive=60)
         _client.set_callback(mqtt_callback)
         _client.connect(clean_session=True)
 
@@ -101,15 +100,6 @@ async def conectar_mqtt_async():
             topic_sub = f"riego/{topic_hash}/cmd"
             _client.subscribe(topic_sub)
             print(f"[MQTT] Suscrito a: {topic_sub}")
-
-            # Cachear IP del broker para evitar DNS en reconexiones
-            if not cached_mqtt_ip:
-                try:
-                    addr_info = socket.getaddrinfo(MQTT_BROKER, MQTT_PORT)
-                    cached_mqtt_ip = addr_info[0][-1][0]
-                    print(f"[MQTT] IP del broker cacheada: {cached_mqtt_ip}")
-                except Exception as ex:
-                    print("[MQTT] No se pudo cachear IP DNS:", ex)
         else:
             print("[MQTT] Sin token. Conectado sin suscripción a /cmd.")
 
@@ -128,9 +118,6 @@ async def conectar_mqtt_async():
 
     except Exception as e:
         print("[MQTT] Error al establecer conexión:", e)
-        if cached_mqtt_ip:
-            print("[MQTT] Limpiando IP cacheada por fallo.")
-            cached_mqtt_ip = None
         mqtt_client = None
         return False
 
@@ -349,8 +336,8 @@ async def gestionar_interfaces_network():
                     print("[NET] Reintentando conexión MQTT...")
                     await conectar_mqtt_async()
 
-            # Polling más frecuente si MQTT no está listo
-            await asyncio.sleep(2 if mqtt_client is None else 5)
+            # Esperar 5s entre chequeos/reintentos de MQTT para evitar saturar DNS/socket
+            await asyncio.sleep(5)
 
         # ─── STATE_FALLBACK_BLE ───────────────────────────────────────────────
         elif current_state == STATE_FALLBACK_BLE:
