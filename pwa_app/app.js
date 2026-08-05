@@ -34,6 +34,7 @@ const state = {
     deviceConfig: {
         max_zonas: 8,
         modo_bomba: true,
+        calibracion_temp: 0.0,
         sensor_lluvia_activo: true,
         sensor_lluvia_tipo: "NA",
         ajuste_estacional: 100,
@@ -138,6 +139,9 @@ function escucharConfiguracionFirestore(chipId) {
             }
             if (data.sensor_lluvia_tipo !== undefined) {
                 state.deviceConfig.sensor_lluvia_tipo = data.sensor_lluvia_tipo;
+            }
+            if (data.calibracion_temp !== undefined) {
+                state.deviceConfig.calibracion_temp = data.calibracion_temp;
             }
             if (data.timestamp_sensor_lluvia_clear !== undefined) {
                 state.deviceConfig.timestamp_sensor_lluvia_clear = data.timestamp_sensor_lluvia_clear > 0 ? (data.timestamp_sensor_lluvia_clear - 946684800) : 0;
@@ -1349,6 +1353,17 @@ function refreshUIFromConfig() {
         }
     }
 
+    const tempOffsetInput = document.getElementById('settings-temp-offset');
+    const tempOffsetVal = document.getElementById('temp-offset-val');
+    if (tempOffsetInput && state.deviceConfig.calibracion_temp !== undefined) {
+        const val = parseFloat(state.deviceConfig.calibracion_temp) || 0.0;
+        tempOffsetInput.value = val;
+        if (tempOffsetVal) {
+            const sign = val > 0 ? '+' : '';
+            tempOffsetVal.textContent = `${sign}${val.toFixed(1)} °C`;
+        }
+    }
+
     // 4. Scheduler
     loadProgramIntoUI(state.activeProgTab);
     
@@ -2022,23 +2037,35 @@ function initSettingsUI() {
     });
 
     document.getElementById('btn-save-hw').addEventListener('click', () => {
-        // Los botones individuales ya actualizan en vivo, pero el usuario 
-        // necesita confirmación visual o forzar el envío
+        const tempOffset = parseFloat(document.getElementById('settings-temp-offset')?.value) || 0.0;
+        state.deviceConfig.calibracion_temp = tempOffset;
+
         sendCmd({ 
             comando: "UPDATE_CONFIG", 
             config: { 
                 max_zonas: state.deviceConfig.max_zonas, 
                 modo_bomba: state.deviceConfig.modo_bomba,
+                calibracion_temp: tempOffset,
                 sensor_lluvia_delay_horas: state.deviceConfig.sensor_lluvia_delay_horas || 0
             } 
         });
         pendingCommand = true;
         showGenericModal({
             title: "Configuración Guardada",
-            msg: "Configuración de hardware guardada en la placa.",
+            msg: "Configuración de hardware y calibración guardada en la placa.",
             hideCancel: true
         });
     });
+
+    const tempOffsetSld = document.getElementById('settings-temp-offset');
+    const tempOffsetLbl = document.getElementById('temp-offset-val');
+    if (tempOffsetSld && tempOffsetLbl) {
+        tempOffsetSld.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value) || 0.0;
+            const sign = val > 0 ? '+' : '';
+            tempOffsetLbl.textContent = `${sign}${val.toFixed(1)} °C`;
+        });
+    }
 
     document.querySelectorAll('.rain-active-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {

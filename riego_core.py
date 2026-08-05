@@ -15,6 +15,7 @@ DEFAULT_CONFIG = {
   "config_version": 0,
   "max_zonas": 4,
   "modo_bomba": True,
+  "calibracion_temp": 0.0,
   "sensor_lluvia_activo": True,
   "sensor_lluvia_tipo": "NA",
   "ajustes_estacionales": [
@@ -516,7 +517,9 @@ async def tarea_actualizar_temperatura():
     while True:
         if reloj_rtc:
             try:
-                _cached_temp = round(reloj_rtc.temperature(), 1)
+                raw_t = reloj_rtc.temperature()
+                offset = config_data.get("calibracion_temp", 0.0)
+                _cached_temp = round(raw_t + offset, 1)
             except Exception as e:
                 print("[CORE] Error leyendo temp RTC en background:", e)
         # Actualizar cada 5 minutos
@@ -620,7 +623,7 @@ async def enviar_respuesta_config(origen="ALL"):
     except:
         pass
 
-    campos_basicos = ["config_version", "max_zonas", "modo_bomba",
+    campos_basicos = ["config_version", "max_zonas", "modo_bomba", "calibracion_temp",
                       "timestamp_rain_delay", "ssid", "sensor_lluvia_delay_horas",
                       "timestamp_sensor_lluvia_clear", "sensor_lluvia_activo", "sensor_lluvia_tipo"]
     resp_base = {k: resp[k] for k in campos_basicos if k in resp}
@@ -838,6 +841,12 @@ async def procesar_comando(cmd_dict):
              for k, v in config_recibida.items():
                  config_data[k] = v
              await guardar_configuracion()
+             if reloj_rtc:
+                 try:
+                     raw_t = reloj_rtc.temperature()
+                     offset = config_data.get("calibracion_temp", 0.0)
+                     _cached_temp = round(raw_t + offset, 1)
+                 except: pass
              await tx_queue.put({"tipo": "ACK_CFG", "v": version_recibida, "_destino": origen})
         else:
              print(f"[CORE] Rechazando config obsoleta {version_recibida} (Local: {version_local})")
