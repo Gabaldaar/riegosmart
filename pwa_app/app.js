@@ -371,6 +371,26 @@ async function iniciarConectarDispositivo() {
             sendCmd({comando: "GET_STATE"});
             sendCmd({comando: "GET_TEMP"});
         }, 1000);
+
+        // Heartbeat y reconexión automática en background cada 20 segundos
+        if (!window._appHeartbeatInterval) {
+            window._appHeartbeatInterval = setInterval(async () => {
+                if (!document.hidden && state.chipId && state.token) {
+                    if (!comms.isConnected()) {
+                        console.log("[HEARTBEAT] Conexión caída. Reintentando conectar...");
+                        const ok = await comms.initConnection(state.chipId, state.token);
+                        if (ok) {
+                            sendCmd({comando: "GET_CONFIG"});
+                            sendCmd({comando: "GET_STATE"});
+                            sendCmd({comando: "GET_TEMP"});
+                        }
+                    } else {
+                        // Refrescar estado y temperatura periódicamente (solicita GET_STATE)
+                        sendCmd({comando: "GET_STATE"});
+                    }
+                }
+            }, 20000);
+        }
     } else {
         // Sin dispositivo vinculado → ir a Ajustes para configurar por BLE
         document.querySelector('.nav-btn[data-target="view-settings"]')?.click();
@@ -675,6 +695,10 @@ function handleIncomingMessage(msg) {
             if (msg.data.timestamp_sensor_lluvia_clear !== undefined) {
                 state.deviceConfig.timestamp_sensor_lluvia_clear = msg.data.timestamp_sensor_lluvia_clear;
             }
+            if (msg.data.temp !== undefined && msg.data.temp !== "N/A") {
+                const tempEl = document.getElementById('header-temp');
+                if (tempEl) tempEl.textContent = `${msg.data.temp}°C`;
+            }
             
             // Auto-solicitud de configuración en la transición a secado para asegurar timestamps
             if (msg.data.estado === "PAUSA: SECADO" && estadoAnterior !== "PAUSA: SECADO") {
@@ -682,10 +706,6 @@ function handleIncomingMessage(msg) {
             }
         }
         updateActiveWidget(msg.data);
-        if (window._startupSeq === 2) {
-            window._startupSeq = 0;
-            setTimeout(() => sendCmd({comando: "GET_TEMP"}), 200);
-        }
     } else if (msg.tipo === "CONFIG_PROG") {
         // Fix #1: Recibir programas fragmentados desde BLE (un mensaje por programa).
         // El ESP32 envía CONFIG_PROG con prog_id + data cuando el origen es BLE,

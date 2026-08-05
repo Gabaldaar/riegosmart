@@ -246,6 +246,16 @@ class CommsManager {
         this.notifyStatus('DISCONNECTED');
     }
 
+    isConnected() {
+        if (this.mode === 'MQTT' && this.mqttClient && this.mqttClient.connected) {
+            return true;
+        }
+        if (this.mode === 'BLE' && this.bleDevice && this.bleDevice.gatt && this.bleDevice.gatt.connected) {
+            return true;
+        }
+        return false;
+    }
+
     notifyStatus(status) {
         if (this.onConnectionChange) {
             this.onConnectionChange(status);
