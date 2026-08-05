@@ -695,9 +695,9 @@ function handleIncomingMessage(msg) {
             if (msg.data.timestamp_sensor_lluvia_clear !== undefined) {
                 state.deviceConfig.timestamp_sensor_lluvia_clear = msg.data.timestamp_sensor_lluvia_clear;
             }
-            if (msg.data.temp !== undefined && msg.data.temp !== "N/A") {
+            if (msg.data.temp !== undefined) {
                 const tempEl = document.getElementById('header-temp');
-                if (tempEl) tempEl.textContent = `${msg.data.temp}°C`;
+                if (tempEl) tempEl.textContent = (msg.data.temp !== "N/A") ? `${msg.data.temp}°C` : "N/A";
             }
             
             // Auto-solicitud de configuración en la transición a secado para asegurar timestamps
@@ -736,8 +736,8 @@ function handleIncomingMessage(msg) {
         }
     } else if (msg.tipo === "TEMP") {
         const tempEl = document.getElementById('header-temp');
-        if (tempEl && msg.data !== "N/A") {
-            tempEl.textContent = `${msg.data}°C`;
+        if (tempEl) {
+            tempEl.textContent = (msg.data !== "N/A" && msg.data !== undefined) ? `${msg.data}°C` : "N/A";
         }
     } else if (msg.tipo === "ACK_CFG") {
         // El ESP32 aceptó la configuración empujada por el auto-sync.
