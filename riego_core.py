@@ -141,14 +141,24 @@ async def init_hardware():
     boot_button = machine.Pin(BOOT_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
     
     try:
-        try:
-            # Intentar SoftI2C primero para evitar bloqueos del driver de hardware I2C del ESP32
-            i2c = machine.SoftI2C(scl=machine.Pin(22), sda=machine.Pin(21))
-            print("SoftI2C cargado para RTC.")
-        except (AttributeError, ValueError):
-            # Fallback a hardware I2C si SoftI2C no está soportado en la build de MicroPython
-            i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21))
-            print("Hardware I2C(0) cargado para RTC.")
+        i2c = None
+        # Intentar hasta 3 veces dar tiempo a estabilización del bus I2C tras reset
+        for _ in range(3):
+            try:
+                i2c = machine.SoftI2C(scl=machine.Pin(22), sda=machine.Pin(21))
+                if 104 in i2c.scan():
+                    print("SoftI2C cargado y DS3231 detectado en 0x68.")
+                    break
+            except:
+                pass
+            time.sleep_ms(50)
+
+        if not i2c or 104 not in i2c.scan():
+            try:
+                i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21))
+                print("Hardware I2C(0) cargado para RTC.")
+            except:
+                pass
             
         reloj_rtc = ds3231.DS3231(i2c)
         print("DS3231 RTC Detectado y cargado.")
@@ -156,9 +166,7 @@ async def init_hardware():
         # Sincronizar el reloj interno del ESP32 con la hora del DS3231 convertido a UTC (Argentina es UTC-3)
         try:
             t_local = reloj_rtc.get_time()
-            # Convertir tupla local a segundos desde Y2K
             sec_local = time.mktime((t_local[0], t_local[1], t_local[2], t_local[3], t_local[4], t_local[5], t_local[6], 0))
-            # Sumar 3 horas (10800 segundos) para pasarlo a UTC
             sec_utc = sec_local + 10800
             t_utc = time.localtime(sec_utc)
             
@@ -514,8 +522,18 @@ async def tarea_planificador():
         await asyncio.sleep(10)
 
 async def tarea_actualizar_temperatura():
-    global _cached_temp
+    global _cached_temp, reloj_rtc
     while True:
+        # Si el RTC no se inicializó al arrancar (glitch en bus I2C), reintentar detectar
+        if not reloj_rtc:
+            try:
+                i2c = machine.SoftI2C(scl=machine.Pin(22), sda=machine.Pin(21))
+                if 104 in i2c.scan():
+                    reloj_rtc = ds3231.DS3231(i2c)
+                    print("[RTC] DS3231 re-detectado e inicializado con éxito.")
+            except Exception as ex:
+                pass
+
         if reloj_rtc:
             try:
                 raw_t = reloj_rtc.temperature()
@@ -523,8 +541,9 @@ async def tarea_actualizar_temperatura():
                 _cached_temp = round(raw_t + offset, 1)
             except Exception as e:
                 print("[CORE] Error leyendo temp RTC en background:", e)
-        # Actualizar cada 5 minutos
-        await asyncio.sleep(300)
+
+        # Si aún no tenemos lectura válida, reintentar en 30s; de lo contrario actualizar cada 5 minutos
+        await asyncio.sleep(30 if _cached_temp == "N/A" else 300)
 
 async def tarea_monitoreo_lluvia():
     global rain_sensor, estado_riego
