@@ -149,8 +149,12 @@ async def init_hardware():
         dispositivos = i2c.scan()
         print(f"[I2C] Bus escaneado (SDA:21, SCL:22). Dispositivos en bus: {dispositivos}")
         
-        reloj_rtc = ds3231.DS3231(i2c)
-        print("DS3231 RTC Detectado y cargado.")
+        if len(dispositivos) > 10:
+            print("[I2C] CORTOCIRCUITO DETECTADO: El pin SDA (GPIO 21) está derivado a MASA/GND. RTC desactivado.")
+            reloj_rtc = None
+        else:
+            reloj_rtc = ds3231.DS3231(i2c)
+            print("DS3231 RTC Detectado y cargado.")
         
         # Sincronizar el reloj interno del ESP32 con la hora del DS3231 convertido a UTC (Argentina es UTC-3)
         try:
