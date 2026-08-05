@@ -68,7 +68,16 @@ class DS3231:
         self.ds3231 = i2c
         self.alarm1 = Alarm(self, 1)
         self.alarm2 = Alarm(self, 2)
-        if _ADDR not in self.ds3231.scan():
+        # Intentar lectura directa de memoria con reintentos para evitar fallos por oscilación I2C
+        success = False
+        for _ in range(5):
+            try:
+                self.ds3231.readfrom_mem_into(_ADDR, 0, bytearray(1))
+                success = True
+                break
+            except Exception:
+                time.sleep_ms(20)
+        if not success:
             raise RuntimeError(f"DS3231 not found on I2C bus at {_ADDR}")
 
     def get_time(self, data=bytearray(7)):

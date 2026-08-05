@@ -141,25 +141,14 @@ async def init_hardware():
     boot_button = machine.Pin(BOOT_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
     
     try:
-        i2c = None
-        # Intentar hasta 3 veces dar tiempo a estabilización del bus I2C tras reset
-        for _ in range(3):
-            try:
-                i2c = machine.SoftI2C(scl=machine.Pin(22), sda=machine.Pin(21))
-                if 104 in i2c.scan():
-                    print("SoftI2C cargado y DS3231 detectado en 0x68.")
-                    break
-            except:
-                pass
-            time.sleep_ms(50)
-
-        if not i2c or 104 not in i2c.scan():
-            try:
-                i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21))
-                print("Hardware I2C(0) cargado para RTC.")
-            except:
-                pass
-            
+        p_sda = machine.Pin(21, machine.Pin.IN, machine.Pin.PULL_UP)
+        p_scl = machine.Pin(22, machine.Pin.IN, machine.Pin.PULL_UP)
+        time.sleep_ms(30)
+        
+        i2c = machine.SoftI2C(scl=p_scl, sda=p_sda, freq=100000)
+        dispositivos = i2c.scan()
+        print(f"[I2C] Bus escaneado (SDA:21, SCL:22). Dispositivos en bus: {dispositivos}")
+        
         reloj_rtc = ds3231.DS3231(i2c)
         print("DS3231 RTC Detectado y cargado.")
         
@@ -527,10 +516,11 @@ async def tarea_actualizar_temperatura():
         # Si el RTC no se inicializó al arrancar (glitch en bus I2C), reintentar detectar
         if not reloj_rtc:
             try:
-                i2c = machine.SoftI2C(scl=machine.Pin(22), sda=machine.Pin(21))
-                if 104 in i2c.scan():
-                    reloj_rtc = ds3231.DS3231(i2c)
-                    print("[RTC] DS3231 re-detectado e inicializado con éxito.")
+                p_sda = machine.Pin(21, machine.Pin.IN, machine.Pin.PULL_UP)
+                p_scl = machine.Pin(22, machine.Pin.IN, machine.Pin.PULL_UP)
+                i2c = machine.SoftI2C(scl=p_scl, sda=p_sda, freq=100000)
+                reloj_rtc = ds3231.DS3231(i2c)
+                print("[RTC] DS3231 re-detectado e inicializado en background.")
             except Exception as ex:
                 pass
 
@@ -741,15 +731,44 @@ async def procesar_comando(cmd_dict):
     elif cmd == "SYNC_RTC":
         try:
             ts = cmd_dict.get("timestamp", 0)
-            if ts > 0 and reloj_rtc:
+            if ts > 0:
+                global reloj_rtc, _cached_temp
+                if not reloj_rtc:
+                    try:
+                        p_sda = machine.Pin(21, machine.Pin.IN, machine.Pin.PULL_UP)
+                        p_scl = machine.Pin(22, machine.Pin.IN, machine.Pin.PULL_UP)
+                        i2c = machine.SoftI2C(scl=p_scl, sda=p_sda, freq=100000)
+                        reloj_rtc = ds3231.DS3231(i2c)
+                        print("[RTC] DS3231 inicializado durante SYNC_RTC.")
+                    except Exception as ex_rtc:
+                        print("[RTC] No se pudo inicializar RTC en SYNC_RTC:", ex_rtc)
+
                 mpy_ts = int(ts) - 946684800
-                # Fix #7: Validar que el timestamp corresponde a una fecha razonable.
-                # 631152000 es el epoch MicroPython (Y2K) equivalente a 2020-01-01 UTC.
-                # Esto descarta timestamps nulos, negativos o de años anteriores a 2020.
                 if mpy_ts > 631152000:
                     t = time.localtime(mpy_ts)
-                    reloj_rtc.set_time(t)
-                    await sys_log.log_event({"tipo": "info", "msg": "RTC Sincronizado por App"})
+                    if reloj_rtc:
+                        try:
+                            reloj_rtc.set_time(t)
+                            print("[RTC] Hora guardada en DS3231 RTC externo.")
+                        except Exception as ex_st:
+                            print("[RTC] Error guardando hora en DS3231:", ex_st)
+
+                    try:
+                        rtc_int = machine.RTC()
+                        rtc_int.datetime((t[0], t[1], t[2], t[6], t[3], t[4], t[5], 0))
+                        print("[RTC] Hora guardada en reloj interno del ESP32:", t)
+                    except Exception as ex_int:
+                        print("[RTC] Error guardando hora interna:", ex_int)
+
+                    await sys_log.log_event({"tipo": "info", "msg": "Reloj sincronizado por App"})
+
+                    if reloj_rtc:
+                        try:
+                            raw_t = reloj_rtc.temperature()
+                            offset = config_data.get("calibracion_temp", 0.0)
+                            _cached_temp = round(raw_t + offset, 1)
+                            await tx_queue.put({"tipo": "TEMP", "data": _cached_temp, "_destino": origen})
+                        except: pass
                 else:
                     print("[RTC] Timestamp inválido recibido:", ts)
         except Exception as e:
