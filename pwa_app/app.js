@@ -723,6 +723,7 @@ function handleIncomingMessage(msg) {
         // El ESP32 aceptó la configuración empujada por el auto-sync.
         console.log(`[SYNC] ESP32 confirmó config v${msg.v}`);
         showToast(`✓ Placa sincronizada con la nube (v${msg.v})`);
+        sendCmd({ comando: "GET_TEMP" });
 
     } else if (msg.tipo === "NEED_INIT") {
         // El dispositivo no tiene token configurado (nuevo o post factory-reset).

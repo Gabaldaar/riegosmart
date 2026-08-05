@@ -846,6 +846,7 @@ async def procesar_comando(cmd_dict):
                      raw_t = reloj_rtc.temperature()
                      offset = config_data.get("calibracion_temp", 0.0)
                      _cached_temp = round(raw_t + offset, 1)
+                     await tx_queue.put({"tipo": "TEMP", "data": _cached_temp, "_destino": origen})
                  except: pass
              await tx_queue.put({"tipo": "ACK_CFG", "v": version_recibida, "_destino": origen})
         else:
