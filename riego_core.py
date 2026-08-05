@@ -527,10 +527,15 @@ async def tarea_actualizar_temperatura():
         if reloj_rtc:
             try:
                 raw_t = reloj_rtc.temperature()
-                offset = config_data.get("calibracion_temp", 0.0)
-                _cached_temp = round(raw_t + offset, 1)
+                if -10.0 <= raw_t <= 65.0:
+                    offset = config_data.get("calibracion_temp", 0.0)
+                    _cached_temp = round(raw_t + offset, 1)
+                else:
+                    print(f"[RTC] Lectura de temperatura anómala descartada: {raw_t}°C")
             except Exception as e:
-                print("[CORE] Error leyendo temp RTC en background:", e)
+                print("[CORE] Error leyendo temp RTC (re-intentando en background):", e)
+                reloj_rtc = None
+                _cached_temp = "N/A"
 
         # Si aún no tenemos lectura válida, reintentar en 30s; de lo contrario actualizar cada 5 minutos
         await asyncio.sleep(30 if _cached_temp == "N/A" else 300)

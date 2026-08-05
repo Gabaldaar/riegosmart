@@ -130,6 +130,8 @@ class DS3231:
             return -(input_value & mask) + (input_value & ~mask)
 
         t = self.ds3231.readfrom_mem(_ADDR, 0x11, 2)
+        if not t or len(t) < 2 or (t[0] == 0x00 and t[1] == 0x00):
+            raise OSError("Lectura I2C corrupta o RTC no alimentado")
         i = t[0] << 8 | t[1]
         return twos_complement(i >> 6, 10) * 0.25
 
