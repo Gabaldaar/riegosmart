@@ -38,13 +38,13 @@
                 registration.update();
             });
             // Also notify user that they are on the latest version
-            window.APP_VERSION = "v12";
+            window.APP_VERSION = "v13.2";
         }
     </script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="styles.css?v=49">
+    <link rel="stylesheet" href="styles.css?v=51">
 </head>
 <body class="bg-slate-200/60 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30 transition-colors duration-200">
     <!-- Top Header -->
@@ -53,7 +53,7 @@
         <div class="flex flex-col justify-center flex-shrink-0">
             <h1 class="font-bold text-lg sm:text-xl tracking-wide bg-gradient-to-r from-teal-400 to-blue-500 bg-clip-text text-transparent flex items-baseline gap-1.5 leading-none">
                 Smart Riego
-                <span class="text-[9px] font-medium text-slate-500 tracking-normal border border-slate-700 px-1 py-0.5 rounded">v13.1</span>
+                <span class="text-[9px] font-medium text-slate-500 tracking-normal border border-slate-700 px-1 py-0.5 rounded">v13.2</span>
             </h1>
             <span id="user-display-name" class="text-[9px] font-medium text-teal-600 dark:text-teal-400 hidden truncate max-w-[100px] mt-0.5 leading-tight"></span>
         </div>
@@ -416,22 +416,6 @@
                 </div>
             </div>
 
-            <!-- Appearance / Theme Selector -->
-            <div class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200">
-                <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <i data-lucide="palette" class="w-4 h-4 text-teal-655 dark:text-teal-400"></i> Apariencia
-                </h2>
-                <div class="grid grid-cols-3 gap-2.5" id="theme-selector">
-                    <button class="theme-btn flex flex-col items-center gap-1.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white text-xs font-semibold transition-all shadow-sm" data-theme="light">
-                        <i data-lucide="sun" class="w-4 h-4"></i> Claro
-                    </button>
-                    <button class="theme-btn flex flex-col items-center gap-1.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white text-xs font-semibold transition-all shadow-sm" data-theme="dark">
-                        <i data-lucide="moon" class="w-4 h-4"></i> Oscuro
-                    </button>
-                    <button class="theme-btn flex flex-col items-center gap-1.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white text-xs font-semibold transition-all shadow-sm" data-theme="system">
-                        <i data-lucide="monitor" class="w-4 h-4"></i> Sistema
-                    </button>
-                </div>
             </div>
 
             <!-- Asistente BLE -->
@@ -880,7 +864,7 @@
     </div>
 
     <!-- PWA y App Scripts con versión forzada -->
-    <script src="comms.js?v=50"></script>
-    <script src="app.js?v=50"></script>
+    <script src="comms.js?v=51"></script>
+    <script src="app.js?v=51"></script>
 </body>
 </html>
