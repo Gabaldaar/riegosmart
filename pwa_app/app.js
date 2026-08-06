@@ -863,7 +863,7 @@ function updateActiveWidget(data) {
         infoPanel.classList.add('hidden');
         document.getElementById('next-watering-info').classList.remove('hidden');
         calculateNextWatering();
-        document.getElementById('btn-manual-stop').classList.add('hidden');
+        document.getElementById('manual-active-stop-container')?.classList.add('hidden');
         
         // Actualizar el icono de estado de reposo / lluvia
         const iconContainer = document.getElementById('status-icon-container');
@@ -890,7 +890,7 @@ function updateActiveWidget(data) {
         badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-red-900 text-red-300 animate-pulse";
         infoPanel.classList.add('hidden');
         document.getElementById('next-watering-info').classList.add('hidden');
-        document.getElementById('btn-manual-stop').classList.add('hidden');
+        document.getElementById('manual-active-stop-container')?.classList.add('hidden');
     } else {
         let label = data.estado;
         if (data.estado === "REGANDO" && data.ciclo_actual && data.ciclos_totales) {
@@ -902,14 +902,11 @@ function updateActiveWidget(data) {
         badge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-teal-500/20 text-teal-400 border border-teal-500/30";
         infoPanel.classList.remove('hidden');
         document.getElementById('next-watering-info').classList.add('hidden');
-        document.getElementById('btn-manual-stop').classList.remove('hidden');
-
-        // Expandir el card de control manual automáticamente si hay un riego activo
-        const content = document.getElementById('manual-control-content');
-        const chevron = document.getElementById('manual-toggle-chevron');
-        if (content && content.classList.contains('hidden')) {
-            content.classList.remove('hidden');
-            if (chevron) chevron.classList.add('rotate-180');
+        
+        const stopContainer = document.getElementById('manual-active-stop-container');
+        if (stopContainer) {
+            stopContainer.classList.remove('hidden');
+            if (window.lucide) window.lucide.createIcons();
         }
         
         let zname = data.zona ? obtenerNombreZona(data.zona) : "Preparando...";
@@ -1461,6 +1458,12 @@ document.getElementById('btn-manual-start').addEventListener('click', () => {
         zonas: { [zona]: zonaObj }
     });
     pendingCommand = true;
+
+    // Colapsar la tarjeta de control manual al iniciar el riego
+    const content = document.getElementById('manual-control-content');
+    const chevron = document.getElementById('manual-toggle-chevron');
+    if (content) content.classList.add('hidden');
+    if (chevron) chevron.classList.remove('rotate-180');
 });
 
 document.getElementById('btn-manual-stop').addEventListener('click', () => {
