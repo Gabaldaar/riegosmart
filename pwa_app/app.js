@@ -2027,12 +2027,48 @@ function applyTheme(mode) {
             btn.classList.remove('border-teal-500', 'text-white', 'bg-teal-600', 'shadow-md');
         }
     });
+
+    // Update header theme button icon & title
+    const headerBtn = document.getElementById('header-theme-toggle');
+    const headerIcon = document.getElementById('header-theme-icon');
+    if (headerIcon) {
+        let iconName = 'sun';
+        let iconClass = 'w-4 h-4 text-amber-500';
+        let iconTitle = 'Modo Claro (clic para cambiar)';
+        if (mode === 'dark') {
+            iconName = 'moon';
+            iconClass = 'w-4 h-4 text-indigo-400';
+            iconTitle = 'Modo Oscuro (clic para cambiar)';
+        } else if (mode === 'system') {
+            iconName = 'monitor';
+            iconClass = 'w-4 h-4 text-teal-500 dark:text-teal-400';
+            iconTitle = 'Modo Sistema (clic para cambiar)';
+        }
+        headerIcon.setAttribute('data-lucide', iconName);
+        headerIcon.className = iconClass;
+        if (headerBtn) headerBtn.setAttribute('title', iconTitle);
+        if (window.lucide) window.lucide.createIcons();
+    }
 }
 
 // ==========================================
 // SETTINGS & AUTH
 // ==========================================
 function initSettingsUI() {
+    // Header quick theme toggle listener
+    const headerThemeBtn = document.getElementById('header-theme-toggle');
+    if (headerThemeBtn) {
+        headerThemeBtn.addEventListener('click', () => {
+            const currentMode = localStorage.getItem('theme-mode') || 'system';
+            const modes = ['light', 'dark', 'system'];
+            const nextIdx = (modes.indexOf(currentMode) + 1) % modes.length;
+            const nextMode = modes[nextIdx];
+            setTheme(nextMode);
+            const modeNames = { light: 'Modo Claro ☀️', dark: 'Modo Oscuro 🌙', system: 'Modo Sistema 🖥️' };
+            showToast(`Tema: ${modeNames[nextMode]}`);
+        });
+    }
+
     // Theme selector listeners
     document.querySelectorAll('.theme-btn').forEach(btn => {
         btn.addEventListener('click', () => {
