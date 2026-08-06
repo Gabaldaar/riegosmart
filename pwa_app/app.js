@@ -516,10 +516,10 @@ function cambiarSeccionApp(btn, target) {
 
     // Actualizar botones nav
     navBtns.forEach(b => {
-        b.classList.remove('text-teal-655', 'dark:text-teal-400');
+        b.classList.remove('text-teal-600', 'dark:text-teal-400');
         b.classList.add('text-slate-400', 'dark:text-slate-500');
     });
-    btn.classList.add('text-teal-655', 'dark:text-teal-400');
+    btn.classList.add('text-teal-600', 'dark:text-teal-400');
     btn.classList.remove('text-slate-400', 'dark:text-slate-500');
 
     // Mostrar vista
@@ -934,7 +934,7 @@ function updateActiveWidget(data) {
                 // Bomba: Hélice (fan)
                 const isPumpOn = (data.estado === "REGANDO" || data.estado === "PRESURIZANDO");
                 if (isPumpOn) {
-                    sourceContainer.innerHTML = `<i data-lucide="fan" class="w-8 h-8 stroke-[2.5] text-teal-655 dark:text-teal-400 animate-spin-fast"></i>`;
+                    sourceContainer.innerHTML = `<i data-lucide="fan" class="w-8 h-8 stroke-[2.5] text-teal-600 dark:text-teal-400 animate-spin-fast"></i>`;
                 } else {
                     sourceContainer.innerHTML = `<i data-lucide="fan" class="w-8 h-8 stroke-[2] text-slate-400 opacity-40"></i>`;
                 }
@@ -942,7 +942,7 @@ function updateActiveWidget(data) {
                 // Master Válvula: Válvula de Red (faucet)
                 const isFlowing = (data.estado === "REGANDO" || data.estado === "PRESURIZANDO");
                 if (isFlowing) {
-                    sourceContainer.innerHTML = `<i data-lucide="faucet" class="w-8 h-8 stroke-[2.5] text-teal-655 dark:text-teal-400"></i>`;
+                    sourceContainer.innerHTML = `<i data-lucide="faucet" class="w-8 h-8 stroke-[2.5] text-teal-600 dark:text-teal-400"></i>`;
                 } else {
                     sourceContainer.innerHTML = `<i data-lucide="faucet" class="w-8 h-8 stroke-[2] text-slate-400 opacity-40"></i>`;
                 }
@@ -953,7 +953,7 @@ function updateActiveWidget(data) {
             if (isZoneWatering) {
                 valveContainer.innerHTML = `
                     <div class="relative flex items-center justify-center w-full h-full">
-                        <i data-lucide="droplet" class="w-7 h-7 text-teal-655 dark:text-teal-400 fill-teal-500/20 anim-dripping-droplet"></i>
+                        <i data-lucide="droplet" class="w-7 h-7 text-teal-600 dark:text-teal-400 fill-teal-500/20 anim-dripping-droplet"></i>
                         <span class="absolute w-1.5 h-1.5 bg-teal-500 dark:bg-teal-400 rounded-full anim-dripping-drop bottom-1.5"></span>
                     </div>
                 `;
@@ -1238,7 +1238,7 @@ function refreshUIFromConfig() {
                     </div>
                     <div class="flex justify-between items-center mb-1">
                         <span class="text-xs text-slate-500 dark:text-slate-400">Porcentaje</span>
-                        <span id="pct-val-${idx}" class="text-xs font-bold ${temp.porcentaje !== 100 ? 'text-yellow-600 dark:text-yellow-500' : 'text-teal-655 dark:text-teal-400'}">${temp.porcentaje}%</span>
+                        <span id="pct-val-${idx}" class="text-xs font-bold ${temp.porcentaje !== 100 ? 'text-yellow-600 dark:text-yellow-500' : 'text-teal-600 dark:text-teal-400'}">${temp.porcentaje}%</span>
                     </div>
                     <input type="range" class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500 season-slider" data-idx="${idx}" min="0" max="100" step="10" value="${temp.porcentaje}">
                 `;
@@ -1771,7 +1771,7 @@ function loadProgramIntoUI(progId) {
         div.innerHTML = `
             <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center flex-1 pr-2 min-w-0">
-                    <span class="text-xs font-bold text-teal-655 dark:text-teal-400 mr-2 whitespace-nowrap">Z${i}:</span>
+                    <span class="text-xs font-bold text-teal-600 dark:text-teal-400 mr-2 whitespace-nowrap">Z${i}:</span>
                     <input type="text" class="bg-transparent text-sm font-medium w-full focus:outline-none focus:border-b focus:border-teal-500 z-name-input text-slate-800 dark:text-slate-200" data-zidx="${i}" value="${zName}" placeholder="Nombre...">
                 </div>
                 <!-- Toggle habilitado/deshabilitado -->
@@ -1792,7 +1792,7 @@ function loadProgramIntoUI(progId) {
                     <span class="text-xs text-slate-500 dark:text-slate-400">min</span>
                 </div>
                 <label class="flex items-center gap-2 text-xs text-slate-550 dark:text-slate-400 cursor-pointer select-none">
-                    <input type="checkbox" class="rounded border-slate-300 dark:border-slate-600 text-teal-655 dark:text-teal-500 bg-white dark:bg-slate-800 z-cycle-check" data-zidx="${i}" ${zData.cycle_min > 0 ? 'checked' : ''}>
+                    <input type="checkbox" class="rounded border-slate-300 dark:border-slate-600 text-teal-600 dark:text-teal-500 bg-white dark:bg-slate-800 z-cycle-check" data-zidx="${i}" ${zData.cycle_min > 0 ? 'checked' : ''}>
                     Activar Ciclo y Remojo
                 </label>
                 <div class="z-cycle-opts mt-2 grid grid-cols-2 gap-2 ${zData.cycle_min > 0 ? '' : 'hidden'}">
@@ -1960,7 +1960,7 @@ function renderLogs(logsArray) {
             icon = '<i data-lucide="refresh-cw" class="w-4 h-4 text-amber-500 dark:text-amber-400"></i>';
             desc = "Reinicio del equipo";
         } else if (log.tipo === 'inicio_zona') {
-            icon = '<i data-lucide="droplets" class="w-4 h-4 text-teal-655 dark:text-teal-400"></i>';
+            icon = '<i data-lucide="droplets" class="w-4 h-4 text-teal-600 dark:text-teal-400"></i>';
             const zoneName = obtenerNombreZona(log.zona);
             const duracion = log.duracion || 0;
             const ajuste = log.ajuste !== undefined ? log.ajuste : 100;
