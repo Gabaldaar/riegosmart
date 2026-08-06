@@ -1449,6 +1449,16 @@ document.getElementById('btn-manual-start').addEventListener('click', () => {
         const cycleMin = parseInt(document.getElementById('manual-cycle-min').value) || 5;
         const soakMin = parseInt(document.getElementById('manual-soak-min').value) || 10;
         
+        if (mins < cycleMin) {
+            const zName = obtenerNombreZona(zona);
+            showGenericModal({
+                title: "Configuración Inválida de Ciclo",
+                msg: `En la zona ${zName}, la duración total del riego (${mins} min) no puede ser menor que la duración de un ciclo (${cycleMin} min). Por favor modifique los valores antes de iniciar.`,
+                hideCancel: true
+            });
+            return;
+        }
+        
         zonaObj.cycle_min = cycleMin;
         zonaObj.soak_min = soakMin;
     }
@@ -1647,6 +1657,36 @@ function initSchedulerUI() {
 
     document.getElementById('btn-sync-prog').addEventListener('click', () => {
         updateTempProgData();
+
+        // Validar Ciclo y Remojo en todas las zonas activas del programa
+        const invalidZones = [];
+        const maxZ = state.deviceConfig.max_zonas || 4;
+        for (let i = 1; i <= maxZ; i++) {
+            const toggleEl = document.querySelector(`.z-enable-toggle[data-zidx="${i}"]`);
+            if (toggleEl && toggleEl.checked) {
+                const minInp = document.querySelector(`.z-min-input[data-zidx="${i}"]`);
+                const cycleCheck = document.querySelector(`.z-cycle-check[data-zidx="${i}"]`);
+                if (minInp && cycleCheck && cycleCheck.checked) {
+                    const mins = parseInt(minInp.value) || 0;
+                    const cInp = document.querySelector(`.z-c-input[data-zidx="${i}"]`);
+                    const cycleMin = parseInt(cInp?.value) || 0;
+                    if (mins > 0 && cycleMin > 0 && mins < cycleMin) {
+                        const zName = obtenerNombreZona(i);
+                        invalidZones.push(`• ${zName}: Duración (${mins} min) < Ciclo (${cycleMin} min)`);
+                    }
+                }
+            }
+        }
+
+        if (invalidZones.length > 0) {
+            showGenericModal({
+                title: "Configuración Inválida de Ciclo y Remojo",
+                msg: `En el programa activo, la duración total no puede ser menor que la duración de un ciclo:\n\n${invalidZones.join('\n')}\n\nPor favor modifique los valores antes de guardar.`,
+                hideCancel: true
+            });
+            return;
+        }
+
         const fullProgObj = { ...state.deviceConfig.programas };
         fullProgObj[state.activeProgTab] = state.tempProgData;
         state.deviceConfig.programas = fullProgObj;
@@ -1752,10 +1792,10 @@ function loadProgramIntoUI(progId) {
                     <span class="text-xs text-slate-500 dark:text-slate-400">min</span>
                 </div>
                 <label class="flex items-center gap-2 text-xs text-slate-550 dark:text-slate-400 cursor-pointer select-none">
-                    <input type="checkbox" class="rounded border-slate-300 dark:border-slate-600 text-teal-655 dark:text-teal-500 bg-white dark:bg-slate-800 z-cycle-check" data-zidx="${i}" ${zData.cycle_min > 0 && zData.cycle_min < zData.minutos ? 'checked' : ''}>
+                    <input type="checkbox" class="rounded border-slate-300 dark:border-slate-600 text-teal-655 dark:text-teal-500 bg-white dark:bg-slate-800 z-cycle-check" data-zidx="${i}" ${zData.cycle_min > 0 ? 'checked' : ''}>
                     Activar Ciclo y Remojo
                 </label>
-                <div class="z-cycle-opts mt-2 grid grid-cols-2 gap-2 ${zData.cycle_min > 0 && zData.cycle_min < zData.minutos ? '' : 'hidden'}">
+                <div class="z-cycle-opts mt-2 grid grid-cols-2 gap-2 ${zData.cycle_min > 0 ? '' : 'hidden'}">
                     <div>
                         <span class="text-[10px] text-slate-500 dark:text-slate-400">Ciclo (min)</span>
                         <input type="number" min="1" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-sm text-slate-800 dark:text-slate-100 z-c-input" data-zidx="${i}" value="${zData.cycle_min || 5}">
