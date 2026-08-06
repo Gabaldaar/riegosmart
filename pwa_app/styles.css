@@ -37,30 +37,58 @@ input[type="date"] {
     color-scheme: dark;
 }
 
+/* Hero Telemetry Card (Estado Actual) */
+.telemetry-hero-card {
+    background: linear-gradient(135deg, #f0fdfa 0%, #f8fafc 60%, #e0f2fe 100%);
+    border: 1px solid rgba(45, 212, 191, 0.4);
+    border-top: 4px solid #0d9488;
+    box-shadow: 0 4px 18px -2px rgba(13, 148, 136, 0.15), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+}
+.dark .telemetry-hero-card {
+    background: #1e293b;
+    border: 1px solid rgba(51, 65, 85, 0.8);
+    border-top: 4px solid #14b8a6;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+}
+
+/* Soft Cards for Light Mode */
+.soft-card {
+    background-color: rgba(248, 250, 252, 0.95);
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+}
+.dark .soft-card {
+    background-color: #1e293b;
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
 /* Active states for program tabs, hw settings buttons, pump buttons, rain sensor buttons */
 .prog-tab.bg-slate-700, .hw-zones-btn.bg-slate-700, .hw-pump-btn.bg-slate-700, .rain-active-btn.bg-slate-700, .rain-type-btn.bg-slate-700 {
-    background-color: #ffffff !important;
-    color: #0f172a !important; /* slate-900 */
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+    background-color: #0d9488 !important; /* teal-600 */
+    color: #ffffff !important;
+    box-shadow: 0 2px 4px 0 rgba(13, 148, 136, 0.3) !important;
 }
 .dark .prog-tab.bg-slate-700, .dark .hw-zones-btn.bg-slate-700, .dark .hw-pump-btn.bg-slate-700, .dark .rain-active-btn.bg-slate-700, .dark .rain-type-btn.bg-slate-700 {
-    background-color: #334155 !important; /* slate-700 */
+    background-color: #0d9488 !important; /* teal-600 */
     color: #ffffff !important;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+    box-shadow: 0 2px 4px 0 rgba(13, 148, 136, 0.3) !important;
 }
 
 /* Inactive states */
 .prog-tab.text-slate-400, .hw-zones-btn.text-slate-400, .hw-pump-btn.text-slate-400, .rain-active-btn.text-slate-400, .rain-type-btn.text-slate-400 {
-    color: #64748b !important; /* slate-500 */
+    color: #475569 !important; /* slate-600 */
+    background-color: transparent !important;
 }
 .dark .prog-tab.text-slate-400, .dark .hw-zones-btn.text-slate-400, .dark .hw-pump-btn.text-slate-400, .dark .rain-active-btn.text-slate-400, .dark .rain-type-btn.text-slate-400 {
     color: #94a3b8 !important; /* slate-400 */
+    background-color: transparent !important;
 }
 
 /* Day buttons inactive states */
 .day-btn {
-    background-color: #f1f5f9 !important; /* slate-100 */
-    color: #475569 !important; /* slate-600 */
+    background-color: #e2e8f0 !important; /* slate-200 */
+    color: #334155 !important; /* slate-700 */
     transition: all 0.2s ease;
 }
 .dark .day-btn {
@@ -71,15 +99,17 @@ input[type="date"] {
 .day-btn.active {
     background-color: #0d9488 !important; /* teal-600 */
     color: #ffffff !important;
+    box-shadow: 0 2px 4px 0 rgba(13, 148, 136, 0.3) !important;
 }
 
 /* Manual zone selector buttons inactive */
 .manual-z-btn.bg-slate-900 {
-    background-color: #f1f5f9 !important; /* slate-100 */
-    border-color: #e2e8f0 !important; /* slate-200 */
-    color: #475569 !important; /* slate-600 */
+    background-color: #e2e8f0 !important; /* slate-200 */
+    border-color: #cbd5e1 !important; /* slate-300 */
+    color: #334155 !important; /* slate-700 */
 }
 .manual-z-btn.bg-slate-900:hover {
+    background-color: #cbd5e1 !important;
     color: #0f172a !important; /* slate-900 */
 }
 .dark .manual-z-btn.bg-slate-900 {

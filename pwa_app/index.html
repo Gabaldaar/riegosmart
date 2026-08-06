@@ -44,16 +44,16 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="styles.css?v=44">
+    <link rel="stylesheet" href="styles.css?v=47">
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30 transition-colors duration-200">
+<body class="bg-slate-100/70 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30 transition-colors duration-200">
     <!-- Top Header -->
-    <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 sticky top-0 z-20 flex justify-between items-center shadow-md transition-colors duration-200">
+    <header class="bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 p-4 sticky top-0 z-20 flex justify-between items-center shadow-sm transition-colors duration-200">
         <!-- Izquierda: Logo -->
         <div class="flex flex-col w-1/3 justify-center">
             <h1 class="font-bold text-xl tracking-wide bg-gradient-to-r from-teal-400 to-blue-500 bg-clip-text text-transparent flex items-baseline gap-2 leading-none">
                 Smart Riego
-                <span class="text-[10px] font-medium text-slate-500 tracking-normal border border-slate-700 px-1.5 py-0.5 rounded-md">v12.7</span>
+                <span class="text-[10px] font-medium text-slate-500 tracking-normal border border-slate-700 px-1.5 py-0.5 rounded-md">v12.8</span>
             </h1>
             <span id="user-display-name" class="text-[10px] font-medium text-teal-600 dark:text-teal-400 hidden truncate max-w-[120px] mt-1 leading-tight"></span>
         </div>
@@ -92,7 +92,7 @@
         <!-- DASHBOARD VIEW -->
         <section id="view-dashboard" class="p-4 space-y-4 tab-view">
             <!-- Active Status Widget -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+            <div class="telemetry-hero-card rounded-2xl p-5 transition-colors duration-200">
                 <div class="flex justify-between items-center mb-4">
                     <div class="flex items-center gap-2">
                         <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider">Estado Actual</h2>
@@ -182,7 +182,7 @@
             </div>
             
             <!-- Manual Control Widget -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+            <div class="soft-card rounded-2xl shadow-sm transition-colors duration-200">
                 <!-- Header clickeable para colapsar/expandir -->
                 <button id="btn-toggle-manual" class="w-full flex items-center justify-between p-5 focus:outline-none select-none text-left">
                     <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
@@ -238,7 +238,7 @@
             <!-- Global Adjustments -->
             <div class="grid grid-cols-1 gap-4">
                 <!-- Retraso por Lluvia -->
-                <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+                <div class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-2">
                             <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
@@ -253,9 +253,9 @@
                         </button>
                     </div>
                     <div class="grid grid-cols-3 gap-2">
-                        <button class="btn-rain-delay py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" data-days="1">24h</button>
-                        <button class="btn-rain-delay py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" data-days="2">48h</button>
-                        <button class="btn-rain-delay py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors" data-days="3">72h</button>
+                        <button class="btn-rain-delay py-2 bg-slate-200/80 dark:bg-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors border border-slate-300/50 dark:border-transparent active:scale-95" data-days="1">24h</button>
+                        <button class="btn-rain-delay py-2 bg-slate-200/80 dark:bg-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors border border-slate-300/50 dark:border-transparent active:scale-95" data-days="2">48h</button>
+                        <button class="btn-rain-delay py-2 bg-slate-200/80 dark:bg-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors border border-slate-300/50 dark:border-transparent active:scale-95" data-days="3">72h</button>
                     </div>
                     <p id="rain-delay-status" class="text-xs text-blue-600 dark:text-blue-400 mt-3 text-center hidden flex flex-col items-center gap-2">
                         <span>Retraso activo hasta: <strong>--</strong></span>
@@ -276,14 +276,14 @@
             </div>
             
             <!-- Tabs Programas -->
-            <div class="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl space-x-1 mb-4" id="program-tabs">
+            <div class="flex p-1 bg-slate-200/70 dark:bg-slate-900 rounded-xl space-x-1 mb-4" id="program-tabs">
                 <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg" data-prog="A">Prog A</button>
                 <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg" data-prog="B">Prog B</button>
                 <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg" data-prog="C">Prog C</button>
                 <button class="prog-tab flex-1 py-2 text-sm font-medium rounded-lg" data-prog="D">Prog D</button>
             </div>
 
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+            <div class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200">
                 <div class="flex justify-between items-center mb-5">
                     <input type="text" id="prog-name" class="bg-transparent border-b border-slate-300 dark:border-slate-600 text-lg font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-teal-500 w-2/3" value="Riego Césped" maxlength="20">
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -333,7 +333,7 @@
             </button>
 
             <!-- Ajustes por Temporada (Collapsible) -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200 mt-4">
+            <div class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200 mt-4">
                 <div class="flex items-center justify-between cursor-pointer group" id="btn-toggle-seasons">
                     <h2 class="text-sm font-semibold text-slate-555 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
                         <i data-lucide="sun" class="w-4 h-4 text-amber-500 dark:text-amber-400"></i> Ajustes por Temporada
@@ -364,7 +364,7 @@
 
         <!-- HISTORY VIEW -->
         <section id="view-history" class="p-4 space-y-4 tab-view hidden h-full">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 flex flex-col h-full min-h-[400px] transition-colors duration-200">
+            <div class="soft-card rounded-2xl p-5 shadow-sm flex flex-col h-full min-h-[400px] transition-colors duration-200">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
                         <i data-lucide="scroll-text" class="w-4 h-4 text-teal-655 dark:text-teal-400"></i> Caja Negra
@@ -391,7 +391,7 @@
         <section id="view-settings" class="p-4 space-y-4 tab-view hidden">
 
             <!-- Cuenta -->
-            <div id="card-cuenta" class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200 hidden">
+            <div id="card-cuenta" class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200 hidden">
                 <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <i data-lucide="user-circle" class="w-4 h-4 text-teal-500 dark:text-teal-400"></i> Cuenta
                 </h2>
@@ -409,7 +409,7 @@
             </div>
 
             <!-- Appearance / Theme Selector -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+            <div class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200">
                 <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <i data-lucide="palette" class="w-4 h-4 text-teal-655 dark:text-teal-400"></i> Apariencia
                 </h2>
@@ -427,7 +427,7 @@
             </div>
 
             <!-- Asistente BLE -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+            <div class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200">
                 <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <i data-lucide="bluetooth" class="w-4 h-4 text-blue-500 dark:text-blue-400"></i> Vinculación
                 </h2>
@@ -444,7 +444,7 @@
             </div>
 
             <!-- Hardware Config -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+            <div class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
                         <i data-lucide="cpu" class="w-4 h-4 text-purple-500 dark:text-purple-400"></i> Hardware
@@ -456,7 +456,7 @@
                 
                 <div class="mb-4">
                     <label class="block text-xs text-slate-550 dark:text-slate-400 mb-2">Capacidad del Equipo</label>
-                    <div class="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
+                    <div class="flex bg-slate-200/70 dark:bg-slate-900 p-1 rounded-lg">
                         <button class="hw-zones-btn flex-1 py-1.5 rounded-md text-sm font-medium bg-slate-700 text-white" data-val="4">4 Zonas</button>
                         <button class="hw-zones-btn flex-1 py-1.5 rounded-md text-sm font-medium text-slate-400" data-val="8">8 Zonas</button>
                     </div>
@@ -464,7 +464,7 @@
                 
                 <div class="mb-4">
                     <label class="block text-xs text-slate-550 dark:text-slate-400 mb-2">Modo Hidráulico (Transición)</label>
-                    <div class="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
+                    <div class="flex bg-slate-200/70 dark:bg-slate-900 p-1 rounded-lg">
                         <button class="hw-pump-btn flex-1 py-1.5 rounded-md text-sm font-medium bg-slate-700 text-white" data-val="true">Bomba (Overlap)</button>
                         <button class="hw-pump-btn flex-1 py-1.5 rounded-md text-sm font-medium text-slate-400" data-val="false">Red (Pausa)</button>
                     </div>
@@ -490,7 +490,7 @@
             </div>
 
             <!-- Sensor de Lluvia Config -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+            <div class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200">
                 <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <i data-lucide="cloud-rain" class="w-4 h-4 text-sky-500 dark:text-sky-400"></i> Sensor de Lluvia
                 </h2>
@@ -498,7 +498,7 @@
                     <!-- Habilitar/Desactivar Sensor de Lluvia -->
                     <div>
                         <label class="block text-xs text-slate-550 dark:text-slate-400 mb-2">Estado del Sensor (GPIO 4)</label>
-                        <div class="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
+                        <div class="flex bg-slate-200/70 dark:bg-slate-900 p-1 rounded-lg">
                             <button class="rain-active-btn flex-1 py-1.5 rounded-md text-sm font-medium bg-slate-700 text-white" data-val="true">Habilitado</button>
                             <button class="rain-active-btn flex-1 py-1.5 rounded-md text-sm font-medium text-slate-400" data-val="false">Desactivado</button>
                         </div>
@@ -507,7 +507,7 @@
                     <!-- Tipo de Contacto (NA / NC) -->
                     <div id="container-rain-type">
                         <label class="block text-xs text-slate-550 dark:text-slate-400 mb-2">Tipo de Contacto</label>
-                        <div class="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
+                        <div class="flex bg-slate-200/70 dark:bg-slate-900 p-1 rounded-lg">
                             <button class="rain-type-btn flex-1 py-1.5 rounded-md text-sm font-medium bg-slate-700 text-white" data-val="NA">Normal Abierto (NA)</button>
                             <button class="rain-type-btn flex-1 py-1.5 rounded-md text-sm font-medium text-slate-400" data-val="NC">Normal Cerrado (NC)</button>
                         </div>
@@ -531,7 +531,7 @@
             </div>
 
             <!-- WiFi Config -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700/50 transition-colors duration-200">
+            <div class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-sm font-semibold text-slate-550 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
                         <i data-lucide="wifi" class="w-4 h-4 text-emerald-555 dark:text-emerald-400"></i> Red Wi-Fi
@@ -569,7 +569,7 @@
     </main>
 
     <!-- Bottom Navigation -->
-    <nav class="bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 fixed bottom-0 w-full z-20 pb-safe transition-colors duration-200">
+    <nav class="bg-slate-50/95 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 fixed bottom-0 w-full z-20 pb-safe transition-colors duration-200">
         <div class="flex justify-around items-center p-2">
             <button class="nav-btn flex flex-col items-center p-2 text-teal-655 dark:text-teal-400" data-target="view-dashboard">
                 <i data-lucide="layout-dashboard" class="w-6 h-6 mb-1"></i>
@@ -872,7 +872,7 @@
     </div>
 
     <!-- PWA y App Scripts con versión forzada -->
-    <script src="comms.js?v=44"></script>
-    <script src="app.js?v=46"></script>
+    <script src="comms.js?v=47"></script>
+    <script src="app.js?v=47"></script>
 </body>
 </html>

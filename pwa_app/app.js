@@ -2017,11 +2017,11 @@ function applyTheme(mode) {
     document.querySelectorAll('.theme-btn').forEach(btn => {
         const themeVal = btn.getAttribute('data-theme');
         if (themeVal === mode) {
-            btn.classList.remove('border-slate-200', 'dark:border-slate-700', 'text-slate-500', 'dark:text-slate-400', 'bg-slate-55', 'bg-slate-50', 'dark:bg-slate-900');
-            btn.classList.add('border-teal-500', 'text-teal-655', 'dark:text-teal-400', 'bg-teal-50', 'dark:bg-teal-950/30');
+            btn.classList.remove('border-slate-200', 'dark:border-slate-700', 'text-slate-500', 'dark:text-slate-400', 'bg-slate-50', 'dark:bg-slate-900', 'bg-slate-200/70');
+            btn.classList.add('border-teal-500', 'text-white', 'bg-teal-600', 'shadow-md');
         } else {
-            btn.classList.add('border-slate-200', 'dark:border-slate-700', 'text-slate-500', 'dark:text-slate-400', 'bg-slate-50', 'dark:bg-slate-900');
-            btn.classList.remove('border-teal-500', 'text-teal-655', 'dark:text-teal-400', 'bg-teal-50', 'dark:bg-teal-950/30');
+            btn.classList.add('border-slate-200', 'dark:border-slate-700', 'text-slate-600', 'dark:text-slate-400', 'bg-slate-200/70', 'dark:bg-slate-900');
+            btn.classList.remove('border-teal-500', 'text-white', 'bg-teal-600', 'shadow-md');
         }
     });
 }
