@@ -1,8 +1,11 @@
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onRequest } = require("firebase-functions/v2/https");
+const { initializeApp } = require("firebase-admin/app");
+const { getFirestore } = require("firebase-admin/firestore");
+const { getMessaging } = require("firebase-admin/messaging");
 
-admin.initializeApp();
-const db = admin.firestore();
+initializeApp();
+const db = getFirestore();
 
 /**
  * Despacha notificaciones Push Multicast a los propietarios de un regador (chipId),
@@ -98,7 +101,7 @@ async function sendPushToDeviceOwners(chipId, notification, eventType, extraData
     };
 
     // 5. Despacho Multicast vía FCM
-    const response = await admin.messaging().sendEachForMulticast(messagePayload);
+    const response = await getMessaging().sendEachForMulticast(messagePayload);
     console.log(`[FCM] Resultado despacho - Éxitos: ${response.successCount}, Fallos: ${response.failureCount}`);
 
     // 6. Limpieza automática de tokens obsoletos / apps desinstaladas
@@ -134,12 +137,14 @@ function formatearZona(zona) {
 }
 
 /**
- * 1. Trigger Firestore: Disparo ante eventos de alerta en dispositivos/{chipId}/eventos/{eventId}
+ * 1. Trigger Firestore v2: Disparo ante eventos de alerta en dispositivos/{chipId}/eventos/{eventId}
  */
-exports.onDeviceEventCreated = functions.firestore
-  .document("dispositivos/{chipId}/eventos/{eventId}")
-  .onCreate(async (snap, context) => {
-    const chipId = context.params.chipId;
+exports.onDeviceEventCreated = onDocumentCreated(
+  "dispositivos/{chipId}/eventos/{eventId}",
+  async (event) => {
+    const chipId = event.params.chipId;
+    const snap = event.data;
+    if (!snap) return;
     const data = snap.data();
     if (!data) return;
 
@@ -226,15 +231,18 @@ exports.onDeviceEventCreated = functions.firestore
         "general"
       );
     }
-  });
+  }
+);
 
 /**
- * 2. Trigger Firestore: Disparo ante logs en dispositivos/{chipId}/logs/{logId} (compatibilidad directa)
+ * 2. Trigger Firestore v2: Disparo ante logs en dispositivos/{chipId}/logs/{logId} (compatibilidad directa)
  */
-exports.onDeviceLogCreated = functions.firestore
-  .document("dispositivos/{chipId}/logs/{logId}")
-  .onCreate(async (snap, context) => {
-    const chipId = context.params.chipId;
+exports.onDeviceLogCreated = onDocumentCreated(
+  "dispositivos/{chipId}/logs/{logId}",
+  async (event) => {
+    const chipId = event.params.chipId;
+    const snap = event.data;
+    if (!snap) return;
     const logData = snap.data();
     if (!logData) return;
 
@@ -282,12 +290,13 @@ exports.onDeviceLogCreated = functions.firestore
         "pausa_lluvia"
       );
     }
-  });
+  }
+);
 
 /**
- * 3. Webhook HTTP para envío directo de alertas o telemetría
+ * 3. Webhook HTTP v2 para envío directo de alertas o telemetría
  */
-exports.enviarAlertaDirecta = functions.https.onRequest(async (req, res) => {
+exports.enviarAlertaDirecta = onRequest(async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).send("Method Not Allowed");
   }
