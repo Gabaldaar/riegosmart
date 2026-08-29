@@ -1,4 +1,4 @@
-// sw.js - Service Worker Unificado para PWA y Notificaciones Push FCM
+// firebase-messaging-sw.js - Service Worker Unificado para PWA y Notificaciones Push FCM
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
@@ -47,6 +47,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Solo interceptar peticiones locales GET (ignorar POST, Firestore, APIs externas)
   if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
     return;
   }

@@ -266,6 +266,11 @@ async def tarea_reset_emergencia():
                 print("RESET DE EMERGENCIA INICIADO")
                 config_data["token_acceso"] = None
                 await guardar_configuracion()
+                for f_red in ["wifi_config.json", "wifi_config.json.tmp"]:
+                    try:
+                        os.remove(f_red)
+                    except:
+                        pass
                 try:
                     os.remove(sys_log.LOG_FILE)
                 except:
@@ -660,7 +665,7 @@ async def enviar_respuesta_config(origen="ALL"):
 
 async def procesar_comando(cmd_dict):
     """Interfaz RX para MQTT y BLE"""
-    global reinicio_pendiente, _cached_temp
+    global reinicio_pendiente, _cached_temp, reloj_rtc
     gc.collect()
     print(f"[CORE] Procesando comando: {cmd_dict}")
     token_recibido = cmd_dict.get("token")
@@ -741,7 +746,6 @@ async def procesar_comando(cmd_dict):
         try:
             ts = cmd_dict.get("timestamp", 0)
             if ts > 0:
-                global reloj_rtc, _cached_temp
                 if not reloj_rtc:
                     try:
                         p_sda = machine.Pin(21, machine.Pin.IN, machine.Pin.PULL_UP)

@@ -87,10 +87,10 @@ async def conectar_mqtt_async():
 
         if wdt_ref: wdt_ref.feed()
 
-        # Aplicar timeout nativo al socket MQTT
+        # Aplicar timeout nativo al socket MQTT (ampliado a 6.0s para redes débiles/red eléctrica)
         if hasattr(_client, 'sock') and _client.sock:
             try:
-                _client.sock.settimeout(3.0)
+                _client.sock.settimeout(6.0)
             except:
                 pass
 
@@ -278,6 +278,7 @@ async def gestionar_interfaces_network():
     """
     global current_state, wifi_conectado, mqtt_client
     wlan = network.WLAN(network.STA_IF)
+    intentos_fallidos_mqtt = 0
 
     while True:
         tiene_creds = tiene_credenciales_wifi()
@@ -312,10 +313,20 @@ async def gestionar_interfaces_network():
             # Exclusión mutua: apagar BLE antes de encender WiFi
             await ble_service.stop_ble_service()
             wlan.active(True)
+            try:
+                # Maximizar sensibilidad RF y emisión al estar alimentado a 220V/red
+                wlan.config(pm=wlan.PM_NONE)      # Sin ahorro de energía (receptor continuo)
+            except Exception as e_pm:
+                pass
+            try:
+                wlan.config(txpower=20)          # Máxima potencia de transmisión (20 dBm)
+            except Exception as e_tx:
+                pass
             gc.collect()
 
             success = await conectar_wifi_non_blocking(wlan)
             if success:
+                intentos_fallidos_mqtt = 0
                 current_state = STATE_WIFI_ONLINE
             else:
                 print("[NET] Fallo al conectar WiFi. Activando Fallback BLE...")
@@ -329,12 +340,28 @@ async def gestionar_interfaces_network():
                 wifi_conectado = False
                 async with mqtt_lock:
                     mqtt_client = None
+                intentos_fallidos_mqtt = 0
                 current_state = STATE_FALLBACK_BLE
             else:
                 # Mantener conexión MQTT activa
                 if mqtt_client is None:
                     print("[NET] Reintentando conexión MQTT...")
-                    await conectar_mqtt_async()
+                    mqtt_ok = await conectar_mqtt_async()
+                    if mqtt_ok:
+                        intentos_fallidos_mqtt = 0
+                    else:
+                        intentos_fallidos_mqtt += 1
+                        print(f"[NET] Fallo conexión MQTT ({intentos_fallidos_mqtt}/4 en WiFi débil).")
+                        if intentos_fallidos_mqtt >= 4:
+                            print("[NET] WiFi enganchado pero sin datos (MQTT inalcanzable). Desconectando WiFi para Fallback BLE...")
+                            wlan.disconnect()
+                            wifi_conectado = False
+                            async with mqtt_lock:
+                                mqtt_client = None
+                            intentos_fallidos_mqtt = 0
+                            current_state = STATE_FALLBACK_BLE
+                else:
+                    intentos_fallidos_mqtt = 0
 
             # Esperar 5s entre chequeos/reintentos de MQTT para evitar saturar DNS/socket
             await asyncio.sleep(5)

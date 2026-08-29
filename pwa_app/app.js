@@ -12,15 +12,23 @@ const firebaseConfig = {
 
 let db   = null;
 let auth = null;
+let fcmMessaging = null;
 let currentUser = null;
 let firestoreUnsubscribe = null;
 
-// Inicializar Firebase (Auth + Firestore)
+// Inicializar Firebase (Auth + Firestore + Messaging)
 if (typeof firebase !== 'undefined' && firebaseConfig.apiKey !== "TU_API_KEY_AQUI") {
     try {
         firebase.initializeApp(firebaseConfig);
         db   = firebase.firestore();
         auth = firebase.auth();
+        if (typeof firebase.messaging === 'function') {
+            try {
+                fcmMessaging = firebase.messaging();
+            } catch (em) {
+                console.warn("[FCM] Firebase Messaging no disponible:", em);
+            }
+        }
     } catch (e) {
         console.error("Error inicializando Firebase SDK:", e);
     }
@@ -88,6 +96,48 @@ const seasonIconMap = {
     "Invierno": { icon: "snowflake", color: "text-blue-500 dark:text-blue-400" },
     "Primavera": { icon: "sprout", color: "text-emerald-500 dark:text-emerald-400" }
 };
+function normalizeProgramasData(programas) {
+    if (!programas || typeof programas !== 'object') return {};
+    const mapKeys = {
+        "1": "A", "2": "B", "3": "C", "4": "D",
+        "P1": "A", "P2": "B", "P3": "C", "P4": "D",
+        "a": "A", "b": "B", "c": "C", "d": "D"
+    };
+    const norm = {};
+    for (const [pKey, pObj] of Object.entries(programas)) {
+        if (!pObj || typeof pObj !== 'object') continue;
+        const targetPKey = mapKeys[pKey] || pKey;
+        
+        const pObjCloned = JSON.parse(JSON.stringify(pObj));
+        if (pObjCloned.zonas && typeof pObjCloned.zonas === 'object') {
+            const zNorm = {};
+            for (const [zKey, zVal] of Object.entries(pObjCloned.zonas)) {
+                if (!zVal || typeof zVal !== 'object') continue;
+                const zNum = String(zKey).toUpperCase().replace('Z', '');
+                const targetZKey = `Z${zNum}`;
+                
+                const mins = parseInt(zVal.minutos) || 0;
+                if (mins > 0) {
+                    const cMin = parseInt(zVal.cycle_min) || 0;
+                    const sMin = parseInt(zVal.soak_min) || 0;
+                    const hasCycle = Boolean(sMin > 0 && cMin > 0 && cMin < mins);
+                    
+                    zNorm[targetZKey] = {
+                        minutos: mins,
+                        cycle_min: hasCycle ? cMin : 0,
+                        soak_min: hasCycle ? sMin : 0
+                    };
+                }
+            }
+            pObjCloned.zonas = zNorm;
+        } else {
+            pObjCloned.zonas = {};
+        }
+        
+        norm[targetPKey] = pObjCloned;
+    }
+    return norm;
+}
 
 function escucharConfiguracionFirestore(chipId) {
     if (!db) {
@@ -124,7 +174,7 @@ function escucharConfiguracionFirestore(chipId) {
             if (data.ajustes_estacionales) {
                 state.deviceConfig.ajustes_estacionales = data.ajustes_estacionales;
             }
-            state.deviceConfig.programas = data.programas || state.deviceConfig.programas;
+            state.deviceConfig.programas = normalizeProgramasData(data.programas || state.deviceConfig.programas);
             state.deviceConfig.config_version = data.config_version || state.deviceConfig.config_version;
             
             // Sincronizar el retraso por lluvia desde la nube (Firestore usa epoch 1970, la app usa epoch 2000 internamente)
@@ -244,6 +294,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     initSchedulerUI();
     initHelpModals();
     initAuthUI();
+    initNotificacionesPushUI();
 
     // UI inicial con config por defecto (sin esperar auth)
     refreshUIFromConfig();
@@ -328,6 +379,10 @@ async function iniciarSesionApp(user) {
     const settingsName = document.getElementById('settings-user-name');
     if (settingsName) settingsName.textContent = user.displayName || user.email || 'Usuario';
     document.getElementById('card-cuenta')?.classList.remove('hidden');
+
+    // Sincronizar preferencias de Notificaciones Push
+    cargarPreferenciasNotificaciones();
+    actualizarEstadoUIPush();
 
     await iniciarConectarDispositivo();
 }
@@ -473,6 +528,200 @@ function traducirErrorAuth(code) {
         'auth/invalid-credential':     'Email o contraseña incorrectos.',
     };
     return errores[code] || `Error de autenticación: ${code}`;
+}
+
+// ==========================================
+// NOTIFICACIONES PUSH FCM (MULTI-USUARIO)
+// ==========================================
+
+function initNotificacionesPushUI() {
+    document.getElementById('btn-toggle-push')?.addEventListener('click', toggleNotificacionesPush);
+    document.getElementById('btn-test-notification')?.addEventListener('click', probarNotificacionLocal);
+
+    ['pref-riego-completado', 'pref-pausa-lluvia', 'pref-fin-secado'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', guardarPreferenciasNotificaciones);
+    });
+
+    actualizarEstadoUIPush();
+}
+
+function actualizarEstadoUIPush() {
+    const badge = document.getElementById('push-status-badge');
+    const btnText = document.getElementById('btn-toggle-push-text');
+    const btn = document.getElementById('btn-toggle-push');
+
+    if (!('Notification' in window)) {
+        if (badge) {
+            badge.textContent = 'No Soportado';
+            badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-500';
+        }
+        if (btn) btn.disabled = true;
+        return;
+    }
+
+    const permiso = Notification.permission;
+    const tokenRegistrado = !!localStorage.getItem('FCM_TOKEN_CURRENT');
+
+    if (permiso === 'granted' && tokenRegistrado) {
+        if (badge) {
+            badge.textContent = 'Activo';
+            badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20';
+        }
+        if (btnText) btnText.textContent = 'Notificaciones Habilitadas (Sincronizar)';
+        if (btn) btn.className = 'w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold transition-all mb-4 flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 active:scale-98';
+    } else if (permiso === 'denied') {
+        if (badge) {
+            badge.textContent = 'Bloqueado';
+            badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-500/20';
+        }
+        if (btnText) btnText.textContent = 'Permiso Denegado en el Navegador';
+        if (btn) btn.className = 'w-full py-2.5 bg-slate-400 dark:bg-slate-700 text-white rounded-xl text-sm font-semibold transition-all mb-4 flex items-center justify-center gap-2 cursor-not-allowed';
+    } else {
+        if (badge) {
+            badge.textContent = 'Inactivo';
+            badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 border border-amber-500/20';
+        }
+        if (btnText) btnText.textContent = 'Activar Notificaciones en este Móvil';
+        if (btn) btn.className = 'w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-sm font-semibold transition-all mb-4 flex items-center justify-center gap-2 shadow-md shadow-teal-500/20 active:scale-98';
+    }
+}
+
+async function toggleNotificacionesPush() {
+    if (!('Notification' in window)) {
+        showToast("Tu navegador no soporta Web Push. En iOS agrega la app a Inicio.");
+        return;
+    }
+
+    if (!currentUser) {
+        showToast("Debes iniciar sesión para activar las notificaciones.");
+        return;
+    }
+
+    await solicitarPermisoYRegistrarToken();
+}
+
+async function solicitarPermisoYRegistrarToken() {
+    try {
+        const permiso = await Notification.requestPermission();
+        if (permiso !== 'granted') {
+            actualizarEstadoUIPush();
+            showToast("No se otorgó permiso para notificaciones.");
+            return;
+        }
+
+        if (!fcmMessaging && typeof firebase !== 'undefined' && typeof firebase.messaging === 'function') {
+            try { fcmMessaging = firebase.messaging(); } catch (e) {}
+        }
+
+        if (!fcmMessaging) {
+            showToast("FCM no disponible en este dispositivo.");
+            return;
+        }
+
+        const swReg = await navigator.serviceWorker.ready;
+        
+        // Obtener token FCM con el Service Worker registrado
+        const token = await fcmMessaging.getToken({
+            serviceWorkerRegistration: swReg
+        });
+
+        if (token && currentUser && db) {
+            console.log("[FCM] Token registrado con éxito:", token.substring(0, 15) + "...");
+            localStorage.setItem('FCM_TOKEN_CURRENT', token);
+
+            // Guardar token en Firestore: usuarios/{uid}/fcm_tokens/{tokenId}
+            const tokenDocId = token.replace(/[^a-zA-Z0-9]/g, '').substring(0, 32) || 'token_' + Date.now();
+            await db.collection("usuarios").doc(currentUser.uid).collection("fcm_tokens").doc(tokenDocId).set({
+                token: token,
+                userAgent: navigator.userAgent,
+                updatedAt: Date.now(),
+                chipId: state.chipId || null
+            }, { merge: true });
+
+            // Guardar preferencias actuales por defecto
+            await guardarPreferenciasNotificaciones();
+
+            actualizarEstadoUIPush();
+            showToast("¡Notificaciones Push activadas!");
+        } else {
+            showToast("No se pudo obtener el token de notificación.");
+        }
+    } catch (error) {
+        console.error("[FCM] Error solicitando permiso:", error);
+        showToast("Error al activar notificaciones: " + error.message);
+    }
+}
+
+async function guardarPreferenciasNotificaciones() {
+    if (!currentUser || !db) return;
+
+    const prefs = {
+        notificaciones_activas: true,
+        riego_completado: document.getElementById('pref-riego-completado')?.checked ?? true,
+        pausa_lluvia: document.getElementById('pref-pausa-lluvia')?.checked ?? true,
+        fin_secado: document.getElementById('pref-fin-secado')?.checked ?? true,
+        updatedAt: Date.now()
+    };
+
+    try {
+        await db.collection("usuarios").doc(currentUser.uid).collection("config_notificaciones").doc("actual").set(prefs, { merge: true });
+        console.log("[FCM] Preferencias guardadas:", prefs);
+    } catch (e) {
+        console.error("[FCM] Error guardando preferencias:", e);
+    }
+}
+
+async function cargarPreferenciasNotificaciones() {
+    if (!currentUser || !db) return;
+
+    try {
+        const docSnap = await db.collection("usuarios").doc(currentUser.uid).collection("config_notificaciones").doc("actual").get();
+        if (docSnap.exists) {
+            const data = docSnap.data();
+            const chkRiego = document.getElementById('pref-riego-completado');
+            const chkPausa = document.getElementById('pref-pausa-lluvia');
+            const chkSecado = document.getElementById('pref-fin-secado');
+
+            if (chkRiego && data.riego_completado !== undefined) chkRiego.checked = data.riego_completado;
+            if (chkPausa && data.pausa_lluvia !== undefined) chkPausa.checked = data.pausa_lluvia;
+            if (chkSecado && data.fin_secado !== undefined) chkSecado.checked = data.fin_secado;
+        }
+        actualizarEstadoUIPush();
+    } catch (e) {
+        console.warn("[FCM] Error cargando preferencias:", e);
+    }
+}
+
+async function probarNotificacionLocal() {
+    if (!('Notification' in window)) {
+        showToast("Notificaciones no soportadas en este navegador.");
+        return;
+    }
+
+    if (Notification.permission !== 'granted') {
+        const p = await Notification.requestPermission();
+        if (p !== 'granted') {
+            showToast("Permiso de notificación no otorgado.");
+            return;
+        }
+    }
+
+    try {
+        const swReg = await navigator.serviceWorker.ready;
+        if (swReg && swReg.showNotification) {
+            await swReg.showNotification("💧 Smart Riego (Prueba)", {
+                body: "¡Prueba exitosa! Tu teléfono está listo para recibir alertas del regador.",
+                icon: "./icon-512.png",
+                badge: "./favicon.ico",
+                vibrate: [200, 100, 200],
+                tag: "test-alert"
+            });
+            showToast("Notificación de prueba emitida.");
+        }
+    } catch (e) {
+        console.error("[FCM] Error en notificación de prueba:", e);
+        showToast("Error al emitir notificación: " + e.message);
+    }
 }
 
 // ==========================================
@@ -645,6 +894,7 @@ function handleIncomingMessage(msg) {
         const ajustesLocales = state.deviceConfig.ajustes_estacionales;
 
         state.deviceConfig = { ...state.deviceConfig, ...msg.data };
+        state.deviceConfig.programas = normalizeProgramasData(state.deviceConfig.programas);
         
         // Preservar siempre los nombres de zonas locales/Firestore (SSOT) ya que el ESP32 no los almacena
         if (nombresZonasLocales && Object.keys(nombresZonasLocales).length > 0) {
@@ -660,7 +910,7 @@ function handleIncomingMessage(msg) {
             showToast('☁️ Sincronizando config con la placa...');
             // Restaurar datos de la nube (que son los del usuario) en el state
             if (programasLocales && Object.keys(programasLocales).length > 0) {
-                state.deviceConfig.programas = programasLocales;
+                state.deviceConfig.programas = normalizeProgramasData(programasLocales);
             }
             if (ajustesLocales && Array.isArray(ajustesLocales) && ajustesLocales.length > 0) {
                 state.deviceConfig.ajustes_estacionales = ajustesLocales;
@@ -716,6 +966,7 @@ function handleIncomingMessage(msg) {
         } else if (msg.data && typeof msg.data === 'object') {
             Object.assign(state.deviceConfig.programas, msg.data);
         }
+        state.deviceConfig.programas = normalizeProgramasData(state.deviceConfig.programas);
         refreshUIFromConfig();
 
     } else if (msg.tipo === "LOGS") {
@@ -1383,7 +1634,10 @@ function refreshUIFromConfig() {
     }
 
     // 4. Scheduler
-    loadProgramIntoUI(state.activeProgTab);
+    state.deviceConfig.programas = normalizeProgramasData(state.deviceConfig.programas);
+    if (!state.hasUnsavedChanges) {
+        loadProgramIntoUI(state.activeProgTab);
+    }
     
     // 5. Update Connection Header
     if (comms.mode) {
@@ -1764,6 +2018,7 @@ function loadProgramIntoUI(progId) {
         // Si la zona estaba deshabilitada (minutos=0), mostrar 10 min como valor por defecto
         // para cuando el usuario la vuelva a habilitar.
         const displayMins = zData.minutos > 0 ? zData.minutos : 10;
+        const hasCycle = Boolean(zData.soak_min > 0 && zData.cycle_min > 0 && zData.cycle_min < (zData.minutos || Infinity));
 
         const div = document.createElement('div');
         div.className = "bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 transition-all duration-200";
@@ -1792,17 +2047,17 @@ function loadProgramIntoUI(progId) {
                     <span class="text-xs text-slate-500 dark:text-slate-400">min</span>
                 </div>
                 <label class="flex items-center gap-2 text-xs text-slate-550 dark:text-slate-400 cursor-pointer select-none">
-                    <input type="checkbox" class="rounded border-slate-300 dark:border-slate-600 text-teal-600 dark:text-teal-500 bg-white dark:bg-slate-800 z-cycle-check" data-zidx="${i}" ${zData.cycle_min > 0 ? 'checked' : ''}>
+                    <input type="checkbox" class="rounded border-slate-300 dark:border-slate-600 text-teal-600 dark:text-teal-500 bg-white dark:bg-slate-800 z-cycle-check" data-zidx="${i}" ${hasCycle ? 'checked' : ''}>
                     Activar Ciclo y Remojo
                 </label>
-                <div class="z-cycle-opts mt-2 grid grid-cols-2 gap-2 ${zData.cycle_min > 0 ? '' : 'hidden'}">
+                <div class="z-cycle-opts mt-2 grid grid-cols-2 gap-2 ${hasCycle ? '' : 'hidden'}">
                     <div>
                         <span class="text-[10px] text-slate-500 dark:text-slate-400">Ciclo (min)</span>
-                        <input type="number" min="1" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-sm text-slate-800 dark:text-slate-100 z-c-input" data-zidx="${i}" value="${zData.cycle_min || 5}">
+                        <input type="number" min="1" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-sm text-slate-800 dark:text-slate-100 z-c-input" data-zidx="${i}" value="${hasCycle ? zData.cycle_min : 5}">
                     </div>
                     <div>
                         <span class="text-[10px] text-slate-500 dark:text-slate-400">Remojo (min)</span>
-                        <input type="number" min="1" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-sm text-slate-800 dark:text-slate-100 z-s-input" data-zidx="${i}" value="${zData.soak_min || 10}">
+                        <input type="number" min="1" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded p-1 text-sm text-slate-800 dark:text-slate-100 z-s-input" data-zidx="${i}" value="${hasCycle ? zData.soak_min : 10}">
                     </div>
                 </div>
             </div>
@@ -1892,10 +2147,14 @@ function updateTempProgData() {
                 const checked = cycleCheck ? cycleCheck.checked : false;
                 const cInp = document.querySelector(`.z-c-input[data-zidx="${i}"]`);
                 const sInp = document.querySelector(`.z-s-input[data-zidx="${i}"]`);
-                zonas[i] = {
+                
+                const cycleMin = checked ? (parseInt(cInp?.value) || 5) : 0;
+                const soakMin = checked ? (parseInt(sInp?.value) || 10) : 0;
+
+                zonas[`Z${i}`] = {
                     minutos: mins,
-                    cycle_min: checked ? (parseInt(cInp.value)||mins) : mins,
-                    soak_min: checked ? (parseInt(sInp.value)||0) : 0
+                    cycle_min: cycleMin,
+                    soak_min: soakMin
                 };
             }
         }
@@ -2430,6 +2689,7 @@ function sendCmd(obj) {
             
             if (!state.deviceConfig.programas) state.deviceConfig.programas = {};
             state.deviceConfig.programas[obj.prog_id] = obj.prog_data;
+            state.deviceConfig.programas = normalizeProgramasData(state.deviceConfig.programas);
             
             payload.programas = state.deviceConfig.programas;
         } else if (obj.comando === "RAIN_DELAY") {
