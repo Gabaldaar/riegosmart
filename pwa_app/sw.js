@@ -2,26 +2,26 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'riego-pwa-v55';
+const CACHE_NAME = 'riego-pwa-v56';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css',
-  './comms.js',
-  './app.js',
+  './styles.css?v=56',
+  './comms.js?v=56',
+  './app.js?v=56',
   './manifest.json',
   './favicon.ico',
-  './icon-512.png?v=55'
+  './icon-512.png?v=56'
 ];
 
 // === 1. CACHÉ FUERA DE LÍNEA PWA ===
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);
     })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('message', (event) => {
@@ -48,6 +48,24 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
+  // Network-First para index.html para asegurar siempre la versión más reciente
+  if (event.request.mode === 'navigate' || event.request.url.includes('index.html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
     return;
   }
 

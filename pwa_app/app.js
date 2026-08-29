@@ -784,6 +784,14 @@ function cambiarSeccionApp(btn, target) {
     if (target === 'view-history') {
         // requestLogs(); 
     }
+
+    if (target === 'view-settings') {
+        actualizarEstadoUIPush();
+    }
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
     
     // Si ingresamos a programas, seleccionar el programa A por defecto
     if (target === 'view-programs') {
