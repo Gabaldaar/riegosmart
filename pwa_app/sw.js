@@ -1,22 +1,22 @@
-const CACHE_NAME = 'riego-pwa-v54';
+const CACHE_NAME = 'riego-pwa-v60';
 const ASSETS = [
   './index.html',
-  './styles.css',
-  './comms.js',
-  './app.js',
+  './styles.css?v=60',
+  './comms.js?v=60',
+  './app.js?v=60',
   './manifest.json',
   './favicon.ico',
-  './icon-512.png?v=54'
+  './icon-512.png?v=60'
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
         return cache.addAll(ASSETS);
       })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -36,15 +36,32 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Solo interceptar peticiones locales GET (ignorar POST, Firestore, APIs externas)
+  // Solo interceptar peticiones locales GET (ignorar POST, Firestore, APIs externas como Open-Meteo)
   if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
+  // Network-First para index.html para asegurar siempre la versión más reciente
+  if (event.request.mode === 'navigate' || event.request.url.includes('index.html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
     return;
   }
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Si la respuesta es válida, clonarla y guardarla en cache
         if (response && response.status === 200 && response.type === 'basic') {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -54,7 +71,6 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // Si falla la red (offline), buscar en la cache
         return caches.match(event.request);
       })
   );

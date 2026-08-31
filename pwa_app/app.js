@@ -287,6 +287,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     initHelpModals();
     initAuthUI();
 
+    // Inicializar Clima y Presets
+    if (typeof presetsService !== 'undefined') presetsService.init();
+    if (typeof weatherService !== 'undefined') {
+        weatherService.fetchWeather();
+        document.getElementById('btn-refresh-weather')?.addEventListener('click', () => {
+            weatherService.fetchWeather(true);
+            showToast("Clima actualizado.");
+        });
+        document.getElementById('btn-smart-delay-dismiss')?.addEventListener('click', () => {
+            document.getElementById('smart-rain-delay-card')?.classList.add('hidden');
+        });
+        document.getElementById('btn-smart-delay-apply')?.addEventListener('click', () => {
+            sendCmd({ comando: "RAIN_DELAY", dias: 1 });
+            showToast("✓ Riego pausado por 24 horas por lluvia.");
+            document.getElementById('smart-rain-delay-card')?.classList.add('hidden');
+        });
+    }
+
     // UI inicial con config por defecto (sin esperar auth)
     refreshUIFromConfig();
 
@@ -370,6 +388,21 @@ async function iniciarSesionApp(user) {
     const settingsName = document.getElementById('settings-user-name');
     if (settingsName) settingsName.textContent = user.displayName || user.email || 'Usuario';
     document.getElementById('card-cuenta')?.classList.remove('hidden');
+
+    // Cargar ubicación de clima y presets del usuario desde Firestore
+    if (typeof weatherService !== 'undefined' && db) {
+        db.collection('usuarios').doc(user.uid).get().then(doc => {
+            if (doc.exists && doc.data().ubicacion_clima) {
+                const u = doc.data().ubicacion_clima;
+                weatherService.location = { lat: parseFloat(u.lat), lon: parseFloat(u.lon), name: u.name };
+                weatherService.fetchWeather(true);
+            }
+        }).catch(err => console.log("[AUTH] Error leyendo ubicacion:", err));
+    }
+
+    if (typeof presetsService !== 'undefined') {
+        presetsService.cargarPresetsFirestore();
+    }
 
     await iniciarConectarDispositivo();
 }
@@ -573,20 +606,20 @@ function cambiarSeccionApp(btn, target) {
         }
     });
 
-    // Evitar pedir logs automáticamente al entrar para no saturar la conexión
-    if (target === 'view-history') {
-        // requestLogs(); 
-    }
-    
-    // Si ingresamos a programas, seleccionar el programa A por defecto
-    if (target === 'view-programs') {
-        const tabA = document.querySelector('.prog-tab[data-prog="A"]');
-        if (tabA) {
-            const hasChanges = state.hasUnsavedChanges;
-            state.hasUnsavedChanges = false;
-            tabA.click();
-            state.hasUnsavedChanges = hasChanges;
+    if (target === 'view-dashboard') {
+        if (typeof weatherService !== 'undefined') {
+            weatherService.evaluarSugerenciaRetrasoLluvia();
         }
+    }
+
+    if (target === 'view-scheduler') {
+        if (typeof weeklyCalendarService !== 'undefined') {
+            weeklyCalendarService.render();
+        }
+    }
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
     }
 }
 
@@ -1443,6 +1476,9 @@ function refreshUIFromConfig() {
     }
     
     actualizarVisualizacionPestanasProgramas();
+    if (typeof weeklyCalendarService !== 'undefined') {
+        weeklyCalendarService.render();
+    }
 }
 
 // ==========================================
@@ -1629,6 +1665,41 @@ document.getElementById('btn-cancel-rain')?.addEventListener('click', () => {
 // SCHEDULER
 // ==========================================
 function initSchedulerUI() {
+    // Subtabs del Scheduler: Editor | Calendario | Perfiles
+    document.querySelectorAll('.scheduler-subtab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetPanelId = btn.getAttribute('data-target');
+            document.querySelectorAll('.scheduler-subtab-btn').forEach(b => {
+                b.classList.remove('bg-teal-600', 'text-white', 'shadow');
+                b.classList.add('text-slate-600', 'dark:text-slate-400');
+            });
+            btn.classList.add('bg-teal-600', 'text-white', 'shadow');
+            btn.classList.remove('text-slate-600', 'dark:text-slate-400');
+
+            document.querySelectorAll('.scheduler-view-panel').forEach(panel => {
+                if (panel.id === targetPanelId) {
+                    panel.classList.remove('hidden');
+                } else {
+                    panel.classList.add('hidden');
+                }
+            });
+
+            if (targetPanelId === 'scheduler-calendar-view') {
+                if (typeof weeklyCalendarService !== 'undefined') {
+                    weeklyCalendarService.render();
+                }
+            } else if (targetPanelId === 'scheduler-presets-view') {
+                if (typeof presetsService !== 'undefined') {
+                    presetsService.render();
+                }
+            }
+
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                window.lucide.createIcons();
+            }
+        });
+    });
+
     // Tabs de programas
     document.querySelectorAll('.prog-tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -2328,6 +2399,55 @@ function initSettingsUI() {
         }
     });
 
+    // Ubicación y Clima
+    document.getElementById('btn-detect-gps')?.addEventListener('click', () => {
+        if (typeof weatherService !== 'undefined') {
+            weatherService.detectarGPS();
+        }
+    });
+
+    document.getElementById('btn-search-city')?.addEventListener('click', async () => {
+        const query = document.getElementById('input-search-city')?.value;
+        const resultsCont = document.getElementById('city-search-results');
+        if (!resultsCont) return;
+
+        resultsCont.innerHTML = '<div class="text-[11px] text-slate-400 p-2 text-center">Buscando localidades...</div>';
+        resultsCont.classList.remove('hidden');
+
+        if (typeof weatherService !== 'undefined') {
+            const results = await weatherService.buscarCiudad(query);
+            if (results.length === 0) {
+                resultsCont.innerHTML = '<div class="text-[11px] text-slate-400 p-2 text-center">No se encontraron resultados.</div>';
+                return;
+            }
+
+            resultsCont.innerHTML = results.map(res => {
+                const admin = res.admin1 ? `, ${res.admin1}` : '';
+                const pais = res.country ? ` (${res.country})` : '';
+                const nombreCompleto = `${res.name}${admin}${pais}`;
+                const sanitizedName = res.name.replace(/'/g, "\\'");
+                return `
+                    <button type="button" class="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-xs transition flex items-center justify-between border-b border-slate-100 dark:border-slate-800/60 last:border-0" onclick="window.seleccionarCiudadBuscada(${res.latitude}, ${res.longitude}, '${sanitizedName}')">
+                        <span class="font-medium text-slate-700 dark:text-slate-200 truncate">${nombreCompleto}</span>
+                        <span class="text-[10px] text-slate-400 font-mono flex-shrink-0 ml-2">${res.latitude.toFixed(2)}°, ${res.longitude.toFixed(2)}°</span>
+                    </button>
+                `;
+            }).join('');
+        }
+    });
+
+    document.getElementById('settings-smart-delay-toggle')?.addEventListener('change', (e) => {
+        if (typeof weatherService !== 'undefined') {
+            weatherService.smartDelayEnabled = e.target.checked;
+            localStorage.setItem('WEATHER_SMART_DELAY', e.target.checked);
+            if (!e.target.checked) {
+                document.getElementById('smart-rain-delay-card')?.classList.add('hidden');
+            } else {
+                weatherService.evaluarSugerenciaRetrasoLluvia();
+            }
+        }
+    });
+
     document.getElementById('btn-wifi-connect')?.addEventListener('click', async () => {
         if (!state.chipId || !state.token) {
             showGenericModal({
@@ -2732,3 +2852,647 @@ document.getElementById('btn-install-app')?.addEventListener('click', async () =
 document.querySelector('#modal-install button[onclick]')?.addEventListener('click', () => {
     sessionStorage.setItem('installPromptDismissed', 'true');
 });
+
+// ==========================================
+// 🌦️ MÓDULO DE CLIMA Y SMART RAIN DELAY
+// ==========================================
+const weatherService = {
+    data: null,
+    location: {
+        name: localStorage.getItem('WEATHER_LOC_NAME') || 'Buenos Aires',
+        lat: parseFloat(localStorage.getItem('WEATHER_LOC_LAT')) || -34.6037,
+        lon: parseFloat(localStorage.getItem('WEATHER_LOC_LON')) || -58.3816
+    },
+    smartDelayEnabled: localStorage.getItem('WEATHER_SMART_DELAY') !== 'false',
+    lastFetch: 0,
+
+    wmoCodeMap: {
+        0: { desc: "Despejado", icon: "sun" },
+        1: { desc: "Mayormente despejado", icon: "sun-dim" },
+        2: { desc: "Parcialmente nublado", icon: "cloud-sun" },
+        3: { desc: "Nublado", icon: "cloud" },
+        45: { desc: "Niebla", icon: "cloud-fog" },
+        48: { desc: "Niebla con escarcha", icon: "cloud-fog" },
+        51: { desc: "Llovizna ligera", icon: "cloud-drizzle" },
+        53: { desc: "Llovizna moderada", icon: "cloud-drizzle" },
+        55: { desc: "Llovizna densa", icon: "cloud-drizzle" },
+        61: { desc: "Lluvia ligera", icon: "cloud-rain" },
+        63: { desc: "Lluvia moderada", icon: "cloud-rain" },
+        65: { desc: "Lluvia fuerte", icon: "cloud-rain" },
+        71: { desc: "Nieve ligera", icon: "snowflake" },
+        73: { desc: "Nieve moderada", icon: "snowflake" },
+        75: { desc: "Nieve intensa", icon: "snowflake" },
+        80: { desc: "Chubascos ligeros", icon: "cloud-rain" },
+        81: { desc: "Chubascos moderados", icon: "cloud-rain" },
+        82: { desc: "Chubascos violentos", icon: "cloud-lightning" },
+        95: { desc: "Tormenta eléctrica", icon: "cloud-lightning" },
+        96: { desc: "Tormenta con granizo leve", icon: "cloud-lightning" },
+        99: { desc: "Tormenta con granizo fuerte", icon: "cloud-lightning" }
+    },
+
+    getWmoInfo(code) {
+        return this.wmoCodeMap[code] || { desc: "Variable", icon: "cloud" };
+    },
+
+    async fetchWeather(force = false) {
+        const now = Date.now();
+        if (!force && this.data && (now - this.lastFetch < 30 * 60 * 1000)) {
+            this.render();
+            return;
+        }
+
+        try {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${this.location.lat}&longitude=${this.location.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&timezone=auto&forecast_days=3`;
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error("Error HTTP " + resp.status);
+            this.data = await resp.json();
+            this.lastFetch = now;
+            this.render();
+            this.evaluarSugerenciaRetrasoLluvia();
+        } catch (e) {
+            console.warn("[WEATHER] Error obteniendo clima:", e);
+            const descEl = document.getElementById('weather-condition-desc');
+            if (descEl) descEl.textContent = "Clima no disponible";
+        }
+    },
+
+    render() {
+        if (!this.data || !this.data.current) return;
+        const current = this.data.current;
+        const daily = this.data.daily;
+
+        // Badge y ubicación
+        const badge = document.getElementById('weather-location-badge');
+        if (badge) badge.textContent = this.location.name;
+
+        // Settings info
+        const setLocName = document.getElementById('settings-location-name');
+        const setLocCoords = document.getElementById('settings-location-coords');
+        if (setLocName) setLocName.textContent = this.location.name;
+        if (setLocCoords) setLocCoords.textContent = `${this.location.lat.toFixed(4)}°, ${this.location.lon.toFixed(4)}°`;
+
+        // Datos actuales
+        const tempEl = document.getElementById('weather-current-temp');
+        if (tempEl) tempEl.textContent = `${Math.round(current.temperature_2m)}°C`;
+
+        const humEl = document.getElementById('weather-current-humidity');
+        if (humEl) humEl.textContent = `${current.relative_humidity_2m}%`;
+
+        const wmoInfo = this.getWmoInfo(current.weather_code);
+        const descEl = document.getElementById('weather-condition-desc');
+        if (descEl) descEl.textContent = wmoInfo.desc;
+
+        const iconEl = document.getElementById('weather-current-icon');
+        if (iconEl) iconEl.setAttribute('data-lucide', wmoInfo.icon);
+
+        // Renderizar mini-pronóstico 3 días
+        const forecastCont = document.getElementById('weather-forecast-container');
+        if (forecastCont && daily && daily.time) {
+            forecastCont.innerHTML = '';
+            const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+            for (let i = 0; i < Math.min(3, daily.time.length); i++) {
+                const dateObj = new Date(daily.time[i] + 'T00:00:00');
+                const diaNombre = i === 0 ? 'Hoy' : diasSemana[dateObj.getDay()];
+                const dayWmo = this.getWmoInfo(daily.weather_code[i]);
+                const maxT = Math.round(daily.temperature_2m_max[i]);
+                const minT = Math.round(daily.temperature_2m_min[i]);
+                const rainProb = daily.precipitation_probability_max ? daily.precipitation_probability_max[i] : 0;
+                const rainMm = daily.precipitation_sum ? daily.precipitation_sum[i] : 0;
+
+                const dayCard = document.createElement('div');
+                dayCard.className = `p-2 rounded-xl transition ${i === 0 ? 'bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60' : 'bg-slate-50/50 dark:bg-slate-900/40'}`;
+                dayCard.innerHTML = `
+                    <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-0.5">${diaNombre}</p>
+                    <div class="flex justify-center my-1 text-slate-700 dark:text-slate-300">
+                        <i data-lucide="${dayWmo.icon}" class="w-4 h-4"></i>
+                    </div>
+                    <p class="text-[11px] font-bold text-slate-800 dark:text-slate-100 font-mono">${maxT}° / <span class="text-slate-400 font-normal">${minT}°</span></p>
+                    <div class="mt-0.5 flex items-center justify-center gap-0.5 text-[9px] ${rainProb >= 50 || rainMm >= 3 ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-400 dark:text-slate-500'}">
+                        <i data-lucide="droplet" class="w-2.5 h-2.5"></i>
+                        <span>${rainProb}%</span>
+                        ${rainMm > 0 ? `<span class="text-[8px] opacity-80">(${rainMm}mm)</span>` : ''}
+                    </div>
+                `;
+                forecastCont.appendChild(dayCard);
+            }
+        }
+
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons();
+        }
+    },
+
+    evaluarSugerenciaRetrasoLluvia() {
+        if (!this.smartDelayEnabled) return;
+        const banner = document.getElementById('smart-rain-delay-card');
+        if (!banner) return;
+
+        // Si ya hay un retraso por lluvia activo en el dispositivo, no mostrar sugerencia
+        if (state.telemetria && (state.telemetria.retraso_lluvia || state.telemetria.sensor_lluvia_pausa)) {
+            banner.classList.add('hidden');
+            return;
+        }
+
+        if (!this.data || !this.data.daily) return;
+        const daily = this.data.daily;
+
+        let maxRainMm = 0;
+        let maxProb = 0;
+        let diaLluvia = "próximamente";
+
+        for (let i = 0; i < Math.min(2, daily.time.length); i++) {
+            const mm = daily.precipitation_sum ? daily.precipitation_sum[i] : 0;
+            const prob = daily.precipitation_probability_max ? daily.precipitation_probability_max[i] : 0;
+            if (mm > maxRainMm) {
+                maxRainMm = mm;
+                diaLluvia = i === 0 ? "hoy" : "mañana";
+            }
+            if (prob > maxProb) maxProb = prob;
+        }
+
+        if (maxRainMm >= 4 || maxProb >= 70) {
+            const titleEl = document.getElementById('smart-rain-delay-title');
+            const descEl = document.getElementById('smart-rain-delay-desc');
+
+            if (titleEl) titleEl.textContent = `🌧️ Lluvia prevista para ${diaLluvia} (${maxRainMm > 0 ? maxRainMm + ' mm' : maxProb + '% prob.'})`;
+            if (descEl) descEl.textContent = `Se pronostican precipitaciones. ¿Deseas pausar el riego por 24 horas para ahorrar agua?`;
+
+            banner.classList.remove('hidden');
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                window.lucide.createIcons();
+            }
+        } else {
+            banner.classList.add('hidden');
+        }
+    },
+
+    async detectarGPS() {
+        if (!('geolocation' in navigator)) {
+            showToast("Tu navegador no soporta geolocalización.");
+            return;
+        }
+
+        showToast("Detectando ubicación GPS...");
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            
+            let nombreCiudad = `${lat.toFixed(2)}°, ${lon.toFixed(2)}°`;
+            try {
+                const geoResp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10`);
+                if (geoResp.ok) {
+                    const geoData = await geoResp.json();
+                    nombreCiudad = geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.county || nombreCiudad;
+                }
+            } catch (e) {
+                console.log("[WEATHER] No se pudo obtener nombre de ciudad:", e);
+            }
+
+            this.guardarUbicacion(lat, lon, nombreCiudad);
+            showToast(`Ubicación establecida: ${nombreCiudad}`);
+            await this.fetchWeather(true);
+        }, (err) => {
+            console.warn("[GPS] Error:", err);
+            showToast("No se pudo obtener ubicación GPS (permiso denegado).");
+        }, { timeout: 10000 });
+    },
+
+    async buscarCiudad(query) {
+        if (!query || query.trim().length < 2) return [];
+        try {
+            const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query.trim())}&count=5&language=es&format=json`;
+            const resp = await fetch(url);
+            if (!resp.ok) return [];
+            const data = await resp.json();
+            return data.results || [];
+        } catch (e) {
+            console.error("[GEOCODING] Error:", e);
+            return [];
+        }
+    },
+
+    guardarUbicacion(lat, lon, name) {
+        this.location = { lat: parseFloat(lat), lon: parseFloat(lon), name: name };
+        localStorage.setItem('WEATHER_LOC_LAT', lat);
+        localStorage.setItem('WEATHER_LOC_LON', lon);
+        localStorage.setItem('WEATHER_LOC_NAME', name);
+
+        if (currentUser && db) {
+            db.collection('usuarios').doc(currentUser.uid).set({
+                ubicacion_clima: { lat, lon, name, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }
+            }, { merge: true }).catch(err => console.warn("[WEATHER] Error guardando en Firestore:", err));
+        }
+    }
+};
+
+window.seleccionarCiudadBuscada = (lat, lon, name) => {
+    weatherService.guardarUbicacion(lat, lon, name);
+    document.getElementById('city-search-results')?.classList.add('hidden');
+    const inputCity = document.getElementById('input-search-city');
+    if (inputCity) inputCity.value = '';
+    showToast(`Ubicación seleccionada: ${name}`);
+    weatherService.fetchWeather(true);
+};
+
+// ==========================================
+// 📅 MÓDULO DE CALENDARIO SEMANAL
+// ==========================================
+const weeklyCalendarService = {
+    render() {
+        const grid = document.getElementById('weekly-calendar-grid');
+        const summaryTotal = document.getElementById('calendar-summary-total');
+        if (!grid) return;
+
+        grid.innerHTML = '';
+        const diasNombres = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+        const diasIndices = [1, 2, 3, 4, 5, 6, 7];
+
+        const hoy = new Date();
+        const diaHoyJs = hoy.getDay();
+        const diaHoyIndex = diaHoyJs === 0 ? 7 : diaHoyJs;
+
+        const programas = state.deviceConfig.programas || {};
+        const factorEstacional = (state.deviceConfig.ajuste_estacional || 100) / 100;
+        let totalMinutosSemana = 0;
+
+        diasIndices.forEach((diaNum, idx) => {
+            const esHoy = (diaNum === diaHoyIndex);
+            const nombreDia = diasNombres[idx];
+
+            const runsDelDia = [];
+
+            for (const [progKey, prog] of Object.entries(programas)) {
+                if (!prog || !prog.activo) continue;
+
+                const diasProg = prog.dias || [];
+                const correEsteDia = diasProg.includes(diaNum);
+
+                if (correEsteDia && Array.isArray(prog.horarios) && prog.horarios.length > 0) {
+                    let duracionTotalMinProg = 0;
+                    const zonasInfo = [];
+
+                    if (prog.zonas && typeof prog.zonas === 'object') {
+                        for (const [zKey, min] of Object.entries(prog.zonas)) {
+                            const minutosBase = parseInt(min) || 0;
+                            if (minutosBase > 0) {
+                                const minutosAjustados = Math.max(1, Math.round(minutosBase * factorEstacional));
+                                duracionTotalMinProg += minutosAjustados;
+                                zonasInfo.push({
+                                    zona: zKey,
+                                    nombre: obtenerNombreZona(zKey),
+                                    duracion: minutosAjustados
+                                });
+                            }
+                        }
+                    }
+
+                    if (duracionTotalMinProg > 0) {
+                        prog.horarios.forEach(hora => {
+                            if (hora) {
+                                runsDelDia.push({
+                                    progKey: progKey,
+                                    progNombre: prog.nombre || `Programa ${progKey}`,
+                                    horaInicio: hora,
+                                    duracionTotal: duracionTotalMinProg,
+                                    zonas: zonasInfo
+                                });
+                                totalMinutosSemana += duracionTotalMinProg;
+                            }
+                        });
+                    }
+                }
+            }
+
+            runsDelDia.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+
+            const dayCard = document.createElement('div');
+            dayCard.className = `p-3.5 rounded-2xl border transition-all ${
+                esHoy 
+                    ? 'bg-teal-500/10 border-teal-500/40 dark:border-teal-400/40 shadow-sm' 
+                    : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200/80 dark:border-slate-800'
+            }`;
+
+            let contenidoRuns = '';
+            if (runsDelDia.length === 0) {
+                contenidoRuns = `<p class="text-xs text-slate-400 italic py-1">Sin riegos programados</p>`;
+            } else {
+                contenidoRuns = runsDelDia.map(run => {
+                    const zonesBadges = run.zonas.map(z => 
+                        `<span class="px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-slate-700 text-[10px] text-slate-700 dark:text-slate-300 font-medium">${z.nombre}: ${z.duracion}m</span>`
+                    ).join(' ');
+
+                    return `
+                        <div class="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 flex flex-col gap-1.5 mb-2 last:mb-0 shadow-sm">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-5 h-5 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 text-[10px] font-bold flex items-center justify-center">${run.progKey}</span>
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200">${run.progNombre}</span>
+                                </div>
+                                <div class="flex items-center gap-1 text-xs font-mono font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-md border border-teal-500/20">
+                                    <i data-lucide="clock" class="w-3 h-3"></i>
+                                    <span>${run.horaInicio}</span>
+                                    <span class="text-[10px] font-normal text-slate-400">(${run.duracionTotal} min)</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-1 mt-0.5">
+                                ${zonesBadges}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            dayCard.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold uppercase tracking-wider ${esHoy ? 'text-teal-600 dark:text-teal-400' : 'text-slate-700 dark:text-slate-300'}">${nombreDia}</span>
+                        ${esHoy ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-600 text-white shadow-sm">HOY</span>' : ''}
+                    </div>
+                    <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        ${runsDelDia.length > 0 ? `${runsDelDia.reduce((acc, r) => acc + r.duracionTotal, 0)} min total` : '0 min'}
+                    </span>
+                </div>
+                <div class="space-y-1.5">
+                    ${contenidoRuns}
+                </div>
+            `;
+
+            grid.appendChild(dayCard);
+        });
+
+        if (summaryTotal) {
+            summaryTotal.textContent = `${totalMinutosSemana} min / sem`;
+        }
+
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons();
+        }
+    }
+};
+
+// ==========================================
+// 💾 MÓDULO DE PRESETS Y RESPALDO JSON
+// ==========================================
+const presetsService = {
+    presets: [],
+
+    init() {
+        this.cargarPresetsLocales();
+        if (currentUser && db) {
+            this.cargarPresetsFirestore();
+        }
+        this.bindEvents();
+    },
+
+    cargarPresetsLocales() {
+        const data = localStorage.getItem('PRESETS_RIEGO');
+        if (data) {
+            try {
+                this.presets = JSON.parse(data);
+            } catch (e) {
+                this.presets = [];
+            }
+        }
+        this.render();
+    },
+
+    async cargarPresetsFirestore() {
+        if (!currentUser || !db) return;
+        try {
+            const snap = await db.collection('usuarios').doc(currentUser.uid).collection('presets').orderBy('creadoEn', 'desc').get();
+            const firestorePresets = [];
+            snap.forEach(doc => {
+                firestorePresets.push({ id: doc.id, ...doc.data() });
+            });
+            if (firestorePresets.length > 0) {
+                this.presets = firestorePresets;
+                localStorage.setItem('PRESETS_RIEGO', JSON.stringify(this.presets));
+            }
+            this.render();
+        } catch (e) {
+            console.warn("[PRESETS] Error cargando de Firestore:", e);
+        }
+    },
+
+    async guardarPresetActual(nombre) {
+        if (!nombre || !nombre.trim()) {
+            showToast("Ingresá un nombre para el perfil.");
+            return;
+        }
+
+        const nuevoPreset = {
+            id: 'preset_' + Date.now(),
+            nombre: nombre.trim(),
+            creadoEn: Date.now(),
+            programas: JSON.parse(JSON.stringify(state.deviceConfig.programas || {})),
+            ajuste_estacional: state.deviceConfig.ajuste_estacional || 100,
+            ajustes_estacionales: JSON.parse(JSON.stringify(state.deviceConfig.ajustes_estacionales || []))
+        };
+
+        this.presets.unshift(nuevoPreset);
+        localStorage.setItem('PRESETS_RIEGO', JSON.stringify(this.presets));
+        this.render();
+
+        if (currentUser && db) {
+            try {
+                await db.collection('usuarios').doc(currentUser.uid).collection('presets').doc(nuevoPreset.id).set(nuevoPreset);
+            } catch (e) {
+                console.warn("[PRESETS] Error guardando en Firestore:", e);
+            }
+        }
+
+        showToast(`✓ Perfil "${nuevoPreset.nombre}" guardado.`);
+    },
+
+    async aplicarPreset(presetId) {
+        const preset = this.presets.find(p => p.id === presetId);
+        if (!preset) return;
+
+        showGenericModal({
+            title: `Cargar Perfil "${preset.nombre}"`,
+            msg: `¿Deseas aplicar los programas de este perfil al regador? Se actualizarán en el equipo.`,
+            onOk: async () => {
+                state.deviceConfig.programas = JSON.parse(JSON.stringify(preset.programas));
+                if (preset.ajuste_estacional !== undefined) {
+                    state.deviceConfig.ajuste_estacional = preset.ajuste_estacional;
+                }
+                if (preset.ajustes_estacionales) {
+                    state.deviceConfig.ajustes_estacionales = JSON.parse(JSON.stringify(preset.ajustes_estacionales));
+                }
+
+                refreshUIFromConfig();
+                weeklyCalendarService.render();
+
+                await this.sincronizarProgramasAlEquipo();
+                showToast(`✓ Perfil "${preset.nombre}" aplicado.`);
+            }
+        });
+    },
+
+    async eliminarPreset(presetId) {
+        const preset = this.presets.find(p => p.id === presetId);
+        const nombre = preset ? preset.nombre : '';
+
+        showGenericModal({
+            title: `Eliminar Perfil`,
+            msg: `¿Estás seguro de eliminar el perfil "${nombre}"?`,
+            onOk: async () => {
+                this.presets = this.presets.filter(p => p.id !== presetId);
+                localStorage.setItem('PRESETS_RIEGO', JSON.stringify(this.presets));
+                this.render();
+
+                if (currentUser && db) {
+                    try {
+                        await db.collection('usuarios').doc(currentUser.uid).collection('presets').doc(presetId).delete();
+                    } catch (e) {
+                        console.warn("[PRESETS] Error eliminando en Firestore:", e);
+                    }
+                }
+                showToast(`Perfil eliminado.`);
+            }
+        });
+    },
+
+    async sincronizarProgramasAlEquipo() {
+        if (state.deviceConfig.programas) {
+            for (const [pId, pData] of Object.entries(state.deviceConfig.programas)) {
+                sendCmd({
+                    comando: "UPDATE_PROGRAMA",
+                    prog_id: pId,
+                    prog_data: pData
+                });
+                await new Promise(r => setTimeout(r, 150));
+            }
+        }
+        sendCmd({
+            comando: "UPDATE_CONFIG",
+            config: {
+                ajuste_estacional: state.deviceConfig.ajuste_estacional || 100,
+                ajustes_estacionales: state.deviceConfig.ajustes_estacionales || []
+            }
+        });
+    },
+
+    exportarJSON() {
+        const exportData = {
+            version_backup: "1.0",
+            fecha: new Date().toISOString(),
+            chipId: state.chipId,
+            deviceConfig: state.deviceConfig,
+            presets: this.presets
+        };
+
+        const jsonStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const fechaStr = new Date().toISOString().split('T')[0];
+        a.href = url;
+        a.download = `respaldo_riego_smart_${fechaStr}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("✓ Archivo de respaldo exportado.");
+    },
+
+    importarJSON(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (!data.deviceConfig && !data.programas) {
+                    showToast("Formato de archivo inválido.");
+                    return;
+                }
+
+                showGenericModal({
+                    title: "Restaurar Copia de Seguridad",
+                    msg: "¿Deseas cargar y sincronizar esta copia de seguridad en el regador?",
+                    onOk: async () => {
+                        if (data.deviceConfig) {
+                            state.deviceConfig = Object.assign(state.deviceConfig, data.deviceConfig);
+                        } else if (data.programas) {
+                            state.deviceConfig.programas = data.programas;
+                        }
+
+                        if (Array.isArray(data.presets)) {
+                            this.presets = data.presets;
+                            localStorage.setItem('PRESETS_RIEGO', JSON.stringify(this.presets));
+                        }
+
+                        refreshUIFromConfig();
+                        weeklyCalendarService.render();
+                        this.render();
+
+                        await this.sincronizarProgramasAlEquipo();
+                        showToast("✓ Copia de seguridad restaurada correctamente.");
+                    }
+                });
+            } catch (err) {
+                console.error("[IMPORT] Error:", err);
+                showToast("Error al leer el archivo JSON.");
+            }
+        };
+        reader.readAsText(file);
+    },
+
+    render() {
+        const container = document.getElementById('presets-list-container');
+        if (!container) return;
+
+        if (this.presets.length === 0) {
+            container.innerHTML = `<div class="text-xs text-slate-400 text-center py-4">No hay perfiles guardados aún.</div>`;
+            return;
+        }
+
+        container.innerHTML = this.presets.map(preset => {
+            const fecha = new Date(preset.creadoEn).toLocaleDateString();
+            const progsCount = preset.programas ? Object.keys(preset.programas).length : 0;
+
+            return `
+                <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between gap-2 shadow-sm">
+                    <div>
+                        <p class="text-xs font-bold text-slate-800 dark:text-slate-100">${preset.nombre}</p>
+                        <p class="text-[10px] text-slate-400">${fecha} • ${progsCount} programas • Ajuste: ${preset.ajuste_estacional || 100}%</p>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="presetsService.aplicarPreset('${preset.id}')" class="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-semibold transition shadow-sm flex items-center gap-1">
+                            <i data-lucide="play" class="w-3 h-3"></i> Cargar
+                        </button>
+                        <button onclick="presetsService.eliminarPreset('${preset.id}')" class="p-1 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition" title="Eliminar">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons();
+        }
+    },
+
+    bindEvents() {
+        document.getElementById('btn-save-preset')?.addEventListener('click', () => {
+            const input = document.getElementById('input-preset-name');
+            if (input) {
+                this.guardarPresetActual(input.value);
+                input.value = '';
+            }
+        });
+
+        document.getElementById('btn-export-json')?.addEventListener('click', () => {
+            this.exportarJSON();
+        });
+
+        document.getElementById('input-import-json')?.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                this.importarJSON(e.target.files[0]);
+                e.target.value = '';
+            }
+        });
+    }
+};
