@@ -610,6 +610,9 @@ function cambiarSeccionApp(btn, target) {
         if (typeof weatherService !== 'undefined') {
             weatherService.evaluarSugerenciaRetrasoLluvia();
         }
+        if (typeof systemDiagnosticsService !== 'undefined') {
+            systemDiagnosticsService.evaluarEstado();
+        }
     }
 
     if (target === 'view-scheduler') {
@@ -1478,6 +1481,9 @@ function refreshUIFromConfig() {
     actualizarVisualizacionPestanasProgramas();
     if (typeof weeklyCalendarService !== 'undefined') {
         weeklyCalendarService.render();
+    }
+    if (typeof systemDiagnosticsService !== 'undefined') {
+        systemDiagnosticsService.evaluarEstado();
     }
 }
 
@@ -3535,3 +3541,305 @@ const presetsService = {
         });
     }
 };
+
+// ==========================================
+// 🛡️ MÓDULO DE DIAGNÓSTICO Y ALERTAS INTELIGENTES (IN-APP)
+// ==========================================
+const systemDiagnosticsService = {
+    alertas: [],
+    lastNotifTimestamp: 0,
+
+    evaluarEstado() {
+        this.alertas = [];
+        const programas = state.deviceConfig.programas || {};
+        const progsKeys = Object.keys(programas);
+
+        // 1. Verificar si TODOS los programas están desactivados
+        if (progsKeys.length > 0) {
+            const algunoActivo = progsKeys.some(k => {
+                const p = programas[k];
+                return p && (p.activo === true || p.activo === 1 || p.activo === "true");
+            });
+
+            if (!algunoActivo) {
+                this.alertas.push({
+                    id: 'all_programs_disabled',
+                    nivel: 'critico',
+                    icono: 'alert-triangle',
+                    titulo: 'Todos los programas están apagados',
+                    mensaje: 'El regador se encuentra en reposo total y no realizará ningún riego automático.',
+                    accionTexto: 'Activar Prog A',
+                    accionHandler: () => this.activarPrograma('A')
+                });
+            }
+        }
+
+        // 2. Verificar programas activos pero incompletos (sin días, sin horas o con zonas en 0)
+        for (const [pKey, pObj] of Object.entries(programas)) {
+            if (!pObj) continue;
+            const estaActivo = (pObj.activo === true || pObj.activo === 1 || pObj.activo === "true");
+            if (!estaActivo) continue;
+
+            const pNombre = pObj.nombre || `Programa ${pKey}`;
+            const rawDias = pObj.dias_semana || pObj.dias || [];
+            const rawHoras = pObj.horas_arranque || pObj.horarios || pObj.horas || [];
+
+            // Sin días
+            if (!Array.isArray(rawDias) || rawDias.length === 0) {
+                this.alertas.push({
+                    id: `prog_${pKey}_no_days`,
+                    nivel: 'advertencia',
+                    icono: 'calendar-x',
+                    titulo: `${pNombre} sin días asignados`,
+                    mensaje: 'Está activo pero no tiene ningún día de la semana seleccionado.',
+                    accionTexto: 'Configurar Días',
+                    accionHandler: () => this.irAProgramacion(pKey)
+                });
+            }
+
+            // Sin horas
+            if (!Array.isArray(rawHoras) || rawHoras.length === 0) {
+                this.alertas.push({
+                    id: `prog_${pKey}_no_hours`,
+                    nivel: 'advertencia',
+                    icono: 'clock',
+                    titulo: `${pNombre} sin horario de inicio`,
+                    mensaje: 'Está activo pero no tiene configurada ninguna hora de arranque.',
+                    accionTexto: 'Agregar Hora',
+                    accionHandler: () => this.irAProgramacion(pKey)
+                });
+            }
+
+            // Zonas con 0 minutos
+            let totalMins = 0;
+            if (pObj.zonas && typeof pObj.zonas === 'object') {
+                for (const zVal of Object.values(pObj.zonas)) {
+                    if (typeof zVal === 'number') totalMins += zVal;
+                    else if (zVal && typeof zVal === 'object') totalMins += (parseInt(zVal.minutos) || 0);
+                }
+            }
+            if (totalMins === 0) {
+                this.alertas.push({
+                    id: `prog_${pKey}_zero_mins`,
+                    nivel: 'advertencia',
+                    icono: 'droplets',
+                    titulo: `${pNombre} sin tiempo de riego`,
+                    mensaje: 'Está activo pero todas sus zonas tienen 0 minutos asignados.',
+                    accionTexto: 'Asignar Tiempos',
+                    accionHandler: () => this.irAProgramacion(pKey)
+                });
+            }
+        }
+
+        // 3. Verificar ajuste estacional en 0%
+        let porcentajeEst = 100;
+        const temporadasEst = state.deviceConfig.ajustes_estacionales || [];
+        if (temporadasEst.length > 0) {
+            const hoy = new Date();
+            const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+            const dd = String(hoy.getDate()).padStart(2, '0');
+            const mmdd = `${mm}-${dd}`;
+            for (const temp of temporadasEst) {
+                const ini = temp.inicio || '01-01';
+                const fin = temp.fin || '12-31';
+                let enRango = false;
+                if (ini <= fin) enRango = (mmdd >= ini && mmdd <= fin);
+                else enRango = (mmdd >= ini || mmdd <= fin);
+                if (enRango) {
+                    porcentajeEst = temp.porcentaje !== undefined ? temp.porcentaje : 100;
+                    break;
+                }
+            }
+        } else if (state.deviceConfig.ajuste_estacional !== undefined) {
+            porcentajeEst = state.deviceConfig.ajuste_estacional;
+        }
+
+        if (porcentajeEst === 0) {
+            this.alertas.push({
+                id: 'seasonal_adjust_zero',
+                nivel: 'critico',
+                icono: 'sun-dim',
+                titulo: 'Ajuste Estacional en 0%',
+                mensaje: 'El porcentaje de temporada actual está al 0%. Las electroválvulas no se abrirán.',
+                accionTexto: 'Restablecer a 100%',
+                accionHandler: () => this.restablecerAjusteEstacional()
+            });
+        }
+
+        // 4. Verificar retraso por lluvia manual activo
+        if (state.telemetria && state.telemetria.retraso_lluvia) {
+            this.alertas.push({
+                id: 'rain_delay_active',
+                nivel: 'info',
+                icono: 'cloud-rain',
+                titulo: 'Pausa por Retraso de Lluvia activa',
+                mensaje: 'El riego automático está suspendido temporalmente por solicitud de retraso manual.',
+                accionTexto: 'Reanudar Ahora',
+                accionHandler: () => this.reanudarRiego()
+            });
+        }
+
+        // 5. Verificar sensor físico de lluvia en estado húmedo
+        if (state.telemetria && state.telemetria.sensor_lluvia_pausa) {
+            this.alertas.push({
+                id: 'rain_sensor_active',
+                nivel: 'info',
+                icono: 'umbrella',
+                titulo: 'Sensor de Lluvia activado',
+                mensaje: 'El sensor físico detectó lluvia o se encuentra en período de secado.',
+                accionTexto: null,
+                accionHandler: null
+            });
+        }
+
+        this.render();
+        this.emitirNotificacionNavegador();
+    },
+
+    render() {
+        const container = document.getElementById('card-system-diagnostics');
+        if (!container) return;
+
+        if (this.alertas.length === 0) {
+            container.innerHTML = `
+                <div class="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 dark:border-emerald-400/30 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300 transition-all">
+                    <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                            <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                        </div>
+                        <span class="font-medium">Programación del sistema activa y lista</span>
+                    </div>
+                    <span class="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 tracking-wider">OK</span>
+                </div>
+            `;
+        } else {
+            container.innerHTML = this.alertas.map(alerta => {
+                let badgeClass = 'bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200';
+                let iconBg = 'bg-amber-500 text-white';
+                let btnClass = 'bg-amber-600 hover:bg-amber-500 text-white';
+
+                if (alerta.nivel === 'critico') {
+                    badgeClass = 'bg-red-500/10 border-red-500/30 text-red-900 dark:text-red-200';
+                    iconBg = 'bg-red-500 text-white';
+                    btnClass = 'bg-red-600 hover:bg-red-500 text-white';
+                } else if (alerta.nivel === 'info') {
+                    badgeClass = 'bg-blue-500/10 border-blue-500/30 text-blue-900 dark:text-blue-200';
+                    iconBg = 'bg-blue-500 text-white';
+                    btnClass = 'bg-blue-600 hover:bg-blue-500 text-white';
+                }
+
+                return `
+                    <div class="p-3.5 rounded-2xl border ${badgeClass} flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all shadow-sm">
+                        <div class="flex items-start gap-2.5">
+                            <div class="w-7 h-7 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+                                <i data-lucide="${alerta.icono}" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xs font-bold leading-tight">${alerta.titulo}</h4>
+                                <p class="text-[11px] opacity-80 mt-0.5 leading-snug">${alerta.mensaje}</p>
+                            </div>
+                        </div>
+                        ${alerta.accionTexto ? `
+                            <button onclick="systemDiagnosticsService.ejecutarAccion('${alerta.id}')" class="px-3 py-1.5 rounded-xl ${btnClass} text-xs font-bold transition-all shadow flex items-center gap-1 flex-shrink-0 self-end sm:self-center active:scale-95">
+                                <span>${alerta.accionTexto}</span>
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons();
+        }
+    },
+
+    ejecutarAccion(alertaId) {
+        const alerta = this.alertas.find(a => a.id === alertaId);
+        if (alerta && typeof alerta.accionHandler === 'function') {
+            alerta.accionHandler();
+        }
+    },
+
+    activarPrograma(progId) {
+        if (!state.deviceConfig.programas) state.deviceConfig.programas = {};
+        if (!state.deviceConfig.programas[progId]) {
+            state.deviceConfig.programas[progId] = {
+                nombre: `Programa ${progId}`,
+                activo: true,
+                dias_semana: [1, 3, 5],
+                horas_arranque: ["06:00"],
+                zonas: { "Z1": { minutos: 10, cycle_min: 0, soak_min: 0 } }
+            };
+        } else {
+            state.deviceConfig.programas[progId].activo = true;
+        }
+
+        sendCmd({
+            comando: "UPDATE_PROGRAMA",
+            prog_id: progId,
+            prog_data: state.deviceConfig.programas[progId]
+        });
+
+        refreshUIFromConfig();
+        this.evaluarEstado();
+        showToast(`✓ Programa ${progId} activado.`);
+    },
+
+    restablecerAjusteEstacional() {
+        state.deviceConfig.ajuste_estacional = 100;
+        if (Array.isArray(state.deviceConfig.ajustes_estacionales)) {
+            state.deviceConfig.ajustes_estacionales.forEach(t => t.porcentaje = 100);
+        }
+
+        sendCmd({
+            comando: "UPDATE_CONFIG",
+            config: {
+                ajuste_estacional: 100,
+                ajustes_estacionales: state.deviceConfig.ajustes_estacionales
+            }
+        });
+
+        refreshUIFromConfig();
+        this.evaluarEstado();
+        showToast("✓ Ajuste estacional restablecido al 100%.");
+    },
+
+    reanudarRiego() {
+        sendCmd({ comando: "RAIN_DELAY", dias: 0 });
+        if (state.telemetria) state.telemetria.retraso_lluvia = false;
+        this.evaluarEstado();
+        showToast("✓ Riego reanudado.");
+    },
+
+    irAProgramacion(progId) {
+        const navBtn = document.querySelector('.nav-btn[data-target="view-scheduler"]');
+        if (navBtn) navBtn.click();
+        const tabBtn = document.querySelector(`.prog-tab[data-prog="${progId}"]`);
+        if (tabBtn) tabBtn.click();
+    },
+
+    emitirNotificacionNavegador() {
+        if (!('Notification' in window)) return;
+        if (Notification.permission !== 'granted') return;
+
+        const alertasCriticas = this.alertas.filter(a => a.nivel === 'critico' || a.nivel === 'advertencia');
+        if (alertasCriticas.length === 0) return;
+
+        const now = Date.now();
+        if (now - this.lastNotifTimestamp < 15 * 60 * 1000) return;
+
+        this.lastNotifTimestamp = now;
+        const primera = alertasCriticas[0];
+        try {
+            new Notification(`Riego Smart: ${primera.titulo}`, {
+                body: primera.mensaje,
+                icon: './icon-512.png',
+                badge: './favicon.ico'
+            });
+        } catch (e) {
+            console.log("[NOTIF] Falló emisión local:", e);
+        }
+    }
+};
+
