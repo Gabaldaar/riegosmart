@@ -38,13 +38,13 @@
                 registration.update();
             });
             // Also notify user that they are on the latest version
-            window.APP_VERSION = "v14.0";
+            window.APP_VERSION = "v13.2";
         }
     </script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="styles.css?v=56">
+    <link rel="stylesheet" href="styles.css?v=51">
 </head>
 <body class="bg-slate-200/60 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30 transition-colors duration-200">
     <!-- Top Header -->
@@ -56,7 +56,7 @@
             </h1>
             <div class="flex items-center gap-1.5 mt-0.5">
                 <span id="user-display-name" class="text-[9px] font-medium text-teal-600 dark:text-teal-400 hidden truncate max-w-[110px] leading-tight"></span>
-                <span class="text-[9px] font-medium text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 px-1 py-0.2 rounded">v14.0</span>
+                <span class="text-[9px] font-medium text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 px-1 py-0.2 rounded">v13.5</span>
             </div>
         </div>
         
@@ -419,75 +419,6 @@
                 </div>
             </div>
 
-            <!-- Notificaciones Push -->
-            <div id="card-notificaciones" class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200">
-                <div class="flex items-center justify-between mb-3">
-                    <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                        <i data-lucide="bell" class="w-4 h-4 text-teal-500 dark:text-teal-400"></i> Notificaciones Push
-                    </h2>
-                    <span id="push-status-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                        Inactivo
-                    </span>
-                </div>
-
-                <p class="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
-                    Recibí alertas en tiempo real en tu teléfono incluso con la aplicación completamente cerrada.
-                </p>
-
-                <!-- Botón de Habilitación / Permiso -->
-                <button id="btn-toggle-push" class="w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-sm font-semibold transition-all mb-4 flex items-center justify-center gap-2 shadow-md shadow-teal-500/20 active:scale-98">
-                    <i data-lucide="bell-ring" class="w-4 h-4"></i>
-                    <span id="btn-toggle-push-text">Activar Notificaciones en este Móvil</span>
-                </button>
-
-                <!-- Preferencias de Alertas -->
-                <div id="push-preferences-container" class="space-y-3 pt-3 border-t border-slate-200/80 dark:border-slate-800">
-                    <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                        Preferencias de Alertas
-                    </p>
-
-                    <!-- Switch: Riego Completado -->
-                    <label class="flex items-center justify-between cursor-pointer py-1">
-                        <div class="flex items-center gap-2.5">
-                            <i data-lucide="droplets" class="w-4 h-4 text-blue-500 dark:text-blue-400"></i>
-                            <div>
-                                <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">Riego Completado</p>
-                                <p class="text-[10px] text-slate-500 dark:text-slate-400">Programa ejecutado y zonas regadas</p>
-                            </div>
-                        </div>
-                        <input type="checkbox" id="pref-riego-completado" class="w-4 h-4 accent-teal-500 rounded cursor-pointer" checked>
-                    </label>
-
-                    <!-- Switch: Pausa por Lluvia / Secado / Manual -->
-                    <label class="flex items-center justify-between cursor-pointer py-1">
-                        <div class="flex items-center gap-2.5">
-                            <i data-lucide="cloud-rain" class="w-4 h-4 text-sky-500 dark:text-sky-400"></i>
-                            <div>
-                                <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">Pausa por Lluvia y Retraso</p>
-                                <p class="text-[10px] text-slate-500 dark:text-slate-400">Sensor físico, secado y retraso manual</p>
-                            </div>
-                        </div>
-                        <input type="checkbox" id="pref-pausa-lluvia" class="w-4 h-4 accent-teal-500 rounded cursor-pointer" checked>
-                    </label>
-
-                    <!-- Switch: Fin de Secado -->
-                    <label class="flex items-center justify-between cursor-pointer py-1">
-                        <div class="flex items-center gap-2.5">
-                            <i data-lucide="sun" class="w-4 h-4 text-amber-500 dark:text-amber-400"></i>
-                            <div>
-                                <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">Fin de Secado del Sensor</p>
-                                <p class="text-[10px] text-slate-500 dark:text-slate-400">Reactivación operativa del regador</p>
-                            </div>
-                        </div>
-                        <input type="checkbox" id="pref-fin-secado" class="w-4 h-4 accent-teal-500 rounded cursor-pointer" checked>
-                    </label>
-
-                    <!-- Botón Probar Notificación Local -->
-                    <button id="btn-test-notification" class="w-full mt-2 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700">
-                        <i data-lucide="send" class="w-3.5 h-3.5 text-teal-500"></i>
-                        Probar Notificación en este Móvil
-                    </button>
-                </div>
             </div>
 
             <!-- Asistente BLE -->
@@ -792,16 +723,15 @@
         // PWA Service Worker Registration con detección de actualizaciones
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('firebase-messaging-sw.js').then(reg => {
-                    console.log('SW unificado FCM registrado:', reg.scope);
-                    window._swRegistration = reg;
+                navigator.serviceWorker.register('sw.js').then(reg => {
+                    console.log('SW registrado:', reg.scope);
                     
                     // Forzar comprobación de actualización
                     reg.update();
 
                     // Detectar si ya hay un Service Worker esperando
                     if (reg.waiting) {
-                        showUpdateBanner(reg.waiting);
+                        showUpdateBanner();
                     }
 
                     // Escuchar si se encuentra un nuevo Service Worker
@@ -810,7 +740,7 @@
                         if (newWorker) {
                             newWorker.addEventListener('statechange', () => {
                                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    showUpdateBanner(newWorker);
+                                    showUpdateBanner();
                                 }
                             });
                         }
@@ -824,24 +754,18 @@
                 navigator.serviceWorker.addEventListener('controllerchange', () => {
                     if (!refreshing) {
                         refreshing = true;
-                        window.location.reload();
+                        showUpdateBanner();
                     }
                 });
 
                 // Listener para recargar la página al presionar el botón de actualizar
                 document.getElementById('btn-update-reload')?.addEventListener('click', () => {
-                    if (window._waitingWorker) {
-                        window._waitingWorker.postMessage({ type: 'SKIP_WAITING' });
-                    }
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 200);
+                    window.location.reload();
                 });
             });
         }
 
-        function showUpdateBanner(worker) {
-            if (worker) window._waitingWorker = worker;
+        function showUpdateBanner() {
             const banner = document.getElementById('update-banner');
             if (banner) {
                 banner.classList.remove('translate-y-24', 'opacity-0');
@@ -930,7 +854,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
 
     <!-- Banner de Notificación de Actualización -->
     <div id="update-banner" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-teal-600 dark:bg-teal-500 text-white px-5 py-3.5 rounded-2xl shadow-2xl z-50 flex items-center gap-4 border border-teal-500/30 transition-all duration-300 transform translate-y-24 opacity-0">
@@ -944,7 +867,7 @@
     </div>
 
     <!-- PWA y App Scripts con versión forzada -->
-    <script src="comms.js?v=56"></script>
-    <script src="app.js?v=56"></script>
+    <script src="comms.js?v=54"></script>
+    <script src="app.js?v=54"></script>
 </body>
 </html>
