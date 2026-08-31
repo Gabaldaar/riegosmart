@@ -3113,7 +3113,32 @@ const weeklyCalendarService = {
         const diaHoyIndex = diaHoyJs === 0 ? 7 : diaHoyJs;
 
         const programas = state.deviceConfig.programas || {};
-        const factorEstacional = (state.deviceConfig.ajuste_estacional || 100) / 100;
+
+        // Calcular factor estacional según fecha actual o global
+        let factorEstacional = 1.0;
+        const temporadasEst = state.deviceConfig.ajustes_estacionales || [];
+        if (temporadasEst.length > 0) {
+            const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+            const dd = String(hoy.getDate()).padStart(2, '0');
+            const mmdd = `${mm}-${dd}`;
+            for (const temp of temporadasEst) {
+                const ini = temp.inicio || '01-01';
+                const fin = temp.fin || '12-31';
+                let enRango = false;
+                if (ini <= fin) {
+                    enRango = (mmdd >= ini && mmdd <= fin);
+                } else {
+                    enRango = (mmdd >= ini || mmdd <= fin);
+                }
+                if (enRango) {
+                    factorEstacional = (temp.porcentaje || 100) / 100;
+                    break;
+                }
+            }
+        } else if (state.deviceConfig.ajuste_estacional) {
+            factorEstacional = state.deviceConfig.ajuste_estacional / 100;
+        }
+
         let totalMinutosSemana = 0;
 
         diasIndices.forEach((diaNum, idx) => {
@@ -3123,20 +3148,34 @@ const weeklyCalendarService = {
             const runsDelDia = [];
 
             for (const [progKey, prog] of Object.entries(programas)) {
-                if (!prog || !prog.activo) continue;
+                if (!prog) continue;
 
-                const diasProg = prog.dias || [];
+                // Verificar si el programa está activo
+                const estaActivo = (prog.activo === true || prog.activo === 1 || prog.activo === "true");
+                if (!estaActivo) continue;
+
+                // Obtener array de días
+                const rawDias = prog.dias_semana || prog.dias || [];
+                const diasProg = Array.isArray(rawDias) ? rawDias.map(Number) : [];
                 const correEsteDia = diasProg.includes(diaNum);
 
-                if (correEsteDia && Array.isArray(prog.horarios) && prog.horarios.length > 0) {
+                // Obtener array de horas de arranque
+                const horasArranque = prog.horas_arranque || prog.horarios || prog.horas || [];
+
+                if (correEsteDia && Array.isArray(horasArranque) && horasArranque.length > 0) {
                     let duracionTotalMinProg = 0;
                     const zonasInfo = [];
 
                     if (prog.zonas && typeof prog.zonas === 'object') {
-                        for (const [zKey, min] of Object.entries(prog.zonas)) {
-                            const minutosBase = parseInt(min) || 0;
-                            if (minutosBase > 0) {
-                                const minutosAjustados = Math.max(1, Math.round(minutosBase * factorEstacional));
+                        for (const [zKey, zVal] of Object.entries(prog.zonas)) {
+                            let mins = 0;
+                            if (typeof zVal === 'number') {
+                                mins = zVal;
+                            } else if (zVal && typeof zVal === 'object') {
+                                mins = parseInt(zVal.minutos) || 0;
+                            }
+                            if (mins > 0) {
+                                const minutosAjustados = Math.max(1, Math.round(mins * factorEstacional));
                                 duracionTotalMinProg += minutosAjustados;
                                 zonasInfo.push({
                                     zona: zKey,
@@ -3148,11 +3187,11 @@ const weeklyCalendarService = {
                     }
 
                     if (duracionTotalMinProg > 0) {
-                        prog.horarios.forEach(hora => {
+                        horasArranque.forEach(hora => {
                             if (hora) {
                                 runsDelDia.push({
                                     progKey: progKey,
-                                    progNombre: prog.nombre || `Programa ${progKey}`,
+                                    progNombre: prog.nombre || `Prog ${progKey}`,
                                     horaInicio: hora,
                                     duracionTotal: duracionTotalMinProg,
                                     zonas: zonasInfo

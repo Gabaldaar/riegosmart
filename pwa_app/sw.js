@@ -1,12 +1,12 @@
-const CACHE_NAME = 'riego-pwa-v60';
+const CACHE_NAME = 'riego-pwa-v61';
 const ASSETS = [
   './index.html',
-  './styles.css?v=60',
-  './comms.js?v=60',
-  './app.js?v=60',
+  './styles.css?v=61',
+  './comms.js?v=61',
+  './app.js?v=61',
   './manifest.json',
   './favicon.ico',
-  './icon-512.png?v=60'
+  './icon-512.png?v=61'
 ];
 
 self.addEventListener('install', (event) => {
@@ -36,7 +36,6 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Solo interceptar peticiones locales GET (ignorar POST, Firestore, APIs externas como Open-Meteo)
   if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
     return;
   }
