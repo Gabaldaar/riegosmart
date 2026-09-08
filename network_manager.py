@@ -500,7 +500,7 @@ async def _enviar_http_push(evento, extra):
     s = None
     try:
         gc.collect()
-        topic = f"riego_{riego_core.chip_id[:16]}"
+        topic = f"riego_{riego_core.chip_id[:16].lower()}"
         
         # Mapear evento a título, mensaje y tags legibles
         if evento == "fin_prog":
@@ -551,7 +551,7 @@ async def _enviar_http_push(evento, extra):
         )
 
         s.write(req.encode("utf-8") + msg_bytes)
-        print(f"[PUSH_HTTP] Notificación \"{titulo}\" enviada con éxito (puerto 80) a ntfy.sh/{topic}")
+        print(f"[PUSH_HTTP] Notificación enviada a https://ntfy.sh/{topic} (Título: {titulo})")
     except Exception as e:
         print(f"[PUSH_HTTP] Error notificando \"{evento}\":", e)
     finally:
