@@ -4034,9 +4034,9 @@ const fcmNotificationService = {
         
         const chip = (state.chipId || localStorage.getItem('CHIP_ID') || "").trim();
         if (chip) {
-            return `riego_${chip.toLowerCase()}`;
+            return `riego_${chip.slice(-4).toLowerCase()}`;
         }
-        return "riego_704bca27c79c";
+        return "riego_c79c";
     },
 
     actualizarUI() {

@@ -2,12 +2,12 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'riego-pwa-v73';
+const CACHE_NAME = 'riego-pwa-v74';
 const ASSETS = [
   './index.html',
-  './styles.css?v=73',
-  './comms.js?v=73',
-  './app.js?v=73',
+  './styles.css?v=74',
+  './comms.js?v=74',
+  './app.js?v=74',
   './manifest.json',
   './favicon.ico',
   './icon-512.png'

@@ -500,7 +500,7 @@ async def _enviar_http_push(evento, extra):
     s = None
     try:
         gc.collect()
-        topic = f"riego_{riego_core.chip_id.lower()}"
+        topic = f"riego_{riego_core.chip_id[-4:].lower()}"
         
         # Mapear evento a título, mensaje y tags legibles
         if evento == "fin_prog":
