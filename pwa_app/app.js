@@ -404,6 +404,10 @@ async function iniciarSesionApp(user) {
         presetsService.cargarPresetsFirestore();
     }
 
+    if (typeof fcmNotificationService !== 'undefined') {
+        fcmNotificationService.onUserLoggedIn(user);
+    }
+
     await iniciarConectarDispositivo();
 }
 
@@ -2576,6 +2580,11 @@ function initSettingsUI() {
             });
         }
     });
+
+    // Inicializar controles de Notificaciones Push FCM
+    if (typeof fcmNotificationService !== 'undefined') {
+        fcmNotificationService.init();
+    }
 }
 
 function showModalAuth() {
@@ -3842,4 +3851,244 @@ const systemDiagnosticsService = {
         }
     }
 };
+
+// ==========================================
+// 🔔 MÓDULO DE NOTIFICACIONES PUSH (FCM)
+// ==========================================
+const fcmNotificationService = {
+    vapidKey: "BCAZ38Y0ttPHXqKlhLZKrSQz3wifKW3GNoovU5LWmPCkHrjUXBWaLjOiNrtxsr8Mv1CRQtSAqgPwafzBA-oMWqU",
+    messaging: null,
+    currentToken: null,
+    preferences: {
+        notif_activas: false,
+        fin_riego: true,
+        sensor_lluvia: true,
+        fin_secado: true,
+        fallo_corriente: true
+    },
+
+    init() {
+        if (typeof firebase !== 'undefined' && firebase.messaging && firebase.messaging.isSupported()) {
+            try {
+                this.messaging = firebase.messaging();
+            } catch (e) {
+                console.warn("[FCM] Error inicializando messaging:", e);
+            }
+        }
+
+        this.bindEvents();
+        this.actualizarUI();
+    },
+
+    async onUserLoggedIn(user) {
+        if (!user || !db) return;
+        await this.cargarPreferenciasFirestore(user.uid);
+        // Si el usuario ya tiene notificaciones habilitadas y el navegador tiene permiso, refrescar token silenciosamente
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && this.preferences.notif_activas) {
+            this.solicitarPermisoYRegistrarToken(true);
+        }
+    },
+
+    async cargarPreferenciasFirestore(uid) {
+        if (!db || !uid) return;
+        try {
+            const doc = await db.doc(`usuarios/${uid}/config_notificaciones/actual`).get();
+            if (doc.exists) {
+                this.preferences = Object.assign(this.preferences, doc.data());
+            }
+            this.actualizarUI();
+        } catch (e) {
+            console.warn("[FCM] Error cargando preferencias:", e);
+        }
+    },
+
+    async guardarPreferenciasFirestore() {
+        if (!db || !currentUser) return;
+        try {
+            await db.doc(`usuarios/${currentUser.uid}/config_notificaciones/actual`).set(this.preferences, { merge: true });
+        } catch (e) {
+            console.error("[FCM] Error guardando preferencias:", e);
+        }
+    },
+
+    async solicitarPermisoYRegistrarToken(silencioso = false) {
+        if (!('Notification' in window)) {
+            if (!silencioso) showToast("Notificaciones no soportadas en este navegador.");
+            return false;
+        }
+
+        if (!this.messaging) {
+            if (!silencioso) showToast("FCM no disponible en este dispositivo.");
+            return false;
+        }
+
+        try {
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                if (!silencioso) showToast("Permiso de notificaciones denegado.");
+                this.preferences.notif_activas = false;
+                this.actualizarUI();
+                return false;
+            }
+
+            const swReg = await navigator.serviceWorker.ready;
+            const token = await this.messaging.getToken({
+                vapidKey: this.vapidKey,
+                serviceWorkerRegistration: swReg
+            });
+
+            if (token) {
+                this.currentToken = token;
+                this.preferences.notif_activas = true;
+                this.actualizarUI();
+
+                if (currentUser && db) {
+                    const tokenId = token.substring(0, 30).replace(/[^a-zA-Z0-9_-]/g, '_');
+                    await db.doc(`usuarios/${currentUser.uid}/fcm_tokens/${tokenId}`).set({
+                        token: token,
+                        userAgent: navigator.userAgent,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    await this.guardarPreferenciasFirestore();
+                }
+
+                if (!silencioso) showToast("✓ Notificaciones Push activadas.");
+                return true;
+            } else {
+                if (!silencioso) showToast("No se pudo obtener el identificador de notificaciones.");
+                return false;
+            }
+        } catch (error) {
+            console.error("[FCM] Error obteniendo token:", error);
+            if (!silencioso) showToast("Error al activar notificaciones.");
+            return false;
+        }
+    },
+
+    async desactivarNotificaciones() {
+        this.preferences.notif_activas = false;
+        this.actualizarUI();
+
+        if (this.currentToken && currentUser && db) {
+            const tokenId = this.currentToken.substring(0, 30).replace(/[^a-zA-Z0-9_-]/g, '_');
+            try {
+                await db.doc(`usuarios/${currentUser.uid}/fcm_tokens/${tokenId}`).delete();
+            } catch (e) {}
+        }
+
+        await this.guardarPreferenciasFirestore();
+        showToast("Notificaciones Push desactivadas.");
+    },
+
+    async probarNotificacion() {
+        if (!currentUser) {
+            showToast("Debes iniciar sesión para realizar la prueba.");
+            return;
+        }
+
+        if (!this.preferences.notif_activas) {
+            showToast("Primero activa las notificaciones con el interruptor principal.");
+            return;
+        }
+
+        showToast("Enviando notificación de prueba desde la nube...");
+
+        try {
+            const sendTest = firebase.functions().httpsCallable('enviarNotificacionPrueba');
+            const result = await sendTest({ chipId: state.chipId });
+            if (result && result.data && result.data.success) {
+                showToast("✓ ¡Notificación enviada! Debería llegar a tu pantalla.");
+            } else {
+                const swReg = await navigator.serviceWorker.ready;
+                if (swReg && swReg.showNotification) {
+                    await swReg.showNotification("🔔 Smart Riego (Prueba)", {
+                        body: "¡Prueba exitosa! Las notificaciones funcionan en tu teléfono.",
+                        icon: "/icon-512.png",
+                        badge: "/favicon.ico",
+                        vibrate: [200, 100, 200]
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn("[FCM] Error llamando a cloud function de prueba, probando localmente:", e);
+            try {
+                const swReg = await navigator.serviceWorker.ready;
+                if (swReg && swReg.showNotification) {
+                    await swReg.showNotification("🔔 Smart Riego (Prueba)", {
+                        body: "¡Prueba exitosa! Las notificaciones funcionan en tu teléfono.",
+                        icon: "/icon-512.png",
+                        badge: "/favicon.ico",
+                        vibrate: [200, 100, 200]
+                    });
+                    showToast("✓ Notificación local disparada.");
+                }
+            } catch (errLocal) {
+                showToast("No se pudo mostrar la notificación. Revisa permisos del sistema.");
+            }
+        }
+    },
+
+    actualizarUI() {
+        const masterToggle = document.getElementById('push-toggle-master');
+        const optionsCont = document.getElementById('push-options-container');
+        const badge = document.getElementById('push-status-badge');
+
+        const isGranted = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
+        const isActive = Boolean(this.preferences.notif_activas && isGranted);
+
+        if (masterToggle) masterToggle.checked = isActive;
+
+        if (badge) {
+            if (isActive) {
+                badge.textContent = "Activas";
+                badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400";
+            } else {
+                badge.textContent = "Inactivas";
+                badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-500";
+            }
+        }
+
+        if (optionsCont) {
+            if (isActive) optionsCont.classList.remove('hidden');
+            else optionsCont.classList.add('hidden');
+        }
+
+        const chkFinRiego = document.getElementById('push-pref-fin-riego');
+        const chkLluvia = document.getElementById('push-pref-sensor-lluvia');
+        const chkFinSecado = document.getElementById('push-pref-fin-secado');
+        const chkFallo = document.getElementById('push-pref-fallo-corriente');
+
+        if (chkFinRiego) chkFinRiego.checked = this.preferences.fin_riego !== false;
+        if (chkLluvia) chkLluvia.checked = this.preferences.sensor_lluvia !== false;
+        if (chkFinSecado) chkFinSecado.checked = this.preferences.fin_secado !== false;
+        if (chkFallo) chkFallo.checked = this.preferences.fallo_corriente !== false;
+    },
+
+    bindEvents() {
+        document.getElementById('push-toggle-master')?.addEventListener('change', async (e) => {
+            if (e.target.checked) {
+                await this.solicitarPermisoYRegistrarToken(false);
+            } else {
+                await this.desactivarNotificaciones();
+            }
+        });
+
+        const bindPref = (id, key) => {
+            document.getElementById(id)?.addEventListener('change', (e) => {
+                this.preferences[key] = e.target.checked;
+                this.guardarPreferenciasFirestore();
+            });
+        };
+
+        bindPref('push-pref-fin-riego', 'fin_riego');
+        bindPref('push-pref-sensor-lluvia', 'sensor_lluvia');
+        bindPref('push-pref-fin-secado', 'fin_secado');
+        bindPref('push-pref-fallo-corriente', 'fallo_corriente');
+
+        document.getElementById('btn-push-test')?.addEventListener('click', () => {
+            this.probarNotificacion();
+        });
+    }
+};
+
 
