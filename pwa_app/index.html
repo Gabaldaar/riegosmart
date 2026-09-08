@@ -38,13 +38,13 @@
                 registration.update();
             });
             // Also notify user that they are on the latest version
-            window.APP_VERSION = "v70.0";
+            window.APP_VERSION = "v71.0";
         }
     </script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="styles.css?v=70">
+    <link rel="stylesheet" href="styles.css?v=71">
 </head>
 <body class="bg-slate-200/60 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30 transition-colors duration-200">
     <!-- Top Header -->
@@ -56,7 +56,7 @@
             </h1>
             <div class="flex items-center gap-1.5 mt-0.5">
                 <span id="user-display-name" class="text-[9px] font-medium text-teal-600 dark:text-teal-400 hidden truncate max-w-[110px] leading-tight"></span>
-                <span class="text-[9px] font-medium text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 px-1 py-0.2 rounded">v70.0</span>
+                <span class="text-[9px] font-medium text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 px-1 py-0.2 rounded">v71.0</span>
             </div>
         </div>
         
@@ -791,6 +791,11 @@
                         <button id="btn-push-test" class="w-full mt-2 py-2 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
                             <i data-lucide="send" class="w-3.5 h-3.5"></i> Enviar Notificación de Prueba
                         </button>
+
+                        <!-- Botón Canal Instantáneo Móvil -->
+                        <a id="link-ntfy-channel" href="https://ntfy.sh" target="_blank" class="w-full mt-2 py-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
+                            <i data-lucide="smartphone" class="w-3.5 h-3.5"></i> Suscribirse al Canal Móvil del Regador
+                        </a>
                     </div>
                 </div>
             </div>

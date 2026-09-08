@@ -6,7 +6,6 @@ import time
 import json
 import gc
 import usocket as socket
-import ssl
 import uasyncio as asyncio
 import riego_core
 import sys_log
@@ -22,14 +21,13 @@ STATE_WIFI_CONNECTING = 2
 STATE_WIFI_ONLINE     = 3
 STATE_FALLBACK_BLE    = 4
 
-current_state       = STATE_INIT
-wifi_conectado      = False
-mqtt_client         = None
-mqtt_loop_task      = None
-mqtt_lock           = asyncio.Lock()
-cached_mqtt_ip      = None
-cached_webhook_addr = None
-wdt_ref             = None   # Referencia al WDT de main.py para hacer feed() en esperas largas
+current_state  = STATE_INIT
+wifi_conectado = False
+mqtt_client    = None
+mqtt_loop_task = None
+mqtt_lock      = asyncio.Lock()
+cached_mqtt_ip = None
+wdt_ref        = None   # Referencia al WDT de main.py para hacer feed() en esperas largas
 
 # Ventana máxima de Fallback BLE antes de reintentar WiFi.
 # ⚑ El contador se REINICIA mientras haya un cliente BLE activo (ver gestionar_interfaces_network).
@@ -224,14 +222,6 @@ async def conectar_wifi_non_blocking(wlan):
                     print("[NTP] DS3231 sincronizado por NTP.")
             except Exception as e:
                 print("[NTP] Error de sincronización:", e)
-
-            # Pre-resolver DNS de Cloud Functions para ahorrar memoria en runtime
-            try:
-                gc.collect()
-                cached_webhook_addr = socket.getaddrinfo("us-central1-riego-smart-b8487.cloudfunctions.net", 443)[0][-1]
-                print("[WIFI] DNS Cloud Functions pre-resuelto:", cached_webhook_addr)
-            except Exception as e_dns:
-                print("[WIFI] No se pudo pre-resolver DNS webhook:", e_dns)
 
             return True
         await asyncio.sleep_ms(500)
@@ -506,58 +496,69 @@ def disparar_webhook_notificacion(evento, extra=None):
 
 
 async def _enviar_http_push(evento, extra):
-    """Envío HTTP POST asíncrono con bajo consumo de RAM para evitar ENOMEM en MicroPython."""
-    global cached_webhook_addr
-    # Pequeña pausa para permitir que las tareas concurrentes (MQTT/Flash) completen y liberen memoria
-    await asyncio.sleep_ms(500)
-    gc.collect()
-
+    """Envío HTTP POST puro (Puerto 80, sin SSL) a ntfy.sh para garantizar 0% ENOMEM y recepción con app cerrada."""
     s = None
-    ss = None
-    host = "us-central1-riego-smart-b8487.cloudfunctions.net"
-    path = "/reportarEvento"
-
     try:
-        payload = {
-            "chipId": riego_core.chip_id,
-            "evento": evento
-        }
-        payload.update(extra)
-        body = json.dumps(payload)
-
-        # Si no fue pre-resuelto o cambió, resolver con fallback
-        if not cached_webhook_addr:
-            gc.collect()
-            cached_webhook_addr = socket.getaddrinfo(host, 443)[0][-1]
+        gc.collect()
+        topic = f"riego_{riego_core.chip_id[:16]}"
+        
+        # Mapear evento a título, mensaje y tags legibles
+        if evento == "fin_prog":
+            prog = extra.get("prog", "Programa")
+            titulo = "✅ Riego Completado"
+            mensaje = f"El {prog} finalizó su ciclo de riego."
+            tags = "white_check_mark,droplet"
+            prioridad = "default"
+        elif evento == "sensor_lluvia_mojado":
+            titulo = "🌧️ Sensor de Lluvia Activado"
+            mensaje = "El sensor detectó lluvia. Riego pausado automáticamente."
+            tags = "cloud_rain,warning"
+            prioridad = "high"
+        elif evento == "sensor_lluvia_seco":
+            titulo = "☀️ Sensor de Lluvia Despejado"
+            mensaje = "El sensor se ha secado. Sistema listo para regar."
+            tags = "sunny"
+            prioridad = "default"
+        elif evento == "fallo_corriente":
+            titulo = "⚠️ Alerta Eléctrica"
+            mensaje = extra.get("msg", "Cortocircuito o sobrecorriente detectada.")
+            tags = "warning,zap"
+            prioridad = "urgent"
+        else:
+            titulo = "🔔 Alerta de Riego"
+            mensaje = f"Evento: {evento}"
+            tags = "bell"
+            prioridad = "default"
 
         if wdt_ref: wdt_ref.feed()
 
-        # Crear socket TCP
+        # Socket TCP estándar en puerto 80 (consume menos de 1KB de RAM y no requiere mbedTLS)
         s = socket.socket()
-        s.settimeout(5.0)
-        s.connect(cached_webhook_addr)
+        s.settimeout(4.0)
+        addr = socket.getaddrinfo("ntfy.sh", 80)[0][-1]
+        s.connect(addr)
 
-        # Recolección obligatoria de memoria antes del handshake SSL
-        gc.collect()
-        ss = ssl.wrap_socket(s, server_hostname=host)
+        msg_bytes = mensaje.encode("utf-8")
+        req = (
+            f"POST /{topic} HTTP/1.1\r\n"
+            f"Host: ntfy.sh\r\n"
+            f"Title: {titulo}\r\n"
+            f"Priority: {prioridad}\r\n"
+            f"Tags: {tags}\r\n"
+            f"Content-Type: text/plain; charset=utf-8\r\n"
+            f"Content-Length: {len(msg_bytes)}\r\n"
+            f"Connection: close\r\n\r\n"
+        )
 
-        req = (f"POST {path} HTTP/1.1\r\n"
-               f"Host: {host}\r\n"
-               f"Content-Type: application/json\r\n"
-               f"Content-Length: {len(body)}\r\n"
-               f"Connection: close\r\n\r\n{body}")
-
-        ss.write(req.encode())
-        print(f"[PUSH_HTTP] Evento \"{evento}\" enviado exitosamente a la nube.")
+        s.write(req.encode("utf-8") + msg_bytes)
+        print(f"[PUSH_HTTP] Notificación \"{titulo}\" enviada con éxito (puerto 80) a ntfy.sh/{topic}")
     except Exception as e:
-        print(f"[PUSH_HTTP] Error notificando \"{evento}\": {e} (RAM libre: {gc.mem_free()} bytes)")
+        print(f"[PUSH_HTTP] Error notificando \"{evento}\":", e)
     finally:
-        try:
-            if ss:
-                ss.close()
-            elif s:
+        if s:
+            try:
                 s.close()
-        except:
-            pass
+            except:
+                pass
         gc.collect()
 

@@ -4062,6 +4062,13 @@ const fcmNotificationService = {
         if (chkLluvia) chkLluvia.checked = this.preferences.sensor_lluvia !== false;
         if (chkFinSecado) chkFinSecado.checked = this.preferences.fin_secado !== false;
         if (chkFallo) chkFallo.checked = this.preferences.fallo_corriente !== false;
+
+        const ntfyLink = document.getElementById('link-ntfy-channel');
+        if (ntfyLink && state.chipId) {
+            const topic = `riego_${state.chipId.substring(0, 16)}`;
+            ntfyLink.href = `https://ntfy.sh/${topic}`;
+            ntfyLink.title = `Canal: ${topic}`;
+        }
     },
 
     bindEvents() {
