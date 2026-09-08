@@ -6,6 +6,7 @@ import time
 import json
 import gc
 import usocket as socket
+import ssl
 import uasyncio as asyncio
 import riego_core
 import sys_log
@@ -21,13 +22,14 @@ STATE_WIFI_CONNECTING = 2
 STATE_WIFI_ONLINE     = 3
 STATE_FALLBACK_BLE    = 4
 
-current_state  = STATE_INIT
-wifi_conectado = False
-mqtt_client    = None
-mqtt_loop_task = None
-mqtt_lock      = asyncio.Lock()
-cached_mqtt_ip = None
-wdt_ref        = None   # Referencia al WDT de main.py para hacer feed() en esperas largas
+current_state       = STATE_INIT
+wifi_conectado      = False
+mqtt_client         = None
+mqtt_loop_task      = None
+mqtt_lock           = asyncio.Lock()
+cached_mqtt_ip      = None
+cached_webhook_addr = None
+wdt_ref             = None   # Referencia al WDT de main.py para hacer feed() en esperas largas
 
 # Ventana máxima de Fallback BLE antes de reintentar WiFi.
 # ⚑ El contador se REINICIA mientras haya un cliente BLE activo (ver gestionar_interfaces_network).
@@ -222,6 +224,14 @@ async def conectar_wifi_non_blocking(wlan):
                     print("[NTP] DS3231 sincronizado por NTP.")
             except Exception as e:
                 print("[NTP] Error de sincronización:", e)
+
+            # Pre-resolver DNS de Cloud Functions para ahorrar memoria en runtime
+            try:
+                gc.collect()
+                cached_webhook_addr = socket.getaddrinfo("us-central1-riego-smart-b8487.cloudfunctions.net", 443)[0][-1]
+                print("[WIFI] DNS Cloud Functions pre-resuelto:", cached_webhook_addr)
+            except Exception as e_dns:
+                print("[WIFI] No se pudo pre-resolver DNS webhook:", e_dns)
 
             return True
         await asyncio.sleep_ms(500)
@@ -496,15 +506,18 @@ def disparar_webhook_notificacion(evento, extra=None):
 
 
 async def _enviar_http_push(evento, extra):
-    """Envío HTTP POST asíncrono con timeout para no retrasar el microcontrolador."""
+    """Envío HTTP POST asíncrono con bajo consumo de RAM para evitar ENOMEM en MicroPython."""
+    global cached_webhook_addr
+    # Pequeña pausa para permitir que las tareas concurrentes (MQTT/Flash) completen y liberen memoria
+    await asyncio.sleep_ms(500)
+    gc.collect()
+
+    s = None
+    ss = None
+    host = "us-central1-riego-smart-b8487.cloudfunctions.net"
+    path = "/reportarEvento"
+
     try:
-        gc.collect()
-        import usocket as socket
-        import ssl
-
-        host = "us-central1-riego-smart-b8487.cloudfunctions.net"
-        path = "/reportarEvento"
-
         payload = {
             "chipId": riego_core.chip_id,
             "evento": evento
@@ -512,13 +525,21 @@ async def _enviar_http_push(evento, extra):
         payload.update(extra)
         body = json.dumps(payload)
 
+        # Si no fue pre-resuelto o cambió, resolver con fallback
+        if not cached_webhook_addr:
+            gc.collect()
+            cached_webhook_addr = socket.getaddrinfo(host, 443)[0][-1]
+
         if wdt_ref: wdt_ref.feed()
 
-        addr = socket.getaddrinfo(host, 443)[0][-1]
+        # Crear socket TCP
         s = socket.socket()
-        s.settimeout(4.0)
-        s.connect(addr)
-        s = ssl.wrap_socket(s, server_hostname=host)
+        s.settimeout(5.0)
+        s.connect(cached_webhook_addr)
+
+        # Recolección obligatoria de memoria antes del handshake SSL
+        gc.collect()
+        ss = ssl.wrap_socket(s, server_hostname=host)
 
         req = (f"POST {path} HTTP/1.1\r\n"
                f"Host: {host}\r\n"
@@ -526,10 +547,17 @@ async def _enviar_http_push(evento, extra):
                f"Content-Length: {len(body)}\r\n"
                f"Connection: close\r\n\r\n{body}")
 
-        s.write(req.encode())
-        s.close()
-        gc.collect()
-        print(f"[PUSH_HTTP] Evento \"{evento}\" enviado a la nube.")
+        ss.write(req.encode())
+        print(f"[PUSH_HTTP] Evento \"{evento}\" enviado exitosamente a la nube.")
     except Exception as e:
-        print(f"[PUSH_HTTP] Error notificando \"{evento}\":", e)
+        print(f"[PUSH_HTTP] Error notificando \"{evento}\": {e} (RAM libre: {gc.mem_free()} bytes)")
+    finally:
+        try:
+            if ss:
+                ss.close()
+            elif s:
+                s.close()
+        except:
+            pass
+        gc.collect()
 
