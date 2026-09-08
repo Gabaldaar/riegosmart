@@ -4028,20 +4028,15 @@ const fcmNotificationService = {
         }
     },
 
-    async obtenerTopicNtfy() {
-        try {
-            const chip = (state.chipId || localStorage.getItem('CHIP_ID') || "").trim();
-            const token = (state.token || localStorage.getItem('TOKEN') || "").trim();
-            if (chip && token && typeof comms !== 'undefined' && comms.hashSHA256) {
-                const raw = (chip.length >= 4 ? chip.slice(-4) : chip) + token;
-                const h = await comms.hashSHA256(raw);
-                return `riego_${h.substring(0, 12).toLowerCase()}`;
-            }
-            if (chip) {
-                return `riego_${chip.slice(-4).toLowerCase()}`;
-            }
-        } catch(e) {}
-        return "riego_alertas";
+    obtenerTopicNtfy() {
+        const custom = localStorage.getItem('NTFY_TOPIC');
+        if (custom && custom.trim()) return custom.trim();
+        
+        const chip = (state.chipId || localStorage.getItem('CHIP_ID') || "").trim();
+        if (chip) {
+            return `riego_${chip.toLowerCase()}`;
+        }
+        return "riego_704bca27c79c";
     },
 
     actualizarUI() {
@@ -4051,18 +4046,29 @@ const fcmNotificationService = {
             badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400";
         }
 
-        this.obtenerTopicNtfy().then(topic => {
-            const input = document.getElementById('ntfy-topic-input');
-            const link = document.getElementById('link-ntfy-channel');
-            if (input) input.value = topic;
-            if (link) {
-                link.href = `https://ntfy.sh/${topic}`;
-                link.title = `Abrir canal: ${topic}`;
-            }
-        });
+        const topic = this.obtenerTopicNtfy();
+        const input = document.getElementById('ntfy-topic-input');
+        const link = document.getElementById('link-ntfy-channel');
+        if (input && document.activeElement !== input) input.value = topic;
+        if (link) {
+            link.href = `https://ntfy.sh/${topic}`;
+            link.title = `Abrir canal: ${topic}`;
+        }
     },
 
     bindEvents() {
+        const topicInput = document.getElementById('ntfy-topic-input');
+        if (topicInput) {
+            topicInput.addEventListener('input', (e) => {
+                const val = e.target.value.trim();
+                if (val) {
+                    localStorage.setItem('NTFY_TOPIC', val);
+                    const link = document.getElementById('link-ntfy-channel');
+                    if (link) link.href = `https://ntfy.sh/${val}`;
+                }
+            });
+        }
+
         document.getElementById('btn-copy-ntfy-topic')?.addEventListener('click', async () => {
             const topic = document.getElementById('ntfy-topic-input')?.value || "";
             if (!topic) return;

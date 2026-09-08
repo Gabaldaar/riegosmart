@@ -220,6 +220,7 @@ async def enviar_telemetria():
         "tiempo_restante": t_rest,
         "tiempo_total": t_tot,
         "temp": _cached_temp,
+        "mac": chip_id.lower(),
         "timestamp_rain_delay": config_data.get("timestamp_rain_delay", 0),
         "timestamp_sensor_lluvia_clear": config_data.get("timestamp_sensor_lluvia_clear", 0)
     }
