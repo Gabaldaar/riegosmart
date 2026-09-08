@@ -38,13 +38,13 @@
                 registration.update();
             });
             // Also notify user that they are on the latest version
-            window.APP_VERSION = "v71.0";
+            window.APP_VERSION = "v72.0";
         }
     </script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="styles.css?v=71">
+    <link rel="stylesheet" href="styles.css?v=72">
 </head>
 <body class="bg-slate-200/60 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30 transition-colors duration-200">
     <!-- Top Header -->
@@ -56,7 +56,7 @@
             </h1>
             <div class="flex items-center gap-1.5 mt-0.5">
                 <span id="user-display-name" class="text-[9px] font-medium text-teal-600 dark:text-teal-400 hidden truncate max-w-[110px] leading-tight"></span>
-                <span class="text-[9px] font-medium text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 px-1 py-0.2 rounded">v71.0</span>
+                <span class="text-[9px] font-medium text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 px-1 py-0.2 rounded">v72.0</span>
             </div>
         </div>
         
@@ -738,65 +738,53 @@
                 </div>
             </div>
 
-            <!-- Notificaciones Push FCM -->
+            <!-- Notificaciones Push y Alertas Móviles -->
             <div id="card-push-notifications" class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                        <i data-lucide="bell" class="w-4 h-4 text-teal-600 dark:text-teal-400"></i> Notificaciones Push
+                        <i data-lucide="bell" class="w-4 h-4 text-teal-600 dark:text-teal-400"></i> Notificaciones y Alertas
                     </h2>
-                    <span id="push-status-badge" class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">Inactivas</span>
+                    <span id="push-status-badge" class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">Listo</span>
                 </div>
 
                 <div class="space-y-4">
-                    <!-- Toggle Principal -->
-                    <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <!-- Caja de Canal de Alertas Móvil -->
+                    <div class="p-3.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-3">
+                        <div class="flex items-start gap-2.5">
+                            <i data-lucide="smartphone" class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"></i>
+                            <div>
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200">Canal de Alertas Móvil (App Cerrada)</p>
+                                <p class="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                    Recibe avisos de fin de riego, sensor de lluvia o fallas aunque no tengas la app abierta.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Selector y copia de tema -->
                         <div>
-                            <p class="text-xs font-bold text-slate-800 dark:text-slate-200">Activar Avisos en este Teléfono</p>
-                            <p class="text-[10px] text-slate-500 dark:text-slate-400">Recibe alertas con la app cerrada y en segundo plano.</p>
-                        </div>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="push-toggle-master" class="sr-only peer">
-                            <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
-                        </label>
-                    </div>
-
-                    <!-- Opciones de Eventos -->
-                    <div id="push-options-container" class="space-y-2.5 hidden">
-                        <div class="flex items-center justify-between text-xs">
-                            <span class="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-500"></i> Riego Completado
-                            </span>
-                            <input type="checkbox" id="push-pref-fin-riego" checked class="accent-teal-600 w-4 h-4 rounded cursor-pointer">
-                        </div>
-                        <div class="flex items-center justify-between text-xs">
-                            <span class="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                <i data-lucide="cloud-rain" class="w-3.5 h-3.5 text-blue-500"></i> Sensor de Lluvia y Pausas
-                            </span>
-                            <input type="checkbox" id="push-pref-sensor-lluvia" checked class="accent-teal-600 w-4 h-4 rounded cursor-pointer">
-                        </div>
-                        <div class="flex items-center justify-between text-xs">
-                            <span class="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                <i data-lucide="sun" class="w-3.5 h-3.5 text-amber-500"></i> Fin de Secado / Reanudación
-                            </span>
-                            <input type="checkbox" id="push-pref-fin-secado" checked class="accent-teal-600 w-4 h-4 rounded cursor-pointer">
-                        </div>
-                        <div class="flex items-center justify-between text-xs">
-                            <span class="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-red-500"></i> Fallo Eléctrico / Corriente
-                            </span>
-                            <input type="checkbox" id="push-pref-fallo-corriente" checked class="accent-teal-600 w-4 h-4 rounded cursor-pointer">
+                            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Nombre de tu Canal:</label>
+                            <div class="flex items-center gap-2">
+                                <input type="text" id="ntfy-topic-input" readonly value="riego_..." class="flex-1 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800/80 rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-blue-700 dark:text-blue-300 select-all">
+                                <button id="btn-copy-ntfy-topic" title="Copiar nombre de canal" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                                    <i data-lucide="copy" class="w-3.5 h-3.5"></i> <span id="copy-btn-text">Copiar</span>
+                                </button>
+                            </div>
                         </div>
 
-                        <!-- Botón de prueba -->
-                        <button id="btn-push-test" class="w-full mt-2 py-2 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
-                            <i data-lucide="send" class="w-3.5 h-3.5"></i> Enviar Notificación de Prueba
-                        </button>
-
-                        <!-- Botón Canal Instantáneo Móvil -->
-                        <a id="link-ntfy-channel" href="https://ntfy.sh" target="_blank" class="w-full mt-2 py-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
-                            <i data-lucide="smartphone" class="w-3.5 h-3.5"></i> Suscribirse al Canal Móvil del Regador
+                        <!-- Botón directo de apertura -->
+                        <a id="link-ntfy-channel" href="https://ntfy.sh" target="_blank" class="w-full py-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold shadow transition-all flex items-center justify-center gap-1.5 text-center">
+                            <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Abrir y Suscribirse en ntfy.sh
                         </a>
+                        
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 italic text-center">
+                            💡 Al abrir el enlace, presiona <strong>"Suscribirse"</strong> para activar los avisos.
+                        </p>
                     </div>
+
+                    <!-- Botón de prueba local -->
+                    <button id="btn-push-test" class="w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
+                        <i data-lucide="send" class="w-3.5 h-3.5"></i> Probar Notificación en Pantalla
+                    </button>
                 </div>
             </div>
 

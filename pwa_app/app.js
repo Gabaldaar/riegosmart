@@ -4028,69 +4028,61 @@ const fcmNotificationService = {
         }
     },
 
-    actualizarUI() {
-        const masterToggle = document.getElementById('push-toggle-master');
-        const optionsCont = document.getElementById('push-options-container');
-        const badge = document.getElementById('push-status-badge');
-
-        const isGranted = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
-        const isActive = Boolean(this.preferences.notif_activas && isGranted);
-
-        if (masterToggle) masterToggle.checked = isActive;
-
-        if (badge) {
-            if (isActive) {
-                badge.textContent = "Activas";
-                badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400";
-            } else {
-                badge.textContent = "Inactivas";
-                badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-500";
+    async obtenerTopicNtfy() {
+        try {
+            const chip = (state.chipId || localStorage.getItem('CHIP_ID') || "").trim();
+            const token = (state.token || localStorage.getItem('TOKEN') || "").trim();
+            if (chip && token && typeof comms !== 'undefined' && comms.hashSHA256) {
+                const raw = (chip.length >= 4 ? chip.slice(-4) : chip) + token;
+                const h = await comms.hashSHA256(raw);
+                return `riego_${h.substring(0, 12).toLowerCase()}`;
             }
+            if (chip) {
+                return `riego_${chip.slice(-4).toLowerCase()}`;
+            }
+        } catch(e) {}
+        return "riego_alertas";
+    },
+
+    actualizarUI() {
+        const badge = document.getElementById('push-status-badge');
+        if (badge) {
+            badge.textContent = "Listo";
+            badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400";
         }
 
-        if (optionsCont) {
-            if (isActive) optionsCont.classList.remove('hidden');
-            else optionsCont.classList.add('hidden');
-        }
-
-        const chkFinRiego = document.getElementById('push-pref-fin-riego');
-        const chkLluvia = document.getElementById('push-pref-sensor-lluvia');
-        const chkFinSecado = document.getElementById('push-pref-fin-secado');
-        const chkFallo = document.getElementById('push-pref-fallo-corriente');
-
-        if (chkFinRiego) chkFinRiego.checked = this.preferences.fin_riego !== false;
-        if (chkLluvia) chkLluvia.checked = this.preferences.sensor_lluvia !== false;
-        if (chkFinSecado) chkFinSecado.checked = this.preferences.fin_secado !== false;
-        if (chkFallo) chkFallo.checked = this.preferences.fallo_corriente !== false;
-
-        const ntfyLink = document.getElementById('link-ntfy-channel');
-        if (ntfyLink && state.chipId) {
-            const topic = `riego_${state.chipId.substring(0, 16)}`;
-            ntfyLink.href = `https://ntfy.sh/${topic}`;
-            ntfyLink.title = `Canal: ${topic}`;
-        }
+        this.obtenerTopicNtfy().then(topic => {
+            const input = document.getElementById('ntfy-topic-input');
+            const link = document.getElementById('link-ntfy-channel');
+            if (input) input.value = topic;
+            if (link) {
+                link.href = `https://ntfy.sh/${topic}`;
+                link.title = `Abrir canal: ${topic}`;
+            }
+        });
     },
 
     bindEvents() {
-        document.getElementById('push-toggle-master')?.addEventListener('change', async (e) => {
-            if (e.target.checked) {
-                await this.solicitarPermisoYRegistrarToken(false);
-            } else {
-                await this.desactivarNotificaciones();
+        document.getElementById('btn-copy-ntfy-topic')?.addEventListener('click', async () => {
+            const topic = document.getElementById('ntfy-topic-input')?.value || "";
+            if (!topic) return;
+            try {
+                await navigator.clipboard.writeText(topic);
+                const btnText = document.getElementById('copy-btn-text');
+                if (btnText) {
+                    btnText.textContent = "¡Copiado!";
+                    setTimeout(() => { btnText.textContent = "Copiar"; }, 2000);
+                }
+                showToast("✓ Canal copiado: " + topic);
+            } catch (err) {
+                const input = document.getElementById('ntfy-topic-input');
+                if (input) {
+                    input.select();
+                    document.execCommand('copy');
+                    showToast("✓ Canal copiado: " + topic);
+                }
             }
         });
-
-        const bindPref = (id, key) => {
-            document.getElementById(id)?.addEventListener('change', (e) => {
-                this.preferences[key] = e.target.checked;
-                this.guardarPreferenciasFirestore();
-            });
-        };
-
-        bindPref('push-pref-fin-riego', 'fin_riego');
-        bindPref('push-pref-sensor-lluvia', 'sensor_lluvia');
-        bindPref('push-pref-fin-secado', 'fin_secado');
-        bindPref('push-pref-fallo-corriente', 'fallo_corriente');
 
         document.getElementById('btn-push-test')?.addEventListener('click', () => {
             this.probarNotificacion();
