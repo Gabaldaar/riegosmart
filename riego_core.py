@@ -251,6 +251,11 @@ async def tarea_monitoreo_corriente():
                 # Si falla forzamos FALLO_CORRIENTE
                 estado_riego = "FALLO_CORRIENTE"
                 await enviar_telemetria()
+                try:
+                    import network_manager
+                    network_manager.disparar_webhook_notificacion("fallo_corriente", {"msg": "Fallo corriente. Corto detectado."})
+                except:
+                    pass
                 await asyncio.sleep(5) 
         else:
             ventanas_alto = 0
@@ -469,8 +474,14 @@ async def ejecutar_riego():
             apagar_todo()
             estado_riego = "IDLE"
             telemetria_extra = {}
-            await sys_log.log_event({"tipo": "fin_prog", "prog": programa_activo.get("nombre", "Manual")})
+            nom_prog = programa_activo.get("nombre", "Manual")
+            await sys_log.log_event({"tipo": "fin_prog", "prog": nom_prog})
             await enviar_telemetria()
+            try:
+                import network_manager
+                network_manager.disparar_webhook_notificacion("fin_prog", {"prog": nom_prog})
+            except:
+                pass
             
             # Ejecutar reinicio diferido seguro si fue programado
             if reinicio_pendiente:
@@ -603,6 +614,11 @@ async def tarea_monitoreo_lluvia():
                             abort_event.set()
                         # Forzar envío de telemetría para actualizar la interfaz
                         await enviar_telemetria()
+                        try:
+                            import network_manager
+                            network_manager.disparar_webhook_notificacion("sensor_lluvia_mojado")
+                        except:
+                            pass
                     else:
                         print("[RAIN] Sensor de lluvia despejado/seco.")
                         delay_horas = config_data.get("sensor_lluvia_delay_horas", 0)
@@ -616,6 +632,11 @@ async def tarea_monitoreo_lluvia():
 
                         await guardar_configuracion()
                         await enviar_telemetria()
+                        try:
+                            import network_manager
+                            network_manager.disparar_webhook_notificacion("sensor_lluvia_seco")
+                        except:
+                            pass
         except Exception as e:
             print("[RAIN] Error en tarea_monitoreo_lluvia:", e)
 

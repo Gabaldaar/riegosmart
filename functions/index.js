@@ -265,3 +265,49 @@ exports.enviarNotificacionPrueba = functions.https.onCall(async (data, context) 
     failureCount: response.failureCount
   };
 });
+
+/**
+ * HTTPS Webhook: Recibe eventos directos desde el ESP32 por WiFi
+ */
+exports.reportarEvento = functions.https.onRequest(async (req, res) => {
+  try {
+    const data = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || req.query || {});
+    const chipId = data.chipId;
+    const evento = data.evento;
+    const prog = data.prog || "Programa";
+    const msg = data.msg || "";
+
+    if (!chipId || !evento) {
+      return res.status(400).json({ error: "Faltan parámetros chipId o evento" });
+    }
+
+    console.log(`[HTTP_WEBHOOK] Recibido evento "${evento}" para chipId: ${chipId}`);
+
+    if (evento === "fin_prog") {
+      await sendPushToDeviceOwners(chipId, {
+        title: "✅ Riego Completado",
+        body: `El ${prog} finalizó su ciclo de riego con éxito.`
+      }, "fin_riego");
+    } else if (evento === "sensor_lluvia_mojado") {
+      await sendPushToDeviceOwners(chipId, {
+        title: "🌧️ Sensor de Lluvia Activado",
+        body: "El sensor detectó lluvia. El riego se ha pausado automáticamente."
+      }, "sensor_lluvia");
+    } else if (evento === "sensor_lluvia_seco") {
+      await sendPushToDeviceOwners(chipId, {
+        title: "☀️ Sensor de Lluvia Seco",
+        body: "El sensor se ha secado por completo. El riego automático vuelve a estar activo."
+      }, "fin_secado");
+    } else if (evento === "fallo_corriente") {
+      await sendPushToDeviceOwners(chipId, {
+        title: "⚠️ Alerta Eléctrica",
+        body: msg || "Se detectó sobrecorriente o cortocircuito en las electroválvulas."
+      }, "fallo_corriente");
+    }
+
+    return res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("[HTTP_WEBHOOK] Error procesando evento:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});

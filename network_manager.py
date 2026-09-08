@@ -479,3 +479,57 @@ async def tarea_tx_queue():
         except Exception as e:
             print("[NET_TX] Error general en tarea_tx_queue:", e)
             await asyncio.sleep_ms(100)
+
+
+# ======================================================================
+# WEBHOOK DIRECTO A CLOUD FUNCTIONS (NOTIFICACIONES PUSH PWA CERRADA)
+# ======================================================================
+
+def disparar_webhook_notificacion(evento, extra=None):
+    """Lanza una tarea asíncrona no bloqueante para notificar a Cloud Functions."""
+    if not wifi_conectado:
+        return
+    try:
+        asyncio.create_task(_enviar_http_push(evento, extra or {}))
+    except Exception as e:
+        print("[PUSH_HTTP] Error creando tarea:", e)
+
+
+async def _enviar_http_push(evento, extra):
+    """Envío HTTP POST asíncrono con timeout para no retrasar el microcontrolador."""
+    try:
+        gc.collect()
+        import usocket as socket
+        import ssl
+
+        host = "us-central1-riego-smart-b8487.cloudfunctions.net"
+        path = "/reportarEvento"
+
+        payload = {
+            "chipId": riego_core.chip_id,
+            "evento": evento
+        }
+        payload.update(extra)
+        body = json.dumps(payload)
+
+        if wdt_ref: wdt_ref.feed()
+
+        addr = socket.getaddrinfo(host, 443)[0][-1]
+        s = socket.socket()
+        s.settimeout(4.0)
+        s.connect(addr)
+        s = ssl.wrap_socket(s, server_hostname=host)
+
+        req = (f"POST {path} HTTP/1.1\r\n"
+               f"Host: {host}\r\n"
+               f"Content-Type: application/json\r\n"
+               f"Content-Length: {len(body)}\r\n"
+               f"Connection: close\r\n\r\n{body}")
+
+        s.write(req.encode())
+        s.close()
+        gc.collect()
+        print(f"[PUSH_HTTP] Evento \"{evento}\" enviado a la nube.")
+    except Exception as e:
+        print(f"[PUSH_HTTP] Error notificando \"{evento}\":", e)
+
