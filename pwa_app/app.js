@@ -249,12 +249,19 @@ function sincronizarConfigTecnicaAFirestore(nuevaConfigParcial) {
     };
     
     console.log("[FIRESTORE] Subiendo cambios a la nube...", payload);
-    db.collection("dispositivos").doc(state.chipId).set(payload, { merge: true })
+    // Usar update() para reemplazar campos completos de primer nivel (como programas o zonas)
+    // sin que Firestore haga merge recursivo de subclaves que fueron desactivadas/eliminadas.
+    db.collection("dispositivos").doc(state.chipId).update(payload)
         .then(() => {
             console.log("[FIRESTORE] Subida a Firestore completada.");
         })
         .catch(err => {
-            console.error("[FIRESTORE] Error subiendo cambios a Firestore:", err);
+            if (err && (err.code === 'not-found' || (err.message && err.message.includes('No document to update')))) {
+                db.collection("dispositivos").doc(state.chipId).set(payload)
+                    .catch(e => console.error("[FIRESTORE] Error creando doc en Firestore:", e));
+            } else {
+                console.error("[FIRESTORE] Error subiendo cambios a Firestore:", err);
+            }
         });
 }
 
