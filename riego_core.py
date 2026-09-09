@@ -62,15 +62,32 @@ def obtener_nombres_zonas_activas(prog):
     nombres = []
     for z in zonas_keys:
         num = str(obtener_num_zona(z))
-        nom = (
+        candidatos = [
+            nombres_dict.get(f"Z{num}"),
+            nombres_dict.get(f"z{num}"),
+            nombres_dict.get(str(z)),
             nombres_dict.get(num)
-            or nombres_dict.get(f"Z{num}")
-            or nombres_dict.get(f"z{num}")
-            or nombres_dict.get(str(z))
-            or f"Zona {num}"
-        )
-        if nom not in nombres:
-            nombres.append(nom)
+        ]
+        
+        # Buscar el primer candidato que no sea el genérico "Zona X"
+        nom_elegido = None
+        for cand in candidatos:
+            if cand and isinstance(cand, str) and cand.strip() and cand.strip().lower() != f"zona {num}":
+                nom_elegido = cand.strip()
+                break
+                
+        if not nom_elegido:
+            for cand in candidatos:
+                if cand and isinstance(cand, str) and cand.strip():
+                    nom_elegido = cand.strip()
+                    break
+                    
+        if not nom_elegido:
+            nom_elegido = f"Zona {num}"
+            
+        if nom_elegido not in nombres:
+            nombres.append(nom_elegido)
+
     if len(nombres) == 0:
         return "las zonas"
     elif len(nombres) == 1:
@@ -958,6 +975,12 @@ async def procesar_comando(cmd_dict):
         await enviar_telemetria()
             
     elif cmd == "RIEGO_MANUAL":
+        if "nombres_zonas" in cmd_dict and isinstance(cmd_dict["nombres_zonas"], dict):
+            if "nombres_zonas" not in config_data:
+                config_data["nombres_zonas"] = {}
+            for zk, zv in cmd_dict["nombres_zonas"].items():
+                config_data["nombres_zonas"][zk] = zv
+            await guardar_configuracion()
         prog = {
             "nombre": "Manual",
             "zonas": cmd_dict.get("zonas", {})
@@ -968,6 +991,12 @@ async def procesar_comando(cmd_dict):
         await cola_programas.put(prog)
         
     elif cmd == "RIEGO_PROGRAMA":
+        if "nombres_zonas" in cmd_dict and isinstance(cmd_dict["nombres_zonas"], dict):
+            if "nombres_zonas" not in config_data:
+                config_data["nombres_zonas"] = {}
+            for zk, zv in cmd_dict["nombres_zonas"].items():
+                config_data["nombres_zonas"][zk] = zv
+            await guardar_configuracion()
         prog_id = cmd_dict.get("prog_id")
         if prog_id and "programas" in config_data and prog_id in config_data["programas"]:
             if estado_riego != "IDLE":
@@ -986,12 +1015,16 @@ async def procesar_comando(cmd_dict):
             
     elif cmd == "UPDATE_CONFIG":
         config_recibida = cmd_dict.get("config", {})
-        version_recibida = config_recibida.get("config_version", 0)
+        version_recibida = config_recibida.get("config_version")
         version_local = config_data.get("config_version", 0)
         
-        if version_recibida > version_local:
-             print(f"[CORE] Aceptando config versión {version_recibida} (Local: {version_local})")
-             # Preservar nombres_zonas si existían localmente
+        # Aceptar si no tiene version (actualización parcial de ajustes/nombres) o si version >= local
+        if version_recibida is None or version_recibida >= version_local:
+             if version_recibida is not None:
+                 print(f"[CORE] Aceptando config versión {version_recibida} (Local: {version_local})")
+             else:
+                 print(f"[CORE] Aceptando actualización parcial de configuración.")
+             # Preservar nombres_zonas si existían localmente y no vinieron en la recibida
              if "nombres_zonas" in config_data and "nombres_zonas" not in config_recibida:
                  config_recibida["nombres_zonas"] = config_data["nombres_zonas"]
              for k, v in config_recibida.items():
@@ -1004,7 +1037,7 @@ async def procesar_comando(cmd_dict):
                      _cached_temp = round(raw_t + offset, 1)
                      await tx_queue.put({"tipo": "TEMP", "data": _cached_temp, "_destino": origen})
                  except: pass
-             await tx_queue.put({"tipo": "ACK_CFG", "v": version_recibida, "_destino": origen})
+             await tx_queue.put({"tipo": "ACK_CFG", "v": version_recibida if version_recibida is not None else version_local, "_destino": origen})
         else:
              print(f"[CORE] Rechazando config obsoleta {version_recibida} (Local: {version_local})")
              await enviar_respuesta_config(origen)

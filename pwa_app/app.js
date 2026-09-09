@@ -758,11 +758,21 @@ function handleIncomingMessage(msg) {
                         sensor_lluvia_delay_horas: state.deviceConfig.sensor_lluvia_delay_horas || 0,
                         programas: state.deviceConfig.programas,
                         ajustes_estacionales: state.deviceConfig.ajustes_estacionales,
-                        nombres_zonas: state.deviceConfig.nombres_zonas,
+                        nombres_zonas: nombresZonasLocales,
                         notificaciones: state.deviceConfig.notificaciones
                     }
                 });
             }, 1500);
+        } else if (nombresZonasLocales && Object.keys(nombresZonasLocales).length > 0 && state.token && (comms.mode === 'BLE' || comms.mode === 'MQTT')) {
+            // Sincronizar siempre los nombres de zonas personalizados si la placa aún no los tiene
+            setTimeout(() => {
+                sendCmd({
+                    comando: "UPDATE_CONFIG",
+                    config: {
+                        nombres_zonas: nombresZonasLocales
+                    }
+                });
+            }, 1000);
         }
 
         refreshUIFromConfig();
@@ -1563,7 +1573,8 @@ document.getElementById('btn-manual-start').addEventListener('click', () => {
     
     sendCmd({
         comando: "RIEGO_MANUAL",
-        zonas: { [zona]: zonaObj }
+        zonas: { [zona]: zonaObj },
+        nombres_zonas: state.deviceConfig.nombres_zonas
     });
     pendingCommand = true;
 
@@ -1582,7 +1593,11 @@ document.getElementById('btn-manual-stop').addEventListener('click', () => {
 document.getElementById('btn-next-start')?.addEventListener('click', (e) => {
     const progId = e.target.dataset.progId;
     if (progId) {
-        sendCmd({ comando: "RIEGO_PROGRAMA", prog_id: progId });
+        sendCmd({
+            comando: "RIEGO_PROGRAMA",
+            prog_id: progId,
+            nombres_zonas: state.deviceConfig.nombres_zonas
+        });
         pendingCommand = true;
     }
 });
@@ -1831,6 +1846,14 @@ function initSchedulerUI() {
             prog_id: state.activeProgTab,
             prog_data: state.tempProgData
         });
+        if (state.deviceConfig.nombres_zonas) {
+            sendCmd({
+                comando: "UPDATE_CONFIG",
+                config: {
+                    nombres_zonas: state.deviceConfig.nombres_zonas
+                }
+            });
+        }
         pendingCommand = true;
         
         // Animacion del boton
