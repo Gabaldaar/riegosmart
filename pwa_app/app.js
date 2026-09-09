@@ -1489,6 +1489,9 @@ function refreshUIFromConfig() {
     if (typeof systemDiagnosticsService !== 'undefined') {
         systemDiagnosticsService.evaluarEstado();
     }
+    if (typeof fcmNotificationService !== 'undefined' && fcmNotificationService.actualizarUI) {
+        fcmNotificationService.actualizarUI();
+    }
 }
 
 // ==========================================
@@ -4054,9 +4057,37 @@ const fcmNotificationService = {
             link.href = `https://ntfy.sh/${topic}`;
             link.title = `Abrir canal: ${topic}`;
         }
+
+        // Sincronizar estado de los selectores individuales con la configuración del dispositivo
+        const notifCfg = state.deviceConfig && state.deviceConfig.notificaciones ? state.deviceConfig.notificaciones : {};
+        
+        const chkInicio = document.getElementById('notif-opt-inicio');
+        if (chkInicio) chkInicio.checked = notifCfg.inicio_riego !== false;
+
+        const chkFin = document.getElementById('notif-opt-fin');
+        if (chkFin) chkFin.checked = notifCfg.fin_riego !== false;
+
+        const chkLluvia = document.getElementById('notif-opt-lluvia');
+        if (chkLluvia) chkLluvia.checked = notifCfg.sensor_lluvia !== false;
+
+        const chkSinProg = document.getElementById('notif-opt-sin-prog');
+        if (chkSinProg) chkSinProg.checked = notifCfg.sin_programas !== false;
+
+        const chkFallo = document.getElementById('notif-opt-fallo');
+        if (chkFallo) chkFallo.checked = notifCfg.fallo_corriente !== false;
     },
 
     bindEvents() {
+        // Modal de ayuda de notificaciones
+        document.getElementById('btn-help-notifications')?.addEventListener('click', () => {
+            document.getElementById('modal-help-notifications')?.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-close-help-notifications')?.addEventListener('click', () => {
+            document.getElementById('modal-help-notifications')?.classList.add('hidden');
+        });
+
+        // Configuración de canal ntfy
         const topicInput = document.getElementById('ntfy-topic-input');
         if (topicInput) {
             topicInput.addEventListener('input', (e) => {
@@ -4092,6 +4123,63 @@ const fcmNotificationService = {
 
         document.getElementById('btn-push-test')?.addEventListener('click', () => {
             this.probarNotificacion();
+        });
+
+        // Helper para guardar cambios en selectores de notificaciones
+        const handleNotifToggle = async (key, checked) => {
+            if (!state.deviceConfig.notificaciones) {
+                state.deviceConfig.notificaciones = {
+                    inicio_riego: true,
+                    fin_riego: true,
+                    sensor_lluvia: true,
+                    sin_programas: true,
+                    fallo_corriente: true
+                };
+            }
+            state.deviceConfig.notificaciones[key] = checked;
+
+            // Enviar comando a la placa
+            sendCmd({
+                comando: "UPDATE_CONFIG",
+                config: {
+                    notificaciones: state.deviceConfig.notificaciones
+                }
+            });
+
+            // Persistir en Firestore si hay sesión activa
+            if (currentUser && db && state.chipId) {
+                try {
+                    await db.doc(`dispositivos/${state.chipId}`).set({
+                        notificaciones: state.deviceConfig.notificaciones,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                } catch (e) {
+                    console.warn("[NOTIF] Error guardando preferencias en Firestore:", e);
+                }
+            }
+
+            showToast("✓ Preferencia de notificación guardada.");
+        };
+
+        // Listeners para los 5 selectores
+        document.getElementById('notif-opt-inicio')?.addEventListener('change', (e) => {
+            handleNotifToggle('inicio_riego', e.target.checked);
+        });
+
+        document.getElementById('notif-opt-fin')?.addEventListener('change', (e) => {
+            handleNotifToggle('fin_riego', e.target.checked);
+        });
+
+        document.getElementById('notif-opt-lluvia')?.addEventListener('change', (e) => {
+            handleNotifToggle('sensor_lluvia', e.target.checked);
+        });
+
+        document.getElementById('notif-opt-sin-prog')?.addEventListener('change', (e) => {
+            handleNotifToggle('sin_programas', e.target.checked);
+        });
+
+        document.getElementById('notif-opt-fallo')?.addEventListener('change', (e) => {
+            handleNotifToggle('fallo_corriente', e.target.checked);
         });
     }
 };

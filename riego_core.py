@@ -30,6 +30,13 @@ DEFAULT_CONFIG = {
     "1": "Zona 1", "2": "Zona 2", "3": "Zona 3", "4": "Zona 4",
     "5": "Zona 5", "6": "Zona 6", "7": "Zona 7", "8": "Zona 8"
   },
+  "notificaciones": {
+    "inicio_riego": True,
+    "fin_riego": True,
+    "sensor_lluvia": True,
+    "sin_programas": True,
+    "fallo_corriente": True
+  },
   "programas": {}
 }
 
@@ -42,6 +49,29 @@ _config_lock = asyncio.Lock()
 _cached_temp = "N/A"
 _cached_temp_ts = 0
 ultimo_arranque_minuto = ""
+ultimo_check_sin_prog_dia = ""
+
+def obtener_nombres_zonas_activas(prog):
+    """Extrae y formatea los nombres amigables de las zonas asignadas al programa."""
+    if not prog or "zonas" not in prog:
+        return "las zonas"
+    nombres_dict = config_data.get("nombres_zonas", {})
+    zonas_keys = list(prog.get("zonas", {}).keys())
+    zonas_keys.sort(key=obtener_num_zona)
+    nombres = []
+    for z in zonas_keys:
+        num = str(obtener_num_zona(z))
+        nom = nombres_dict.get(num) or nombres_dict.get(f"Z{num}") or f"Zona {num}"
+        if nom not in nombres:
+            nombres.append(nom)
+    if len(nombres) == 0:
+        return "las zonas"
+    elif len(nombres) == 1:
+        return nombres[0]
+    elif len(nombres) == 2:
+        return f"{nombres[0]} y {nombres[1]}"
+    else:
+        return ", ".join(nombres[:-1]) + f" y {nombres[-1]}"
 
 # Mapado de Hardware
 MV_PIN = 25
@@ -333,6 +363,17 @@ async def ejecutar_riego():
             zonas_prog = list(programa_activo.get("zonas", {}).keys())
             zonas_prog.sort(key=obtener_num_zona)
             
+            nom_prog = programa_activo.get("nombre", "Manual")
+            nom_zonas = obtener_nombres_zonas_activas(programa_activo)
+            try:
+                import network_manager
+                network_manager.disparar_webhook_notificacion("inicio_prog", {
+                    "prog": nom_prog,
+                    "zonas": nom_zonas
+                })
+            except:
+                pass
+
             ajuste = 1.0
             if programa_activo.get("nombre") != "Manual":
                 try:
@@ -476,11 +517,18 @@ async def ejecutar_riego():
             estado_riego = "IDLE"
             telemetria_extra = {}
             nom_prog = programa_activo.get("nombre", "Manual")
+            nom_zonas = obtener_nombres_zonas_activas(programa_activo)
+            t_fin = get_time()
+            hora_fin_str = f"{t_fin[3]:02d}:{t_fin[4]:02d}"
             await sys_log.log_event({"tipo": "fin_prog", "prog": nom_prog})
             await enviar_telemetria()
             try:
                 import network_manager
-                network_manager.disparar_webhook_notificacion("fin_prog", {"prog": nom_prog})
+                network_manager.disparar_webhook_notificacion("fin_prog", {
+                    "prog": nom_prog,
+                    "zonas": nom_zonas,
+                    "hora": hora_fin_str
+                })
             except:
                 pass
             
@@ -492,21 +540,39 @@ async def ejecutar_riego():
 
 
 async def tarea_planificador():
-    global ultimo_arranque_minuto
+    global ultimo_arranque_minuto, ultimo_check_sin_prog_dia
     while True:
         if estado_riego == "IDLE":
             tiene_lluvia = es_sensor_lluvia_activo_y_detectando()
             tiene_secado = (time.time() < config_data.get("timestamp_sensor_lluvia_clear", 0))
             tiene_retraso_manual = (time.time() < config_data.get("timestamp_rain_delay", 0))
             
-            if tiene_lluvia or tiene_secado or tiene_retraso_manual:
-                await asyncio.sleep(10)
-                continue
-                
             t = get_time() 
             hora_str = f"{t[3]:02d}:{t[4]:02d}"
             dia_sem = t[6] + 1 
             id_minuto = f"{t[0]}_{t[1]}_{t[2]}_{t[3]}_{t[4]}"
+            id_dia = f"{t[0]}_{t[1]}_{t[2]}"
+
+            # Comprobar a las 09:00 si no hay ningún programa activo o configurado
+            if hora_str == "09:00" and ultimo_check_sin_prog_dia != id_dia:
+                ultimo_check_sin_prog_dia = id_dia
+                programas = config_data.get("programas", {})
+                hay_activos = False
+                for p in programas.values():
+                    if p.get("activo", False) and len(p.get("dias_semana", [])) > 0 and len(p.get("horas_arranque", [])) > 0:
+                        hay_activos = True
+                        break
+                if not hay_activos:
+                    print("[PLANIFICADOR] Advertencia: No hay programas de riego activos (09:00).")
+                    try:
+                        import network_manager
+                        network_manager.disparar_webhook_notificacion("sin_programas")
+                    except:
+                        pass
+
+            if tiene_lluvia or tiene_secado or tiene_retraso_manual:
+                await asyncio.sleep(10)
+                continue
             
             prog_keys = list(config_data.get("programas", {}).keys())
             prog_keys.sort()

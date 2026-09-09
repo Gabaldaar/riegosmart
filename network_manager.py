@@ -496,33 +496,67 @@ def disparar_webhook_notificacion(evento, extra=None):
 
 
 async def _enviar_http_push(evento, extra):
-    """Envío HTTP POST puro (Puerto 80, sin SSL) a ntfy.sh para garantizar 0% ENOMEM y recepción con app cerrada."""
+    """Envío HTTP POST puro (Puerto 80, sin SSL) a ntfy.sh con textos personalizados y botón de acción."""
     s = None
     try:
+        prefs = riego_core.config_data.get("notificaciones", {})
+
+        # Comprobar selectores de usuario antes de enviar
+        if evento == "inicio_prog" and not prefs.get("inicio_riego", True):
+            return
+        if evento == "fin_prog" and not prefs.get("fin_riego", True):
+            return
+        if evento in ("sensor_lluvia_mojado", "sensor_lluvia_seco", "fin_secado") and not prefs.get("sensor_lluvia", True):
+            return
+        if evento == "sin_programas" and not prefs.get("sin_programas", True):
+            return
+        if evento == "fallo_corriente" and not prefs.get("fallo_corriente", True):
+            return
+
         gc.collect()
         topic = f"riego_{riego_core.chip_id[-4:].lower()}"
         
-        # Mapear evento a título, mensaje y tags legibles
-        if evento == "fin_prog":
-            prog = extra.get("prog", "Programa")
-            titulo = "✅ Riego Completado"
-            mensaje = f"El {prog} finalizó su ciclo de riego."
+        prog = extra.get("prog", "Manual")
+        zonas = extra.get("zonas", "las zonas")
+        hora = extra.get("hora", "")
+
+        # Mapear evento a título, mensaje y tags personalizados
+        if evento == "inicio_prog":
+            titulo = "🚿 Inicio de Riego"
+            mensaje = f"El Programa {prog} inició el riego de {zonas}." if prog != "Manual" else f"Se inició el riego manual de {zonas}."
+            tags = "droplet,play"
+            prioridad = "default"
+        elif evento == "fin_prog":
+            titulo = "✅ Riego Finalizado"
+            hora_txt = f" a las {hora}" if hora else ""
+            mensaje = f"El Programa {prog} terminó de regar las zonas {zonas}{hora_txt}." if prog != "Manual" else f"El riego manual terminó de regar las zonas {zonas}{hora_txt}."
             tags = "white_check_mark,droplet"
             prioridad = "default"
         elif evento == "sensor_lluvia_mojado":
-            titulo = "🌧️ Sensor de Lluvia Activado"
-            mensaje = "El sensor detectó lluvia. Riego pausado automáticamente."
+            titulo = "🌧️ Sensor de Lluvia"
+            mensaje = "Se detectó lluvia. Riego suspendido automáticamente."
             tags = "cloud_rain,warning"
             prioridad = "high"
         elif evento == "sensor_lluvia_seco":
-            titulo = "☀️ Sensor de Lluvia Despejado"
-            mensaje = "El sensor se ha secado. Sistema listo para regar."
-            tags = "sunny"
+            horas_sec = extra.get("horas", 1)
+            titulo = "⏳ Sensor en Secado"
+            mensaje = f"La lluvia se detuvo. Esperando {horas_sec}h de secado antes de reanudar el riego."
+            tags = "hourglass_flowing_sand,droplet"
             prioridad = "default"
+        elif evento == "fin_secado":
+            titulo = "☀️ Sensor de Lluvia Seco"
+            mensaje = "El sensor de lluvia se secó por completo. El riego automático vuelve a estar activo."
+            tags = "sunny,seedling"
+            prioridad = "default"
+        elif evento == "sin_programas":
+            titulo = "⚠️ Advertencia de Riego"
+            mensaje = "No hay ningún programa de riego activo en el sistema."
+            tags = "warning,calendar"
+            prioridad = "high"
         elif evento == "fallo_corriente":
-            titulo = "⚠️ Alerta Eléctrica"
-            mensaje = extra.get("msg", "Cortocircuito o sobrecorriente detectada.")
-            tags = "warning,zap"
+            titulo = "🚨 Alerta Eléctrica Crítica"
+            mensaje = extra.get("msg", "Cortocircuito o sobrecorriente detectada en las electroválvulas. Riego abortado por seguridad.")
+            tags = "warning,zap,rotating_light"
             prioridad = "urgent"
         else:
             titulo = "🔔 Alerta de Riego"
@@ -545,6 +579,7 @@ async def _enviar_http_push(evento, extra):
             f"Title: {titulo}\r\n"
             f"Priority: {prioridad}\r\n"
             f"Tags: {tags}\r\n"
+            f"Actions: view, Abrir Smart Riego, https://miriego-smart.web.app\r\n"
             f"Content-Type: text/plain; charset=utf-8\r\n"
             f"Content-Length: {len(msg_bytes)}\r\n"
             f"Connection: close\r\n\r\n"

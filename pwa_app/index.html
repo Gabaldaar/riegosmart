@@ -38,13 +38,13 @@
                 registration.update();
             });
             // Also notify user that they are on the latest version
-            window.APP_VERSION = "v74.0";
+            window.APP_VERSION = "v75.0";
         }
     </script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="styles.css?v=74">
+    <link rel="stylesheet" href="styles.css?v=75">
 </head>
 <body class="bg-slate-200/60 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30 transition-colors duration-200">
     <!-- Top Header -->
@@ -56,7 +56,7 @@
             </h1>
             <div class="flex items-center gap-1.5 mt-0.5">
                 <span id="user-display-name" class="text-[9px] font-medium text-teal-600 dark:text-teal-400 hidden truncate max-w-[110px] leading-tight"></span>
-                <span class="text-[9px] font-medium text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 px-1 py-0.2 rounded">v74.0</span>
+                <span class="text-[9px] font-medium text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 px-1 py-0.2 rounded">v75.0</span>
             </div>
         </div>
         
@@ -741,9 +741,14 @@
             <!-- Notificaciones Push y Alertas Móviles -->
             <div id="card-push-notifications" class="soft-card rounded-2xl p-5 shadow-sm transition-colors duration-200">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                        <i data-lucide="bell" class="w-4 h-4 text-teal-600 dark:text-teal-400"></i> Notificaciones y Alertas
-                    </h2>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="bell" class="w-4 h-4 text-teal-600 dark:text-teal-400"></i> Notificaciones y Alertas
+                        </h2>
+                        <button id="btn-help-notifications" title="Ayuda de Notificaciones" class="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
+                            <i data-lucide="help-circle" class="w-4 h-4"></i>
+                        </button>
+                    </div>
                     <span id="push-status-badge" class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">Listo</span>
                 </div>
 
@@ -764,7 +769,7 @@
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Nombre de tu Canal:</label>
                             <div class="flex items-center gap-2">
-                                <input type="text" id="ntfy-topic-input" readonly value="riego_..." class="flex-1 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800/80 rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-blue-700 dark:text-blue-300 select-all">
+                                <input type="text" id="ntfy-topic-input" value="riego_c79c" class="flex-1 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800/80 rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-blue-700 dark:text-blue-300 select-all">
                                 <button id="btn-copy-ntfy-topic" title="Copiar nombre de canal" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1">
                                     <i data-lucide="copy" class="w-3.5 h-3.5"></i> <span id="copy-btn-text">Copiar</span>
                                 </button>
@@ -772,13 +777,68 @@
                         </div>
 
                         <!-- Botón directo de apertura -->
-                        <a id="link-ntfy-channel" href="https://ntfy.sh" target="_blank" class="w-full py-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold shadow transition-all flex items-center justify-center gap-1.5 text-center">
+                        <a id="link-ntfy-channel" href="https://ntfy.sh/riego_c79c" target="_blank" class="w-full py-2 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold shadow transition-all flex items-center justify-center gap-1.5 text-center">
                             <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Abrir y Suscribirse en ntfy.sh
                         </a>
                         
                         <p class="text-[10px] text-slate-500 dark:text-slate-400 italic text-center">
                             💡 Al abrir el enlace, presiona <strong>"Suscribirse"</strong> para activar los avisos.
                         </p>
+                    </div>
+
+                    <!-- Selectores de Eventos Individuales -->
+                    <div class="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Alertas a Recibir:</label>
+                        
+                        <div class="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                            <span class="text-slate-700 dark:text-slate-300 flex items-center gap-1.5 font-medium">
+                                <i data-lucide="play" class="w-3.5 h-3.5 text-blue-500"></i> Inicio de Riego
+                            </span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="notif-opt-inicio" checked class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                            <span class="text-slate-700 dark:text-slate-300 flex items-center gap-1.5 font-medium">
+                                <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-500"></i> Fin de Riego
+                            </span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="notif-opt-fin" checked class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                            <span class="text-slate-700 dark:text-slate-300 flex items-center gap-1.5 font-medium">
+                                <i data-lucide="cloud-rain" class="w-3.5 h-3.5 text-sky-500"></i> Sensor de Lluvia y Secado
+                            </span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="notif-opt-lluvia" checked class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                            <span class="text-slate-700 dark:text-slate-300 flex items-center gap-1.5 font-medium">
+                                <i data-lucide="calendar" class="w-3.5 h-3.5 text-amber-500"></i> Aviso 09:00 Si No Hay Programas
+                            </span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="notif-opt-sin-prog" checked class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                            <span class="text-slate-700 dark:text-slate-300 flex items-center gap-1.5 font-medium">
+                                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-red-500"></i> Fallo Eléctrico (Cortocircuito)
+                            </span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="notif-opt-fallo" checked class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-teal-600"></div>
+                            </label>
+                        </div>
                     </div>
 
                     <!-- Botón de prueba local -->
@@ -913,6 +973,45 @@
             
             <div class="flex justify-end gap-3 mt-6">
                 <button onclick="document.getElementById('modal-help').classList.add('hidden')" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm font-medium transition-colors w-full shadow">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notifications Help Modal -->
+    <div id="modal-help-notifications" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex flex-col justify-center items-center p-4">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85vh] overflow-y-auto transition-colors duration-200">
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <i data-lucide="bell" class="w-5 h-5 text-teal-600 dark:text-teal-400"></i> Ayuda de Notificaciones
+            </h2>
+            
+            <div class="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+                <div>
+                    <h3 class="font-semibold text-teal-600 dark:text-teal-400 mb-1">¿Cómo recibir alertas con la App cerrada?</h3>
+                    <p class="text-xs leading-relaxed">
+                        Para que tu teléfono suene y vibre automáticamente cuando termina un riego o llueve, se utiliza el servicio gratuito de alertas móviles <strong>ntfy</strong>.
+                    </p>
+                </div>
+                
+                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
+                    <p class="font-bold text-slate-800 dark:text-slate-200">Pasos para activar en tu celular:</p>
+                    <ol class="list-decimal pl-4 space-y-1.5 text-slate-600 dark:text-slate-400">
+                        <li>Descarga la app gratuita <strong>ntfy</strong> desde Google Play Store o Apple App Store.</li>
+                        <li>Abre la app y toca el botón <strong>+</strong> (Suscribirse al tema).</li>
+                        <li>Ingresa el nombre de tu canal (por ejemplo: <strong class="text-blue-600 dark:text-blue-400 font-mono">riego_c79c</strong>).</li>
+                        <li>Toca <strong>Suscribirse</strong> y permite las notificaciones del sistema.</li>
+                    </ol>
+                </div>
+
+                <div>
+                    <h3 class="font-semibold text-teal-600 dark:text-teal-400 mb-1">Sin instalar aplicaciones</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        También puedes tocar el botón <em>"Abrir y Suscribirse en ntfy.sh"</em> desde el navegador de tu computadora o móvil y presionar <strong>"Suscribirse"</strong> en la web.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-6">
+                <button id="btn-close-help-notifications" onclick="document.getElementById('modal-help-notifications').classList.add('hidden')" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm font-medium transition-colors w-full shadow">Entendido</button>
             </div>
         </div>
     </div>
@@ -1110,7 +1209,7 @@
     </div>
 
     <!-- PWA y App Scripts con versión forzada -->
-    <script src="comms.js?v=70"></script>
-    <script src="app.js?v=70"></script>
+    <script src="comms.js?v=75"></script>
+    <script src="app.js?v=75"></script>
 </body>
 </html>
