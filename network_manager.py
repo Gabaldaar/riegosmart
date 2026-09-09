@@ -23,6 +23,7 @@ STATE_FALLBACK_BLE    = 4
 
 current_state  = STATE_INIT
 wifi_conectado = False
+_notificado_boot = False
 mqtt_client    = None
 mqtt_loop_task = None
 mqtt_lock      = asyncio.Lock()
@@ -222,6 +223,11 @@ async def conectar_wifi_non_blocking(wlan):
                     print("[NTP] DS3231 sincronizado por NTP.")
             except Exception as e:
                 print("[NTP] Error de sincronización:", e)
+
+            global _notificado_boot
+            if not _notificado_boot:
+                _notificado_boot = True
+                disparar_webhook_notificacion("reinicio_equipo")
 
             return True
         await asyncio.sleep_ms(500)
@@ -512,6 +518,8 @@ async def _enviar_http_push(evento, extra):
             return
         if evento == "fallo_corriente" and not prefs.get("fallo_corriente", True):
             return
+        if evento == "reinicio_equipo" and not prefs.get("reinicio_equipo", True):
+            return
 
         gc.collect()
         topic = f"riego_{riego_core.chip_id[-4:].lower()}"
@@ -558,6 +566,13 @@ async def _enviar_http_push(evento, extra):
             mensaje = extra.get("msg", "Cortocircuito o sobrecorriente detectada en las electroválvulas. Riego abortado por seguridad.")
             tags = "warning,zap,rotating_light"
             prioridad = "urgent"
+        elif evento == "reinicio_equipo":
+            t_fin = riego_core.get_time()
+            hora_str = f"{t_fin[3]:02d}:{t_fin[4]:02d}"
+            titulo = "🔄 Equipo Reiniciado"
+            mensaje = f"El controlador de riego se ha iniciado correctamente a las {hora_str}."
+            tags = "arrows_counterclockwise,gear"
+            prioridad = "default"
         else:
             titulo = "🔔 Alerta de Riego"
             mensaje = f"Evento: {evento}"

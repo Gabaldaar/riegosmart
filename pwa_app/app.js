@@ -757,7 +757,9 @@ function handleIncomingMessage(msg) {
                         modo_bomba: state.deviceConfig.modo_bomba,
                         sensor_lluvia_delay_horas: state.deviceConfig.sensor_lluvia_delay_horas || 0,
                         programas: state.deviceConfig.programas,
-                        ajustes_estacionales: state.deviceConfig.ajustes_estacionales
+                        ajustes_estacionales: state.deviceConfig.ajustes_estacionales,
+                        nombres_zonas: state.deviceConfig.nombres_zonas,
+                        notificaciones: state.deviceConfig.notificaciones
                     }
                 });
             }, 1500);
@@ -1976,6 +1978,14 @@ function loadProgramIntoUI(progId) {
                 }).then(() => showToast("Nombre guardado en la nube."))
                   .catch(err => console.error("Error actualizando nombre en Firestore:", err));
             }
+            if (state.token && (comms.mode === 'BLE' || comms.mode === 'MQTT')) {
+                sendCmd({
+                    comando: "UPDATE_CONFIG",
+                    config: {
+                        nombres_zonas: state.deviceConfig.nombres_zonas
+                    }
+                });
+            }
             refreshUIFromConfig();
         });
 
@@ -2601,10 +2611,6 @@ function sendCmd(obj) {
         
         if (obj.comando === "UPDATE_CONFIG" && obj.config) {
             Object.assign(payload, obj.config);
-            // Evitar enviar nombres_zonas al ESP32 por BLE/MQTT para no congestionar
-            if (payload.nombres_zonas) {
-                delete payload.nombres_zonas;
-            }
         } else if (obj.comando === "UPDATE_PROGRAMA") {
             // Mapear zonas del programa a claves "Z1", "Z2", etc.
             const progData = { ...obj.prog_data };
@@ -4075,6 +4081,9 @@ const fcmNotificationService = {
 
         const chkFallo = document.getElementById('notif-opt-fallo');
         if (chkFallo) chkFallo.checked = notifCfg.fallo_corriente !== false;
+
+        const chkReinicio = document.getElementById('notif-opt-reinicio');
+        if (chkReinicio) chkReinicio.checked = notifCfg.reinicio_equipo !== false;
     },
 
     bindEvents() {
@@ -4133,7 +4142,8 @@ const fcmNotificationService = {
                     fin_riego: true,
                     sensor_lluvia: true,
                     sin_programas: true,
-                    fallo_corriente: true
+                    fallo_corriente: true,
+                    reinicio_equipo: true
                 };
             }
             state.deviceConfig.notificaciones[key] = checked;
@@ -4161,7 +4171,7 @@ const fcmNotificationService = {
             showToast("✓ Preferencia de notificación guardada.");
         };
 
-        // Listeners para los 5 selectores
+        // Listeners para los 6 selectores
         document.getElementById('notif-opt-inicio')?.addEventListener('change', (e) => {
             handleNotifToggle('inicio_riego', e.target.checked);
         });
@@ -4180,6 +4190,10 @@ const fcmNotificationService = {
 
         document.getElementById('notif-opt-fallo')?.addEventListener('change', (e) => {
             handleNotifToggle('fallo_corriente', e.target.checked);
+        });
+
+        document.getElementById('notif-opt-reinicio')?.addEventListener('change', (e) => {
+            handleNotifToggle('reinicio_equipo', e.target.checked);
         });
     }
 };

@@ -35,7 +35,8 @@ DEFAULT_CONFIG = {
     "fin_riego": True,
     "sensor_lluvia": True,
     "sin_programas": True,
-    "fallo_corriente": True
+    "fallo_corriente": True,
+    "reinicio_equipo": True
   },
   "programas": {}
 }
@@ -61,7 +62,13 @@ def obtener_nombres_zonas_activas(prog):
     nombres = []
     for z in zonas_keys:
         num = str(obtener_num_zona(z))
-        nom = nombres_dict.get(num) or nombres_dict.get(f"Z{num}") or f"Zona {num}"
+        nom = (
+            nombres_dict.get(num)
+            or nombres_dict.get(f"Z{num}")
+            or nombres_dict.get(f"z{num}")
+            or nombres_dict.get(str(z))
+            or f"Zona {num}"
+        )
         if nom not in nombres:
             nombres.append(nom)
     if len(nombres) == 0:
@@ -646,6 +653,11 @@ async def tarea_monitoreo_lluvia():
                 await guardar_configuracion()
                 await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "fin_secado"})
                 await enviar_telemetria()
+                try:
+                    import network_manager
+                    network_manager.disparar_webhook_notificacion("fin_secado")
+                except:
+                    pass
 
             estado_actual_detectado = es_sensor_lluvia_activo_y_detectando()
             if estado_actual_detectado != ultimo_estado_detectado:
@@ -688,20 +700,24 @@ async def tarea_monitoreo_lluvia():
                             pass
                     else:
                         print("[RAIN] Sensor de lluvia despejado/seco.")
-                        delay_horas = config_data.get("sensor_lluvia_delay_horas", 0)
+                        delay_horas = int(config_data.get("sensor_lluvia_delay_horas", 0))
                         if delay_horas > 0:
                             config_data["timestamp_sensor_lluvia_clear"] = time.time() + (delay_horas * 3600)
                             print(f"[RAIN] Iniciando retraso de secado por {delay_horas} horas.")
                             await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "secado", "horas": delay_horas})
+                            notif_evento = "sensor_lluvia_seco"
+                            notif_extra = {"horas": delay_horas}
                         else:
                             config_data["timestamp_sensor_lluvia_clear"] = 0
                             await sys_log.log_event({"tipo": "sensor_lluvia", "estado": "despejado"})
+                            notif_evento = "fin_secado"
+                            notif_extra = {}
 
                         await guardar_configuracion()
                         await enviar_telemetria()
                         try:
                             import network_manager
-                            network_manager.disparar_webhook_notificacion("sensor_lluvia_seco")
+                            network_manager.disparar_webhook_notificacion(notif_evento, notif_extra)
                         except:
                             pass
         except Exception as e:
