@@ -2618,11 +2618,34 @@ function initSettingsUI() {
             pendingCommand = true;
             showGenericModal({
                 title: "Credenciales",
-                msg: "Credenciales enviadas al equipo.",
+                msg: "Credenciales enviadas al equipo. Si el equipo no está regando, se reiniciará para conectarse.",
                 hideCancel: true
             });
         }
     });
+
+    const btnDelWifi = document.getElementById('btn-delete-wifi');
+    if (btnDelWifi) {
+        btnDelWifi.addEventListener('click', () => {
+            showGenericModal({
+                title: "Eliminar Red Wi-Fi",
+                msg: "¿Seguro que deseas eliminar la red Wi-Fi del equipo? El dispositivo se reiniciará y funcionará únicamente mediante conexión directa Bluetooth (BLE).",
+                onOk: () => {
+                    sendCmd({ comando: "borrar_wifi" });
+                    pendingCommand = true;
+                    document.getElementById('wifi-ssid').value = "";
+                    document.getElementById('wifi-pass').value = "";
+                    const disp = document.getElementById('current-ssid-display');
+                    if (disp) disp.textContent = "No configurada";
+                    showGenericModal({
+                        title: "Red Wi-Fi Eliminada",
+                        msg: "Se borraron las credenciales Wi-Fi del equipo.",
+                        hideCancel: true
+                    });
+                }
+            });
+        });
+    }
 
     // Inicializar controles de Notificaciones Push FCM
     if (typeof fcmNotificationService !== 'undefined') {

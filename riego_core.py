@@ -925,14 +925,44 @@ async def procesar_comando(cmd_dict):
             print("[CORE] Riego activo. Reinicio diferido para FACTORY_RESET.")
             await tx_queue.put({"tipo": "ACK", "status": "DEFERRED", "_destino": origen})
         
+    elif cmd == "borrar_wifi":
+        try:
+            for f_red in ["wifi_config.json", "wifi_config.json.tmp"]:
+                try:
+                    os.remove(f_red)
+                except:
+                    pass
+            print("[CORE] Credenciales WiFi eliminadas.")
+            await sys_log.log_event({"tipo": "info", "msg": "Credenciales WiFi eliminadas"})
+            await tx_queue.put({"tipo": "ACK", "status": "OK", "msg": "WIFI_CLEARED", "_destino": origen})
+            
+            if estado_riego == "IDLE" or estado_riego == "FALLO_CORRIENTE":
+                await asyncio.sleep(1)
+                machine.reset()
+            else:
+                reinicio_pendiente = True
+                print("[CORE] Riego activo. Reinicio diferido para borrar_wifi.")
+                await tx_queue.put({"tipo": "ACK", "status": "DEFERRED", "_destino": origen})
+        except Exception as e:
+            print("Error al borrar wifi:", e)
+
     elif cmd == "config_wifi":
         try:
             s = str(cmd_dict.get("ssid", "")).strip()
             p = str(cmd_dict.get("pass", "")).strip()
-            with open("wifi_config.json", "w") as f:
-                json.dump({"ssid": s, "pass": p}, f)
-            print("WiFi configurado en flash.")
-            await sys_log.log_event({"tipo": "info", "msg": "Nuevas credenciales WiFi recibidas"})
+            if not s:
+                for f_red in ["wifi_config.json", "wifi_config.json.tmp"]:
+                    try:
+                        os.remove(f_red)
+                    except:
+                        pass
+                print("[CORE] SSID vacío. Credenciales WiFi eliminadas.")
+                await sys_log.log_event({"tipo": "info", "msg": "Credenciales WiFi eliminadas"})
+            else:
+                with open("wifi_config.json", "w") as f:
+                    json.dump({"ssid": s, "pass": p}, f)
+                print("WiFi configurado en flash.")
+                await sys_log.log_event({"tipo": "info", "msg": "Nuevas credenciales WiFi recibidas"})
             
             if estado_riego == "IDLE" or estado_riego == "FALLO_CORRIENTE":
                 await asyncio.sleep(1)
