@@ -3076,8 +3076,45 @@ const weatherService = {
             if (window.lucide && typeof window.lucide.createIcons === 'function') {
                 window.lucide.createIcons();
             }
+
+            // Disparar push de alerta meteorológica a ntfy (con control anti-spam diario)
+            this.notificarAlertaClimaPush(diaLluvia, maxRainMm, maxProb);
         } else {
             banner.classList.add('hidden');
+        }
+    },
+
+    async notificarAlertaClimaPush(diaLluvia, maxRainMm, maxProb) {
+        const notifCfg = state.deviceConfig && state.deviceConfig.notificaciones ? state.deviceConfig.notificaciones : {};
+        if (notifCfg.clima_lluvia === false) return;
+
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const lastNotif = localStorage.getItem('LAST_WEATHER_ALERT_DATE');
+        if (lastNotif === todayKey) return;
+
+        let topic = "riego_c79c";
+        if (typeof fcmNotificationService !== 'undefined' && fcmNotificationService.obtenerTopicNtfy) {
+            topic = fcmNotificationService.obtenerTopicNtfy();
+        }
+
+        const rainDetail = maxRainMm > 0 ? `${maxRainMm} mm` : `${maxProb}% prob.`;
+        const body = `Se pronostican precipitaciones para ${diaLluvia} (${rainDetail}). Te sugerimos pausar el riego para ahorrar agua.`;
+
+        try {
+            await fetch(`https://ntfy.sh/${topic}`, {
+                method: 'POST',
+                headers: {
+                    'Title': 'Pronóstico de Lluvia',
+                    'Priority': 'default',
+                    'Tags': 'umbrella',
+                    'Actions': 'view, Abrir Smart Riego, https://miriego-smart.web.app'
+                },
+                body: body
+            });
+            localStorage.setItem('LAST_WEATHER_ALERT_DATE', todayKey);
+            console.log('[WEATHER] Notificación meteorológica enviada a ntfy:', topic);
+        } catch (e) {
+            console.warn('[WEATHER] Error enviando alerta meteorológica:', e);
         }
     },
 
@@ -4114,6 +4151,9 @@ const fcmNotificationService = {
 
         const chkReinicio = document.getElementById('notif-opt-reinicio');
         if (chkReinicio) chkReinicio.checked = notifCfg.reinicio_equipo !== false;
+
+        const chkClima = document.getElementById('notif-opt-clima');
+        if (chkClima) chkClima.checked = notifCfg.clima_lluvia !== false;
     },
 
     bindEvents() {
@@ -4173,7 +4213,8 @@ const fcmNotificationService = {
                     sensor_lluvia: true,
                     sin_programas: true,
                     fallo_corriente: true,
-                    reinicio_equipo: true
+                    reinicio_equipo: true,
+                    clima_lluvia: true
                 };
             }
             state.deviceConfig.notificaciones[key] = checked;
@@ -4201,7 +4242,7 @@ const fcmNotificationService = {
             showToast("✓ Preferencia de notificación guardada.");
         };
 
-        // Listeners para los 6 selectores
+        // Listeners para los selectores
         document.getElementById('notif-opt-inicio')?.addEventListener('change', (e) => {
             handleNotifToggle('inicio_riego', e.target.checked);
         });
@@ -4224,6 +4265,10 @@ const fcmNotificationService = {
 
         document.getElementById('notif-opt-reinicio')?.addEventListener('change', (e) => {
             handleNotifToggle('reinicio_equipo', e.target.checked);
+        });
+
+        document.getElementById('notif-opt-clima')?.addEventListener('change', (e) => {
+            handleNotifToggle('clima_lluvia', e.target.checked);
         });
     }
 };

@@ -528,53 +528,58 @@ async def _enviar_http_push(evento, extra):
         zonas = extra.get("zonas", "las zonas")
         hora = extra.get("hora", "")
 
-        # Mapear evento a título, mensaje y tags personalizados
+        # Mapear evento a título, mensaje y tag único
         if evento == "inicio_prog":
-            titulo = "🚿 Inicio de Riego"
+            titulo = "Inicio de Riego"
             mensaje = f"El Programa {prog} inició el riego de {zonas}." if prog != "Manual" else f"Se inició el riego manual de {zonas}."
-            tags = "droplet,play"
+            tags = "droplet"
             prioridad = "default"
         elif evento == "fin_prog":
-            titulo = "✅ Riego Finalizado"
+            titulo = "Riego Finalizado"
             hora_txt = f" a las {hora}" if hora else ""
             mensaje = f"El Programa {prog} terminó de regar las zonas {zonas}{hora_txt}." if prog != "Manual" else f"El riego manual terminó de regar las zonas {zonas}{hora_txt}."
-            tags = "white_check_mark,droplet"
+            tags = "white_check_mark"
             prioridad = "default"
         elif evento == "sensor_lluvia_mojado":
-            titulo = "🌧️ Sensor de Lluvia"
+            titulo = "Sensor de Lluvia"
             mensaje = "Se detectó lluvia. Riego suspendido automáticamente."
-            tags = "cloud_rain,warning"
+            tags = "cloud_rain"
             prioridad = "high"
         elif evento == "sensor_lluvia_seco":
             horas_sec = extra.get("horas", 1)
-            titulo = "⏳ Sensor en Secado"
+            titulo = "Sensor en Secado"
             mensaje = f"La lluvia se detuvo. Esperando {horas_sec}h de secado antes de reanudar el riego."
-            tags = "hourglass_flowing_sand,droplet"
+            tags = "hourglass_flowing_sand"
             prioridad = "default"
         elif evento == "fin_secado":
-            titulo = "☀️ Sensor de Lluvia Seco"
+            titulo = "Sensor de Lluvia Seco"
             mensaje = "El sensor de lluvia se secó por completo. El riego automático vuelve a estar activo."
-            tags = "sunny,seedling"
+            tags = "sunny"
             prioridad = "default"
         elif evento == "sin_programas":
-            titulo = "⚠️ Advertencia de Riego"
+            titulo = "Advertencia de Riego"
             mensaje = "No hay ningún programa de riego activo en el sistema."
-            tags = "warning,calendar"
+            tags = "calendar"
             prioridad = "high"
         elif evento == "fallo_corriente":
-            titulo = "🚨 Alerta Eléctrica Crítica"
+            titulo = "Alerta Eléctrica"
             mensaje = extra.get("msg", "Cortocircuito o sobrecorriente detectada en las electroválvulas. Riego abortado por seguridad.")
-            tags = "warning,zap,rotating_light"
+            tags = "zap"
             prioridad = "urgent"
         elif evento == "reinicio_equipo":
             t_fin = riego_core.get_time()
             hora_str = f"{t_fin[3]:02d}:{t_fin[4]:02d}"
-            titulo = "🔄 Equipo Reiniciado"
+            titulo = "Equipo Reiniciado"
             mensaje = f"El controlador de riego se ha iniciado correctamente a las {hora_str}."
-            tags = "arrows_counterclockwise,gear"
+            tags = "arrows_counterclockwise"
+            prioridad = "default"
+        elif evento == "clima_lluvia":
+            titulo = "Pronóstico de Lluvia"
+            mensaje = extra.get("msg", "Se pronostican precipitaciones. Te sugerimos pausar el riego.")
+            tags = "umbrella"
             prioridad = "default"
         else:
-            titulo = "🔔 Alerta de Riego"
+            titulo = "Alerta de Riego"
             mensaje = f"Evento: {evento}"
             tags = "bell"
             prioridad = "default"
