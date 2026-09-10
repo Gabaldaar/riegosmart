@@ -3065,7 +3065,10 @@ const weatherService = {
             if (prob > maxProb) maxProb = prob;
         }
 
-        if (maxRainMm >= 4 || maxProb >= 70) {
+        // Opción C: Alerta si hay >= 4 mm de lluvia, O si hay >= 70% de probabilidad Y al menos 2 mm acumulados
+        const alertaLluviaValida = maxRainMm >= 4 || (maxProb >= 70 && maxRainMm >= 2);
+
+        if (alertaLluviaValida) {
             const titleEl = document.getElementById('smart-rain-delay-title');
             const descEl = document.getElementById('smart-rain-delay-desc');
 
