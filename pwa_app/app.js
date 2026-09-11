@@ -3037,18 +3037,23 @@ const weatherService = {
                 const rainProb = daily.precipitation_probability_max ? daily.precipitation_probability_max[i] : 0;
                 const rainMm = daily.precipitation_sum ? daily.precipitation_sum[i] : 0;
 
+                const isRainy = rainProb >= 40 || rainMm >= 1;
+                const rainColorClass = isRainy 
+                    ? 'text-sky-600 dark:text-sky-300 font-bold bg-sky-50 dark:bg-sky-950/60 border border-sky-200/60 dark:border-sky-800/60' 
+                    : 'text-slate-600 dark:text-slate-300 font-medium bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200/40 dark:border-slate-700/40';
+
                 const dayCard = document.createElement('div');
-                dayCard.className = `p-2 rounded-xl transition ${i === 0 ? 'bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60' : 'bg-slate-50/50 dark:bg-slate-900/40'}`;
+                dayCard.className = `p-2 rounded-xl flex flex-col items-center justify-between transition ${i === 0 ? 'bg-slate-100/90 dark:bg-slate-800/90 border border-slate-300/80 dark:border-slate-700 shadow-sm' : 'bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60'}`;
                 dayCard.innerHTML = `
-                    <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-0.5">${diaNombre}</p>
-                    <div class="flex justify-center my-1 text-slate-700 dark:text-slate-300">
+                    <p class="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300 mb-0.5">${diaNombre}</p>
+                    <div class="flex justify-center my-1 text-slate-700 dark:text-slate-200">
                         <i data-lucide="${dayWmo.icon}" class="w-4 h-4"></i>
                     </div>
-                    <p class="text-[11px] font-bold text-slate-800 dark:text-slate-100 font-mono">${maxT}° / <span class="text-slate-400 font-normal">${minT}°</span></p>
-                    <div class="mt-0.5 flex items-center justify-center gap-0.5 text-[9px] ${rainProb >= 50 || rainMm >= 3 ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-400 dark:text-slate-500'}">
-                        <i data-lucide="droplet" class="w-2.5 h-2.5"></i>
+                    <p class="text-[12px] font-bold text-slate-800 dark:text-slate-100 font-mono">${maxT}° <span class="text-slate-500 dark:text-slate-400 font-normal text-[10px]">/ ${minT}°</span></p>
+                    <div class="mt-1.5 px-1.5 py-0.5 rounded-md flex items-center justify-center gap-1 text-[10px] ${rainColorClass}">
+                        <i data-lucide="droplet" class="w-3 h-3 flex-shrink-0 ${isRainy ? 'text-sky-500 dark:text-sky-400' : 'text-slate-400 dark:text-slate-400'}"></i>
                         <span>${rainProb}%</span>
-                        ${rainMm > 0 ? `<span class="text-[8px] opacity-80">(${rainMm}mm)</span>` : ''}
+                        ${rainMm > 0 ? `<span class="font-bold text-[9.5px]">· ${rainMm}mm</span>` : ''}
                     </div>
                 `;
                 forecastCont.appendChild(dayCard);
