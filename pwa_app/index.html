@@ -211,8 +211,9 @@
                     <div class="flex items-center gap-2.5">
                         <div class="text-right">
                             <span id="weather-current-temp" class="text-xl font-bold text-slate-800 dark:text-slate-100 font-mono">--°C</span>
-                            <div class="text-[9px] text-slate-400 dark:text-slate-500">
-                                Hum: <span id="weather-current-humidity" class="font-medium">--%</span>
+                            <div class="text-[11px] text-slate-600 dark:text-slate-300 font-medium flex items-center justify-end gap-1">
+                                <i data-lucide="droplets" class="w-3 h-3 text-sky-500 dark:text-sky-400"></i>
+                                <span>Hum: <strong id="weather-current-humidity" class="text-slate-800 dark:text-slate-100 font-bold">--%</strong></span>
                             </div>
                         </div>
                         <button id="btn-refresh-weather" title="Actualizar Clima" class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition">
@@ -1235,7 +1236,7 @@
     </div>
 
     <!-- PWA y App Scripts con versión forzada -->
-    <script src="comms.js?v=81"></script>
-    <script src="app.js?v=81"></script>
+    <script src="comms.js?v=81.1"></script>
+    <script src="app.js?v=81.1"></script>
 </body>
 </html>
