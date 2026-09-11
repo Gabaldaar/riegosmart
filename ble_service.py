@@ -10,12 +10,23 @@ _UART_SERVICE_UUID = bluetooth.UUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
 _UART_RX_CHAR_UUID = bluetooth.UUID("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
 _UART_TX_CHAR_UUID = bluetooth.UUID("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
 
+# Asegurar que el controlador BLE esté activo antes de registrar servicios en aioble
+try:
+    _ble_hw = bluetooth.BLE()
+    if not _ble_hw.active():
+        _ble_hw.active(True)
+except Exception as _e_ble:
+    print("[BLE] Advertencia activando radio:", _e_ble)
+
 # Configuración del servicio y características
 _uart_service = aioble.Service(_UART_SERVICE_UUID)
 _uart_rx = aioble.Characteristic(_uart_service, _UART_RX_CHAR_UUID, write=True, write_no_response=True, capture=True)
 _uart_tx = aioble.Characteristic(_uart_service, _UART_TX_CHAR_UUID, read=True, notify=True)
 
-aioble.register_services(_uart_service)
+try:
+    aioble.register_services(_uart_service)
+except Exception as _e_reg:
+    print("[BLE] Error registrando servicios:", _e_reg)
 
 # Cola asíncrona para comandos entrantes
 rx_queue = AsyncQueue()
