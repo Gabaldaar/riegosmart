@@ -8,7 +8,6 @@ import gc
 import ds3231
 import binascii
 import hashlib
-import ota_updater
 from utils import AsyncQueue  # Fix #3: Cola asíncrona centralizada en utils.py
 
 CONFIG_FILE = "config_riego.json"
@@ -773,13 +772,6 @@ async def enviar_respuesta_config(origen="ALL"):
                       "timestamp_rain_delay", "ssid", "sensor_lluvia_delay_horas",
                       "timestamp_sensor_lluvia_clear", "sensor_lluvia_activo", "sensor_lluvia_tipo"]
     resp_base = {k: resp[k] for k in campos_basicos if k in resp}
-    try:
-        v_info = ota_updater.obtener_version_actual()
-        resp_base["hw_version"] = v_info.get("hw_version", "1.0.0")
-        resp_base["hw_version_code"] = v_info.get("hw_version_code", 100)
-    except:
-        resp_base["hw_version"] = "1.0.0"
-        resp_base["hw_version_code"] = 100
     await tx_queue.put({"tipo": "CONFIG", "data": resp_base, "_destino": origen})
 
     for prog_id, prog_data in resp.get("programas", {}).items():
@@ -1112,34 +1104,4 @@ async def procesar_comando(cmd_dict):
                 },
                 "_destino": origen
             })
-
-    elif cmd == "CHECK_OTA":
-        try:
-            info = await ota_updater.consultar_actualizacion_disponible(wdt_ref=network_manager.wdt_ref)
-            if info:
-                await tx_queue.put({"tipo": "OTA_INFO", "data": info, "_destino": origen})
-            else:
-                await tx_queue.put({"tipo": "OTA_INFO", "data": {"disponible": False, "error": "No se pudo consultar el servidor"}, "_destino": origen})
-        except Exception as e:
-            print("[CORE] Error en CHECK_OTA:", e)
-            await tx_queue.put({"tipo": "OTA_INFO", "data": {"disponible": False, "error": str(e)}, "_destino": origen})
-
-    elif cmd == "INICIAR_OTA":
-        if estado_riego != "IDLE":
-            print("[CORE] Riego activo. Rechazando INICIAR_OTA.")
-            await tx_queue.put({"tipo": "OTA_STATUS", "estado": "RECHAZADO_REGANDO", "msg": "No se puede actualizar mientras hay un riego en curso.", "_destino": origen})
-            return
-
-        if not network_manager.wifi_conectado:
-            print("[CORE] Sin WiFi. Rechazando INICIAR_OTA.")
-            await tx_queue.put({"tipo": "OTA_STATUS", "estado": "RECHAZADO_SIN_WIFI", "msg": "Se requiere conexión Wi-Fi para descargar la actualización.", "_destino": origen})
-            return
-
-        print("[CORE] Iniciando proceso OTA solicitado por el usuario...")
-        await sys_log.log_event({"tipo": "info", "msg": "Iniciando actualización de firmware OTA"})
-        asyncio.create_task(ota_updater.ejecutar_actualizacion(
-            wdt_ref=network_manager.wdt_ref,
-            tx_queue=tx_queue,
-            origen=origen
-        ))
 

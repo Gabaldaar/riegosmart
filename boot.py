@@ -1,6 +1,5 @@
 # boot.py - Configuraciones iniciales de hardware seguras
 import gc
-import os
 from machine import Pin
 
 # Puesta a cero segura e inmediata para evitar ráfagas transitorias al energizar
