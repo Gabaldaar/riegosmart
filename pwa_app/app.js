@@ -859,6 +859,77 @@ function handleIncomingMessage(msg) {
         localStorage.removeItem('TOKEN');
         showModalAuth();
 
+    } else if (msg.tipo === "OTA_INFO") {
+        const info = msg.data || {};
+        const btnCheck = document.getElementById('btn-check-hw-ota');
+        if (btnCheck) {
+            btnCheck.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Comprobar`;
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        const otaCard = document.getElementById('hw-ota-card');
+        const upToDate = document.getElementById('hw-ota-up-to-date');
+        const newVerSpan = document.getElementById('hw-ota-new-ver');
+        const changelogP = document.getElementById('hw-ota-changelog');
+
+        if (info.disponible) {
+            if (upToDate) upToDate.classList.add('hidden');
+            if (otaCard) otaCard.classList.remove('hidden');
+            if (newVerSpan) newVerSpan.textContent = `v${info.version_remota}`;
+            if (changelogP) changelogP.textContent = info.changelog || "Mejoras generales del sistema.";
+            showToast(`✨ Actualización de hardware disponible: v${info.version_remota}`);
+        } else {
+            if (otaCard) otaCard.classList.add('hidden');
+            if (upToDate) upToDate.classList.remove('hidden');
+            showToast(info.error ? `⚠️ ${info.error}` : "✅ El hardware está en la última versión.");
+        }
+        if (window.lucide) window.lucide.createIcons();
+
+    } else if (msg.tipo === "OTA_STATUS") {
+        console.log("[OTA] Estado:", msg);
+        const progressBox = document.getElementById('hw-ota-progress-box');
+        const progressStatus = document.getElementById('hw-ota-progress-status');
+        const progressVal = document.getElementById('hw-ota-progress-val');
+        const progressBar = document.getElementById('hw-ota-progress-bar');
+        const btnStart = document.getElementById('btn-start-hw-ota');
+
+        if (progressBox) progressBox.classList.remove('hidden');
+        if (btnStart) btnStart.classList.add('hidden');
+
+        if (msg.progreso !== undefined) {
+            if (progressVal) progressVal.textContent = `${msg.progreso}%`;
+            if (progressBar) progressBar.style.width = `${msg.progreso}%`;
+        }
+        if (progressStatus && msg.estado) {
+            progressStatus.textContent = msg.estado;
+        }
+
+        if (msg.estado === "EXITO_REINICIANDO") {
+            showGenericModal({
+                title: "Actualización Exitosa",
+                msg: "El hardware se actualizó correctamente y se está reiniciando. En unos segundos se restablecerá la conexión.",
+                hideCancel: true,
+                onOk: () => {
+                    setTimeout(() => location.reload(), 3000);
+                }
+            });
+        } else if (msg.estado && msg.estado.startsWith("RECHAZADO")) {
+            if (btnStart) btnStart.classList.remove('hidden');
+            if (progressBox) progressBox.classList.add('hidden');
+            showGenericModal({
+                title: "Actualización no disponible",
+                msg: msg.msg || "No se pudo iniciar la actualización en este momento.",
+                hideCancel: true
+            });
+        } else if (msg.estado && msg.estado.startsWith("ERROR")) {
+            if (btnStart) btnStart.classList.remove('hidden');
+            if (progressBox) progressBox.classList.add('hidden');
+            showGenericModal({
+                title: "Error de Actualización",
+                msg: "Hubo un error al descargar los archivos. El firmware anterior se mantiene seguro.",
+                hideCancel: true
+            });
+        }
     } else if (msg.tipo === "AUTH_ERROR") {
         comms.disconnect();
         showGenericModal({
@@ -1483,6 +1554,12 @@ function refreshUIFromConfig() {
             const sign = val > 0 ? '+' : '';
             tempOffsetVal.textContent = `${sign}${val.toFixed(1)} °C`;
         }
+    }
+
+    // Versión de Hardware
+    const hwVerBadge = document.getElementById('hw-version-badge');
+    if (hwVerBadge && state.deviceConfig.hw_version) {
+        hwVerBadge.textContent = `v${state.deviceConfig.hw_version}`;
     }
 
     // 4. Scheduler
@@ -2642,6 +2719,66 @@ function initSettingsUI() {
                         msg: "Se borraron las credenciales Wi-Fi del equipo.",
                         hideCancel: true
                     });
+                }
+            });
+        });
+    }
+
+    // Listeners para Actualización de Firmware OTA del Hardware
+    const btnCheckOta = document.getElementById('btn-check-hw-ota');
+    if (btnCheckOta) {
+        btnCheckOta.addEventListener('click', async () => {
+            btnCheckOta.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Consultando...`;
+            if (window.lucide) window.lucide.createIcons();
+
+            // 1. Si estamos conectados al ESP32 por Wi-Fi o BLE, pedirle al ESP32 que verifique
+            if (comms.mode) {
+                sendCmd({ comando: "CHECK_OTA" });
+            } else {
+                // 2. Si la app está offline del ESP32 pero el celular tiene internet, chequear directo en GitHub
+                try {
+                    const res = await fetch(`https://raw.githubusercontent.com/Gabaldaar/riegosmart/main/version.json?t=${Date.now()}`);
+                    if (res.ok) {
+                        const manifest = await res.json();
+                        const localVerCode = state.deviceConfig.hw_version_code || 100;
+                        const disponible = (manifest.hw_version_code || 0) > localVerCode;
+                        handleIncomingMessage({
+                            tipo: "OTA_INFO",
+                            data: {
+                                disponible: disponible,
+                                version_local: state.deviceConfig.hw_version || "1.0.0",
+                                version_remota: manifest.hw_version || "1.0.0",
+                                changelog: manifest.changelog || "",
+                                release_date: manifest.release_date || ""
+                            }
+                        });
+                    } else {
+                        throw new Error("HTTP " + res.status);
+                    }
+                } catch (e) {
+                    console.warn("[OTA] Error consultando GitHub:", e);
+                    btnCheckOta.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Comprobar`;
+                    if (window.lucide) window.lucide.createIcons();
+                    showToast("⚠️ No se pudo consultar el servidor de actualizaciones.");
+                }
+            }
+        });
+    }
+
+    const btnStartOta = document.getElementById('btn-start-hw-ota');
+    if (btnStartOta) {
+        btnStartOta.addEventListener('click', () => {
+            showGenericModal({
+                title: "Actualizar Hardware",
+                msg: "¿Deseas descargar e instalar la nueva versión de firmware en el ESP32? El equipo debe estar conectado a Wi-Fi y no debe estar regando. Al finalizar se reiniciará automáticamente.",
+                onOk: () => {
+                    sendCmd({ comando: "INICIAR_OTA" });
+                    pendingCommand = true;
+                    const progressBox = document.getElementById('hw-ota-progress-box');
+                    const progressStatus = document.getElementById('hw-ota-progress-status');
+                    if (progressBox) progressBox.classList.remove('hidden');
+                    if (btnStartOta) btnStartOta.classList.add('hidden');
+                    if (progressStatus) progressStatus.textContent = "Iniciando conexión con el servidor...";
                 }
             });
         });
