@@ -1,4 +1,4 @@
-import machine
+﻿import machine
 import json
 import os
 import time
@@ -189,7 +189,7 @@ async def init_hardware():
         p = machine.Pin(ZONAS_PINS[i], machine.Pin.OUT, value=1)
         zonas.append(p)
         
-    rain_sensor = machine.Pin(RAIN_PIN, machine.Pin.IN)
+    rain_sensor = machine.Pin(RAIN_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
     adc = machine.ADC(machine.Pin(ADC_PIN))
     adc.atten(machine.ADC.ATTN_11DB)
     boot_button = machine.Pin(BOOT_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
@@ -233,16 +233,8 @@ def es_sensor_lluvia_activo_y_detectando():
     if not rain_sensor:
         return False
     
-    # Debouncing por software (50ms) para filtrar rebotes mecánicos del interruptor o ruido en cables largos
-    val1 = rain_sensor.value()
-    time.sleep_ms(25)
-    val2 = rain_sensor.value()
-    if val1 != val2:
-        time.sleep_ms(25)
-        val = rain_sensor.value()
-    else:
-        val = val1
-
+    # Lectura directa no bloqueante (el debounce de 2s se realiza en tarea_monitoreo_lluvia)
+    val = rain_sensor.value()
     tipo = str(config_data.get("sensor_lluvia_tipo", "NA")).upper()
     if tipo == "NC":
         return val == 1
@@ -731,7 +723,9 @@ async def tarea_monitoreo_lluvia():
                             notif_extra = {}
 
                         await guardar_configuracion()
+                        await asyncio.sleep_ms(50)
                         await enviar_telemetria()
+                        await asyncio.sleep_ms(50)
                         try:
                             import network_manager
                             network_manager.disparar_webhook_notificacion(notif_evento, notif_extra)

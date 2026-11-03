@@ -340,9 +340,9 @@ async def gestionar_interfaces_network():
 
         # ─── STATE_WIFI_ONLINE ────────────────────────────────────────────────
         elif current_state == STATE_WIFI_ONLINE:
-            # Monitorear enlace WiFi
+            # Monitorear enlace WiFi físico
             if not wlan.isconnected():
-                print("[NET] Enlace WiFi perdido. Pasando a Fallback BLE.")
+                print("[NET] Enlace WiFi físico perdido. Pasando a Fallback BLE...")
                 wifi_conectado = False
                 async with mqtt_lock:
                     mqtt_client = None
@@ -357,19 +357,30 @@ async def gestionar_interfaces_network():
                         intentos_fallidos_mqtt = 0
                     else:
                         intentos_fallidos_mqtt += 1
-                        print(f"[NET] Fallo conexión MQTT ({intentos_fallidos_mqtt}/4 en WiFi débil).")
-                        if intentos_fallidos_mqtt >= 4:
-                            print("[NET] WiFi enganchado pero sin datos (MQTT inalcanzable). Desconectando WiFi para Fallback BLE...")
-                            wlan.disconnect()
-                            wifi_conectado = False
-                            async with mqtt_lock:
-                                mqtt_client = None
-                            intentos_fallidos_mqtt = 0
-                            current_state = STATE_FALLBACK_BLE
+                        espera_reintento = min(30, 5 * intentos_fallidos_mqtt)
+                        print(f"[NET] Fallo conexión MQTT ({intentos_fallidos_mqtt}/20). Reintentando en {espera_reintento}s...")
+
+                        # Solo si falla durante más de 5 minutos continuos (20 intentos)
+                        # y confirmamos que REALMENTE no hay salida a internet:
+                        if intentos_fallidos_mqtt >= 20:
+                            if not comprobar_internet():
+                                print("[NET] Sin internet exterior prolongado (>5 min). Activando Fallback BLE para control de emergencia...")
+                                wlan.disconnect()
+                                wifi_conectado = False
+                                async with mqtt_lock:
+                                    mqtt_client = None
+                                intentos_fallidos_mqtt = 0
+                                current_state = STATE_FALLBACK_BLE
+                            else:
+                                print("[NET] Hay internet pero el broker MQTT no responde. Manteniendo WiFi activo y reintentando...")
+                                intentos_fallidos_mqtt = 10  # Mantener reintentos sin desconectar WiFi
+
+                        await asyncio.sleep(espera_reintento)
+                        continue
                 else:
                     intentos_fallidos_mqtt = 0
 
-            # Esperar 5s entre chequeos/reintentos de MQTT para evitar saturar DNS/socket
+            # Esperar 5s entre chequeos normales
             await asyncio.sleep(5)
 
         # ─── STATE_FALLBACK_BLE ───────────────────────────────────────────────
@@ -383,7 +394,7 @@ async def gestionar_interfaces_network():
 
             await ble_service.start_ble_service(name=f"Riego_{riego_core.chip_id[-4:]}")
 
-            # ⚑ FIX CLAVE (basado en Dosimat IoT V2):
+            # ⚑ FIX CLAVE:
             # El contador se reinicia mientras haya un usuario conectado por BLE.
             # El equipo NUNCA interrumpe una sesión activa para reconectar WiFi.
             print(f"[NET] Ventana Fallback BLE activa (máx {ventana_fallback_ble_s}s, pausa si hay sesión)...")
@@ -398,11 +409,12 @@ async def gestionar_interfaces_network():
                     segundos_esperados += 1
                 await asyncio.sleep(1)
 
-            # Ventana completada sin clientes activos → intentar reconectar WiFi
+            # Ventana completada sin clientes activos → reiniciar limpiamente para reactivar WiFi
+            # (Evita el kernel panic LoadProhibited al alternar radios en MicroPython ESP32)
             if current_state == STATE_FALLBACK_BLE:
-                print("[NET] Ventana Fallback completada sin clientes BLE. Reintentando WiFi...")
-                await ble_service.stop_ble_service()
-                current_state = STATE_WIFI_CONNECTING
+                print("[NET] Ventana Fallback completada sin clientes BLE. Reiniciando limpiamente para reactivar WiFi...")
+                await asyncio.sleep(1)
+                machine.reset()
 
 
 # ======================================================================
