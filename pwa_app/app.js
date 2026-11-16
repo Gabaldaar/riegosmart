@@ -88,6 +88,53 @@ const seasonIconMap = {
     "Invierno": { icon: "snowflake", color: "text-blue-500 dark:text-blue-400" },
     "Primavera": { icon: "sprout", color: "text-emerald-500 dark:text-emerald-400" }
 };
+
+// Helper para determinar la estación actual según fecha y rangos configurados
+function obtenerEstacionDeFecha(fecha, temporadasEst) {
+    const temps = temporadasEst || (state.deviceConfig && state.deviceConfig.ajustes_estacionales) || [];
+    if (!temps || temps.length === 0) {
+        return { nombre: "Verano", porcentaje: 100 };
+    }
+    const d = fecha instanceof Date ? fecha : new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mmdd = mm + "-" + dd;
+    for (const temp of temps) {
+        const ini = temp.inicio || "01-01";
+        const fin = temp.fin   || "12-31";
+        let enRango = false;
+        if (ini <= fin) {
+            enRango = (mmdd >= ini && mmdd <= fin);
+        } else {
+            enRango = (mmdd >= ini || mmdd <= fin);
+        }
+        if (enRango) {
+            return {
+                nombre: temp.nombre || "Verano",
+                porcentaje: typeof temp.porcentaje === "number" ? temp.porcentaje : 100
+            };
+        }
+    }
+    return { nombre: "Verano", porcentaje: 100 };
+}
+
+// Helper para actualizar el badge de resumen de estaciones en el editor
+function actualizarBadgeEstacionesPrograma(estaciones) {
+    const badge = document.getElementById("prog-seasons-badge");
+    if (!badge) return;
+    const est = Array.isArray(estaciones) ? estaciones : ["Verano", "Otono", "Invierno", "Primavera"];
+    if (est.length === 0) {
+        badge.textContent = "Ninguna (inactivo)";
+        badge.className = "text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400";
+    } else if (est.length === 4) {
+        badge.textContent = "Todas";
+        badge.className = "text-[11px] font-medium px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400";
+    } else {
+        const nombresMap = { "Verano": "Verano", "Otono": "Otoño", "Invierno": "Invierno", "Primavera": "Primavera" };
+        badge.textContent = est.map(e => nombresMap[e] || e).join(", ");
+        badge.className = "text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400";
+    }
+}
 function normalizeProgramasData(programas) {
     if (!programas || typeof programas !== 'object') return {};
     const mapKeys = {
@@ -126,6 +173,13 @@ function normalizeProgramasData(programas) {
             pObjCloned.zonas = {};
         }
         
+        if (!Array.isArray(pObjCloned.estaciones)) {
+            pObjCloned.estaciones = ["Verano", "Otono", "Invierno", "Primavera"];
+        }
+        if (pObjCloned.aplicar_ajuste_estacional === undefined) {
+            pObjCloned.aplicar_ajuste_estacional = true;
+        }
+
         norm[targetPKey] = pObjCloned;
     }
     return norm;
@@ -1151,6 +1205,14 @@ function calculateNextWatering() {
                     dateTarget.setDate(dateTarget.getDate() + 7);
                     diffMs = dateTarget.getTime() - now.getTime();
                 }
+
+                // Validar si el programa aplica en la estación de la fecha calculada
+                const temporadasEst = state.deviceConfig.ajustes_estacionales || [];
+                const infoEstTarget = obtenerEstacionDeFecha(dateTarget, temporadasEst);
+                const estacionesProg = Array.isArray(pObj.estaciones) ? pObj.estaciones : ["Verano", "Otono", "Invierno", "Primavera"];
+                if (!estacionesProg.includes(infoEstTarget.nombre)) {
+                    continue;
+                }
                 
                 if (diffMs < minDiff) {
                     minDiff = diffMs;
@@ -1174,35 +1236,14 @@ function calculateNextWatering() {
                     }
                     nextProgProg = pName;
 
-                    // Calcular el desglose de zonas con ajuste estacional del mes actual
+                    // Calcular el desglose de zonas con ajuste estacional de la fecha objetivo
                     let zonesDetail = [];
-                    // Misma lógica que ejecutar_riego() en riego_core.py:
-                    // comparar "MM-DD" actual contra rangos {inicio, fin, porcentaje}
-                    // con soporte de rangos que cruzan año (ej: 12-21 a 03-20).
                     let factorEst = 1.0;
                     let pctEst = 100;
-                    const temporadasEst = state.deviceConfig.ajustes_estacionales || [];
-                    if (temporadasEst.length > 0) {
-                        const hoy = new Date();
-                        const mm = String(hoy.getMonth() + 1).padStart(2, '0');
-                        const dd = String(hoy.getDate()).padStart(2, '0');
-                        const mmdd = `${mm}-${dd}`;
-                        for (const temp of temporadasEst) {
-                            const ini = temp.inicio || '01-01';
-                            const fin = temp.fin   || '12-31';
-                            let enRango = false;
-                            if (ini <= fin) {
-                                enRango = (mmdd >= ini && mmdd <= fin);
-                            } else {
-                                // Rango que cruza año (ej: 12-21 → 03-20)
-                                enRango = (mmdd >= ini || mmdd <= fin);
-                            }
-                            if (enRango) {
-                                pctEst = temp.porcentaje || 100;
-                                factorEst = pctEst / 100;
-                                break;
-                            }
-                        }
+                    const aplicaAjuste = pObj.aplicar_ajuste_estacional !== false;
+                    if (aplicaAjuste) {
+                        pctEst = infoEstTarget.porcentaje;
+                        factorEst = pctEst / 100;
                     }
 
                     if (pObj.zonas) {
@@ -1786,6 +1827,19 @@ function initSchedulerUI() {
     document.getElementById('prog-name').addEventListener('change', updateTempProgData);
     document.getElementById('prog-active').addEventListener('change', updateTempProgData);
 
+    // Estaciones
+    document.querySelectorAll('.season-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.classList.toggle('active');
+            updateTempProgData();
+        });
+    });
+
+    const chkApplySeasonal = document.getElementById('prog-apply-seasonal');
+    if (chkApplySeasonal) {
+        chkApplySeasonal.addEventListener('change', updateTempProgData);
+    }
+
     // Añadir Hora
     document.getElementById('add-time-btn').addEventListener('click', () => {
         const cont = document.getElementById('prog-times');
@@ -1899,6 +1953,25 @@ function loadProgramIntoUI(progId) {
             b.classList.remove('active');
         }
     });
+
+    // Estaciones
+    const estValidas = ["Verano", "Otono", "Invierno", "Primavera"];
+    const estaciones = Array.isArray(prog.estaciones) ? prog.estaciones : estValidas;
+    document.querySelectorAll('.season-chip').forEach(chip => {
+        const sName = chip.dataset.season;
+        if (estaciones.includes(sName)) {
+            chip.classList.add('active');
+        } else {
+            chip.classList.remove('active');
+        }
+    });
+    actualizarBadgeEstacionesPrograma(estaciones);
+
+    // Switch aplicar ajuste estacional
+    const chkApplySeasonalUI = document.getElementById('prog-apply-seasonal');
+    if (chkApplySeasonalUI) {
+        chkApplySeasonalUI.checked = prog.aplicar_ajuste_estacional !== false;
+    }
 
     // Horas
     const contTimes = document.getElementById('prog-times');
@@ -2042,6 +2115,16 @@ function updateTempProgData() {
     const dias = [];
     document.querySelectorAll('.day-btn.active').forEach(b => dias.push(parseInt(b.dataset.day)));
     state.tempProgData.dias_semana = dias;
+
+    const estaciones = [];
+    document.querySelectorAll('.season-chip.active').forEach(chip => {
+        if (chip.dataset.season) estaciones.push(chip.dataset.season);
+    });
+    state.tempProgData.estaciones = estaciones;
+    actualizarBadgeEstacionesPrograma(estaciones);
+
+    const chkApplySeasonalData = document.getElementById('prog-apply-seasonal');
+    state.tempProgData.aplicar_ajuste_estacional = chkApplySeasonalData ? chkApplySeasonalData.checked : true;
     
     const horas = [];
     document.querySelectorAll('.time-input').forEach(i => { if (i.value) horas.push(i.value) });
@@ -3236,36 +3319,17 @@ const weeklyCalendarService = {
 
         const programas = state.deviceConfig.programas || {};
 
-        // Calcular factor estacional según fecha actual o global
-        let factorEstacional = 1.0;
         const temporadasEst = state.deviceConfig.ajustes_estacionales || [];
-        if (temporadasEst.length > 0) {
-            const mm = String(hoy.getMonth() + 1).padStart(2, '0');
-            const dd = String(hoy.getDate()).padStart(2, '0');
-            const mmdd = `${mm}-${dd}`;
-            for (const temp of temporadasEst) {
-                const ini = temp.inicio || '01-01';
-                const fin = temp.fin || '12-31';
-                let enRango = false;
-                if (ini <= fin) {
-                    enRango = (mmdd >= ini && mmdd <= fin);
-                } else {
-                    enRango = (mmdd >= ini || mmdd <= fin);
-                }
-                if (enRango) {
-                    factorEstacional = (temp.porcentaje || 100) / 100;
-                    break;
-                }
-            }
-        } else if (state.deviceConfig.ajuste_estacional) {
-            factorEstacional = state.deviceConfig.ajuste_estacional / 100;
-        }
-
         let totalMinutosSemana = 0;
 
         diasIndices.forEach((diaNum, idx) => {
             const esHoy = (diaNum === diaHoyIndex);
             const nombreDia = diasNombres[idx];
+
+            // Fecha y estación de este día de la semana
+            const offsetDias = diaNum - diaHoyIndex;
+            const fechaDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + offsetDias);
+            const infoEstDia = obtenerEstacionDeFecha(fechaDia, temporadasEst);
 
             const runsDelDia = [];
 
@@ -3275,6 +3339,10 @@ const weeklyCalendarService = {
                 // Verificar si el programa está activo
                 const estaActivo = (prog.activo === true || prog.activo === 1 || prog.activo === "true");
                 if (!estaActivo) continue;
+
+                // Verificar si el programa aplica en la estación de este día
+                const estacionesProg = Array.isArray(prog.estaciones) ? prog.estaciones : ["Verano", "Otono", "Invierno", "Primavera"];
+                if (!estacionesProg.includes(infoEstDia.nombre)) continue;
 
                 // Obtener array de días
                 const rawDias = prog.dias_semana || prog.dias || [];
@@ -3288,6 +3356,10 @@ const weeklyCalendarService = {
                     let duracionTotalMinProg = 0;
                     const zonasInfo = [];
 
+                    // Factor estacional del programa para este día
+                    const aplicaAjuste = prog.aplicar_ajuste_estacional !== false;
+                    const factorProg = aplicaAjuste ? (infoEstDia.porcentaje / 100) : 1.0;
+
                     if (prog.zonas && typeof prog.zonas === 'object') {
                         for (const [zKey, zVal] of Object.entries(prog.zonas)) {
                             let mins = 0;
@@ -3297,7 +3369,7 @@ const weeklyCalendarService = {
                                 mins = parseInt(zVal.minutos) || 0;
                             }
                             if (mins > 0) {
-                                const minutosAjustados = Math.max(1, Math.round(mins * factorEstacional));
+                                const minutosAjustados = Math.max(1, Math.round(mins * factorProg));
                                 duracionTotalMinProg += minutosAjustados;
                                 zonasInfo.push({
                                     zona: zKey,

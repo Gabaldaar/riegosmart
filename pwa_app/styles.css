@@ -222,3 +222,21 @@ input[type="date"] {
 .drop-3 {
     animation-delay: 1.0s;
 }
+
+/* Season Chips */
+.season-chip {
+    background-color: #e2e8f0;
+    color: #475569;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+.dark .season-chip {
+    background-color: #1e293b;
+    color: #94a3b8;
+}
+.season-chip.active {
+    background-color: #0d9488 !important;
+    color: #ffffff !important;
+    border-color: #0d9488 !important;
+    box-shadow: 0 2px 4px 0 rgba(13, 148, 136, 0.3);
+}

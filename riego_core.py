@@ -178,6 +178,31 @@ def get_time():
     """Retorna tiempo (año, mes, dia, hora, min, seg, diasemana) local ajustado a UTC-3 (Argentina)"""
     return time.localtime(time.time() - 10800)[:7]
 
+def obtener_info_estacional(current_mm_dd=None):
+    """
+    Retorna (nombre_estacion, porcentaje) según la fecha local actual MM-DD.
+    Ejemplo: ("Verano", 100)
+    """
+    if not current_mm_dd:
+        t = get_time()
+        current_mm_dd = f"{t[1]:02d}-{t[2]:02d}"
+
+    temporadas = config_data.get("ajustes_estacionales", DEFAULT_CONFIG["ajustes_estacionales"])
+    for temp in temporadas:
+        ini = temp.get("inicio", "01-01")
+        fin = temp.get("fin", "12-31")
+        nom = temp.get("nombre", "Verano")
+        pct = temp.get("porcentaje", 100)
+        if ini <= fin:
+            if ini <= current_mm_dd <= fin:
+                return nom, pct
+        else:
+            # Caso cruce de año (ej: 12-21 a 03-20)
+            if current_mm_dd >= ini or current_mm_dd <= fin:
+                return nom, pct
+
+    return "Verano", 100
+
 async def init_hardware():
     global mv, zonas, rain_sensor, adc, boot_button, reloj_rtc
     
@@ -392,24 +417,12 @@ async def ejecutar_riego():
 
             ajuste = 1.0
             if programa_activo.get("nombre") != "Manual":
-                try:
-                    t = get_time()
-                    current_mm_dd = f"{t[1]:02d}-{t[2]:02d}"
-                    temporadas = config_data.get("ajustes_estacionales", [])
-                    for temp in temporadas:
-                        ini = temp.get("inicio", "01-01")
-                        fin = temp.get("fin", "12-31")
-                        if ini <= fin:
-                            if ini <= current_mm_dd <= fin:
-                                ajuste = temp.get("porcentaje", 100) / 100.0
-                                break
-                        else:
-                            # Caso cruce de año (ej: 12-21 a 03-20)
-                            if current_mm_dd >= ini or current_mm_dd <= fin:
-                                ajuste = temp.get("porcentaje", 100) / 100.0
-                                break
-                except Exception as e:
-                    print("Error RTC estacional:", e)
+                if programa_activo.get("aplicar_ajuste_estacional", True):
+                    try:
+                        nom_est, pct_est = obtener_info_estacional()
+                        ajuste = pct_est / 100.0
+                    except Exception as e:
+                        print("Error RTC estacional:", e)
             
             for idx, str_z in enumerate(zonas_prog):
                 z_idx = obtener_num_zona(str_z) - 1
@@ -570,12 +583,14 @@ async def tarea_planificador():
             id_dia = f"{t[0]}_{t[1]}_{t[2]}"
 
             # Comprobar a las 09:00 si no hay ningún programa activo o configurado
+            nom_estacion, _ = obtener_info_estacional()
             if hora_str == "09:00" and ultimo_check_sin_prog_dia != id_dia:
                 ultimo_check_sin_prog_dia = id_dia
                 programas = config_data.get("programas", {})
                 hay_activos = False
                 for p in programas.values():
-                    if p.get("activo", False) and len(p.get("dias_semana", [])) > 0 and len(p.get("horas_arranque", [])) > 0:
+                    estaciones_p = p.get("estaciones", ["Verano", "Otono", "Invierno", "Primavera"])
+                    if p.get("activo", False) and (nom_estacion in estaciones_p) and len(p.get("dias_semana", [])) > 0 and len(p.get("horas_arranque", [])) > 0:
                         hay_activos = True
                         break
                 if not hay_activos:
@@ -596,6 +611,9 @@ async def tarea_planificador():
             for pk in prog_keys:
                 prog = config_data["programas"][pk]
                 if not prog.get("activo", False):
+                    continue
+                estaciones_p = prog.get("estaciones", ["Verano", "Otono", "Invierno", "Primavera"])
+                if nom_estacion not in estaciones_p:
                     continue
                 if dia_sem not in prog.get("dias_semana", []):
                     continue
