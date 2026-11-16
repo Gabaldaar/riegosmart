@@ -25,6 +25,7 @@ class MQTTClient:
         self.lw_msg = None
         self.lw_qos = 0
         self.lw_retain = False
+        self.timeout = 8.0
 
     def _readexactly(self, n):
         """Lee exactamente n bytes del socket, reintentando si TCP entrega el payload fragmentado."""
@@ -67,7 +68,7 @@ class MQTTClient:
 
     def connect(self, clean_session=True):
         self.sock = socket.socket()
-        self.sock.settimeout(3.0)
+        self.sock.settimeout(self.timeout)
         addr = socket.getaddrinfo(self.server, self.port)[0][-1]
         self.sock.connect(addr)
         if self.ssl:
@@ -194,11 +195,11 @@ class MQTTClient:
         except OSError as e:
             # EAGAIN (11) = sin datos, normal en modo no-bloqueante
             if e.args[0] == 11:
-                self.sock.settimeout(3.0)
+                self.sock.settimeout(self.timeout)
                 return False
-            self.sock.settimeout(3.0)
+            self.sock.settimeout(self.timeout)
             raise
-        self.sock.settimeout(3.0)
+        self.sock.settimeout(self.timeout)
         if res is None:
             # None en modo no-bloqueante = sin datos (equiv. EAGAIN)
             return False

@@ -79,19 +79,31 @@ async def conectar_mqtt_async():
         import urandom
         client_id = f"riego_{riego_core.chip_id}_{urandom.getrandbits(16)}"
 
-        print(f"[MQTT] Conectando a {MQTT_BROKER}:{MQTT_PORT}...")
+        # Determinar servidor: usar IP en caché si está disponible para evitar DNS en repetidores
+        server_to_use = cached_mqtt_ip if cached_mqtt_ip else MQTT_BROKER
+        print(f"[MQTT] Conectando a {server_to_use}:{MQTT_PORT}...")
         if wdt_ref: wdt_ref.feed()
 
-        _client = MQTTClient(client_id, MQTT_BROKER, port=MQTT_PORT, keepalive=60)
+        _client = MQTTClient(client_id, server_to_use, port=MQTT_PORT, keepalive=60)
         _client.set_callback(mqtt_callback)
         _client.connect(clean_session=True)
 
+        # Si conectó con éxito y no teníamos la IP cacheada, resolverla y guardarla
+        if not cached_mqtt_ip:
+            try:
+                ai = socket.getaddrinfo(MQTT_BROKER, MQTT_PORT)
+                if ai and len(ai) > 0:
+                    cached_mqtt_ip = ai[0][-1][0]
+                    print(f"[MQTT] IP de broker resuelta y guardada en caché: {cached_mqtt_ip}")
+            except Exception as e_dns:
+                pass
+
         if wdt_ref: wdt_ref.feed()
 
-        # Aplicar timeout nativo al socket MQTT (ampliado a 6.0s para redes débiles/red eléctrica)
+        # Aplicar timeout nativo al socket MQTT (8.0s para enlaces con latencia/repetidores)
         if hasattr(_client, 'sock') and _client.sock:
             try:
-                _client.sock.settimeout(6.0)
+                _client.sock.settimeout(8.0)
             except:
                 pass
 
@@ -119,6 +131,7 @@ async def conectar_mqtt_async():
 
     except Exception as e:
         print("[MQTT] Error al establecer conexión:", e)
+        cached_mqtt_ip = None
         mqtt_client = None
         return False
 
@@ -207,7 +220,13 @@ async def conectar_wifi_non_blocking(wlan):
         if wdt_ref: wdt_ref.feed()
         if wlan.isconnected():
             wifi_conectado = True
-            print("[WIFI] Conectado exitosamente.", wlan.ifconfig())
+            try:
+                cfg = wlan.ifconfig()
+                # Forzar DNS 8.8.8.8 para evitar proxies DNS defectuosos o lentos en repetidores WiFi
+                wlan.ifconfig((cfg[0], cfg[1], cfg[2], "8.8.8.8"))
+                print("[WIFI] Conectado exitosamente con DNS 8.8.8.8:", wlan.ifconfig())
+            except Exception as e_dns:
+                print("[WIFI] Conectado exitosamente.", wlan.ifconfig(), "(DNS default):", e_dns)
 
             # Sincronización horaria NTP + DS3231
             try:
@@ -241,7 +260,7 @@ def comprobar_internet():
     try:
         gc.collect()
         s = socket.socket()
-        s.settimeout(2.0)
+        s.settimeout(4.0)
         try:
             if wdt_ref: wdt_ref.feed()
             s.connect(("8.8.8.8", 53))
@@ -359,14 +378,14 @@ async def gestionar_interfaces_network():
                         intentos_fallidos_mqtt = 0
                     else:
                         intentos_fallidos_mqtt += 1
-                        espera_reintento = min(30, 5 * intentos_fallidos_mqtt)
-                        print(f"[NET] Fallo conexión MQTT ({intentos_fallidos_mqtt}/20). Reintentando en {espera_reintento}s...")
+                        espera_reintento = 5
+                        print(f"[NET] Fallo conexión MQTT ({intentos_fallidos_mqtt}/30). Reintentando en {espera_reintento}s...")
 
-                        # Solo si falla durante más de 5 minutos continuos (20 intentos)
+                        # Solo si falla durante más de 2.5 minutos continuos (30 intentos)
                         # y confirmamos que REALMENTE no hay salida a internet:
-                        if intentos_fallidos_mqtt >= 20:
+                        if intentos_fallidos_mqtt >= 30:
                             if not comprobar_internet():
-                                print("[NET] Sin internet exterior prolongado (>5 min). Activando Fallback BLE para control de emergencia...")
+                                print("[NET] Sin internet exterior prolongado (>2.5 min). Activando Fallback BLE para control de emergencia...")
                                 wlan.disconnect()
                                 wifi_conectado = False
                                 async with mqtt_lock:
@@ -375,7 +394,7 @@ async def gestionar_interfaces_network():
                                 current_state = STATE_FALLBACK_BLE
                             else:
                                 print("[NET] Hay internet pero el broker MQTT no responde. Manteniendo WiFi activo y reintentando...")
-                                intentos_fallidos_mqtt = 10  # Mantener reintentos sin desconectar WiFi
+                                intentos_fallidos_mqtt = 15  # Mantener reintentos sin desconectar WiFi
 
                         await asyncio.sleep(espera_reintento)
                         continue

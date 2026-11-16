@@ -13,10 +13,16 @@ except:
     pass
 
 import uasyncio as asyncio
+import gc
+gc.collect()
 import riego_core
+gc.collect()
 import network_manager
+gc.collect()
 import ble_service
+gc.collect()
 import sys_log
+gc.collect()
 
 wdt = None
 
