@@ -1,4 +1,4 @@
-﻿import machine
+import machine
 import json
 import os
 import time
