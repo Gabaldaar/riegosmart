@@ -15,5 +15,14 @@ try:
 except Exception as e:
     print("Error init pines en boot:", e)
 
+# Reset de seguridad del stack Bluetooth ante reinicios por software (Ctrl+D)
+try:
+    import bluetooth
+    ble = bluetooth.BLE()
+    if ble.active():
+        ble.active(False)
+except Exception:
+    pass
+
 # Limpieza exhaustiva de RAM en el arranque
 gc.collect()

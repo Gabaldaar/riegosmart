@@ -300,10 +300,11 @@ async def gestionar_interfaces_network():
 
         # ─── STATE_BLE_ONLY ───────────────────────────────────────────────────
         elif current_state == STATE_BLE_ONLY:
-            # Exclusión mutua: asegurar WiFi apagado
+            # Exclusión mutua: asegurar WiFi apagado y estabilizar radio RF
             if wlan.active():
                 wlan.active(False)
                 gc.collect()
+                await asyncio.sleep_ms(500)
 
             await ble_service.start_ble_service(name=f"Riego_{riego_core.chip_id[-4:]}")
 
@@ -318,6 +319,7 @@ async def gestionar_interfaces_network():
         elif current_state == STATE_WIFI_CONNECTING:
             # Exclusión mutua: apagar BLE antes de encender WiFi
             await ble_service.stop_ble_service()
+            await asyncio.sleep_ms(300)
             wlan.active(True)
             try:
                 # Maximizar sensibilidad RF y emisión al estar alimentado a 220V/red
@@ -385,12 +387,13 @@ async def gestionar_interfaces_network():
 
         # ─── STATE_FALLBACK_BLE ───────────────────────────────────────────────
         elif current_state == STATE_FALLBACK_BLE:
-            # Exclusión mutua: apagar WiFi, encender BLE temporal
+            # Exclusión mutua: apagar WiFi, encender BLE temporal (pausa RF)
             wlan.active(False)
             wifi_conectado = False
             async with mqtt_lock:
                 mqtt_client = None
             gc.collect()
+            await asyncio.sleep_ms(500)
 
             await ble_service.start_ble_service(name=f"Riego_{riego_core.chip_id[-4:]}")
 
