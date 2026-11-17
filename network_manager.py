@@ -14,6 +14,17 @@ import ble_service
 # Usar la versión local corregida de simple.py para evitar bloqueos síncronos en el socket
 from simple import MQTTClient
 
+def log_debug(msg):
+    try:
+        t = time.localtime()
+        hora = f"{t[3]:02d}:{t[4]:02d}:{t[5]:02d}"
+        line = f"[{hora}] {msg}"
+        print(line)
+        with open("boot_debug.txt", "a") as f:
+            f.write(line + "\n")
+    except:
+        pass
+
 # ── Estados de Red ────────────────────────────────────────────────────────────
 STATE_INIT            = 0
 STATE_BLE_ONLY        = 1
@@ -59,7 +70,7 @@ def mqtt_callback(topic, msg):
 
 
 async def conectar_mqtt_async():
-    global mqtt_client, mqtt_loop_task, cached_mqtt_ip
+    global mqtt_client, mqtt_loop_task
     if not wifi_conectado:
         return False
 
@@ -79,28 +90,16 @@ async def conectar_mqtt_async():
         import urandom
         client_id = f"riego_{riego_core.chip_id}_{urandom.getrandbits(16)}"
 
-        # Determinar servidor: usar IP en caché si está disponible para evitar DNS en repetidores
-        server_to_use = cached_mqtt_ip if cached_mqtt_ip else MQTT_BROKER
-        print(f"[MQTT] Conectando a {server_to_use}:{MQTT_PORT}...")
+        log_debug(f"[MQTT] Conectando a {MQTT_BROKER}:{MQTT_PORT}...")
         if wdt_ref: wdt_ref.feed()
 
-        _client = MQTTClient(client_id, server_to_use, port=MQTT_PORT, keepalive=60)
+        _client = MQTTClient(client_id, MQTT_BROKER, port=MQTT_PORT, keepalive=60)
         _client.set_callback(mqtt_callback)
         _client.connect(clean_session=True)
 
-        # Si conectó con éxito y no teníamos la IP cacheada, resolverla y guardarla
-        if not cached_mqtt_ip:
-            try:
-                ai = socket.getaddrinfo(MQTT_BROKER, MQTT_PORT)
-                if ai and len(ai) > 0:
-                    cached_mqtt_ip = ai[0][-1][0]
-                    print(f"[MQTT] IP de broker resuelta y guardada en caché: {cached_mqtt_ip}")
-            except Exception as e_dns:
-                pass
-
         if wdt_ref: wdt_ref.feed()
 
-        # Aplicar timeout nativo al socket MQTT (8.0s para enlaces con latencia/repetidores)
+        # Aplicar timeout nativo al socket MQTT (8.0s)
         if hasattr(_client, 'sock') and _client.sock:
             try:
                 _client.sock.settimeout(8.0)
@@ -112,9 +111,9 @@ async def conectar_mqtt_async():
         if topic_hash:
             topic_sub = f"riego/{topic_hash}/cmd"
             _client.subscribe(topic_sub)
-            print(f"[MQTT] Suscrito a: {topic_sub}")
+            log_debug(f"[MQTT] Suscrito a: {topic_sub}")
         else:
-            print("[MQTT] Sin token. Conectado sin suscripción a /cmd.")
+            log_debug("[MQTT] Sin token. Conectado sin suscripción a /cmd.")
 
         async with mqtt_lock:
             mqtt_client = _client
@@ -126,15 +125,14 @@ async def conectar_mqtt_async():
         mqtt_loop_task = asyncio.create_task(loop_mqtt_escucha())
 
         # Enviar telemetría inicial para que la app reciba el estado actual
+        log_debug("[MQTT] Conectado. Enviando telemetría inicial...")
         asyncio.create_task(riego_core.enviar_telemetria())
         return True
 
     except Exception as e:
-        print("[MQTT] Error al establecer conexión:", e)
-        cached_mqtt_ip = None
+        log_debug(f"[MQTT] Error al establecer conexión: {e}")
         mqtt_client = None
         return False
-
 
 async def loop_mqtt_escucha():
     """Polling no bloqueante de mensajes MQTT con keep-alive por PING y watchdog de silencio."""
@@ -198,7 +196,7 @@ async def loop_mqtt_escucha():
 # ======================================================================
 
 async def conectar_wifi_non_blocking(wlan):
-    """Conecta a la red WiFi guardada en flash sin bloquear el loop de asyncio."""
+    """Conecta a la red WiFi guardada en flash esperando tanto RF como IP asignada por DHCP."""
     global wifi_conectado
     try:
         with open("wifi_config.json", "r") as f:
@@ -206,54 +204,53 @@ async def conectar_wifi_non_blocking(wlan):
             ssid     = str(cred.get("ssid", "")).strip()
             password = str(cred.get("pass", "")).strip()
     except:
-        print("[WIFI] Sin credenciales configuradas.")
+        log_debug("[WIFI] Sin credenciales configuradas.")
         return False
 
     if not ssid:
         return False
 
-    print(f"[WIFI] Conectando a AP: {ssid}...")
+    log_debug(f"[WIFI] Conectando a AP: {ssid}...")
     wlan.connect(ssid, password)
 
-    # Espera no bloqueante de hasta 15 segundos (30 × 500 ms)
-    for _ in range(30):
+    # Espera no bloqueante de hasta 20 segundos (40 × 500 ms)
+    # Requiere obligatoriamente enlace RF Y que DHCP haya entregado una IP real (no 0.0.0.0)
+    for i in range(40):
         if wdt_ref: wdt_ref.feed()
         if wlan.isconnected():
-            wifi_conectado = True
-            try:
-                cfg = wlan.ifconfig()
-                # Forzar DNS 8.8.8.8 para evitar proxies DNS defectuosos o lentos en repetidores WiFi
-                wlan.ifconfig((cfg[0], cfg[1], cfg[2], "8.8.8.8"))
-                print("[WIFI] Conectado exitosamente con DNS 8.8.8.8:", wlan.ifconfig())
-            except Exception as e_dns:
-                print("[WIFI] Conectado exitosamente.", wlan.ifconfig(), "(DNS default):", e_dns)
+            cfg = wlan.ifconfig()
+            if cfg[0] != "0.0.0.0":
+                wifi_conectado = True
+                log_debug(f"[WIFI] Conectado exitosamente. IP={cfg[0]}, GW={cfg[2]}, DNS={cfg[3]}")
 
-            # Sincronización horaria NTP + DS3231
-            try:
-                if wdt_ref: wdt_ref.feed()
-                import ntptime
-                ntptime.host = "pool.ntp.org"
-                ntptime.settime()
-                if wdt_ref: wdt_ref.feed()
-                if riego_core.reloj_rtc:
-                    local_now = time.time() - 10800  # Ajuste UTC-3 (Argentina)
-                    t = time.localtime(local_now)
-                    riego_core.reloj_rtc.set_time(t)
-                    print("[NTP] DS3231 sincronizado por NTP.")
-            except Exception as e:
-                print("[NTP] Error de sincronización:", e)
+                # Sincronización horaria NTP + DS3231
+                try:
+                    if wdt_ref: wdt_ref.feed()
+                    import ntptime
+                    ntptime.host = "pool.ntp.org"
+                    ntptime.settime()
+                    if wdt_ref: wdt_ref.feed()
+                    if riego_core.reloj_rtc:
+                        local_now = time.time() - 10800  # Ajuste UTC-3 (Argentina)
+                        t = time.localtime(local_now)
+                        riego_core.reloj_rtc.set_time(t)
+                        log_debug("[NTP] DS3231 sincronizado por NTP.")
+                except Exception as e:
+                    log_debug(f"[NTP] Error sincronización: {e}")
 
-            global _notificado_boot
-            if not _notificado_boot:
-                _notificado_boot = True
-                disparar_webhook_notificacion("reinicio_equipo")
+                global _notificado_boot
+                if not _notificado_boot:
+                    _notificado_boot = True
+                    disparar_webhook_notificacion("reinicio_equipo")
 
-            return True
+                return True
+            else:
+                if i % 4 == 0:
+                    log_debug(f"[WIFI] Asociado a RF. Esperando IP por DHCP ({i+1}/40)...")
         await asyncio.sleep_ms(500)
 
-    print("[WIFI] Timeout al conectar WiFi.")
+    log_debug("[WIFI] Timeout al conectar WiFi o asignar IP DHCP.")
     return False
-
 
 def comprobar_internet():
     """Verifica conectividad real (8.8.8.8:53). Robusto ante agotamiento de sockets."""
@@ -310,11 +307,16 @@ async def gestionar_interfaces_network():
 
         # ─── STATE_INIT ───────────────────────────────────────────────────────
         if current_state == STATE_INIT:
+            try:
+                with open("boot_debug.txt", "w") as f:
+                    f.write("=== INICIO SISTEMA ===\n")
+            except:
+                pass
             if tiene_creds:
-                print("[NET] Credenciales detectadas en inicio. Conectando WiFi...")
+                log_debug("[NET] Credenciales detectadas en inicio. Conectando WiFi...")
                 current_state = STATE_WIFI_CONNECTING
             else:
-                print("[NET] Sin credenciales. Arrancando BLE de configuración...")
+                log_debug("[NET] Sin credenciales. Arrancando BLE de configuración...")
                 current_state = STATE_BLE_ONLY
 
         # ─── STATE_BLE_ONLY ───────────────────────────────────────────────────
@@ -361,9 +363,9 @@ async def gestionar_interfaces_network():
 
         # ─── STATE_WIFI_ONLINE ────────────────────────────────────────────────
         elif current_state == STATE_WIFI_ONLINE:
-            # Monitorear enlace WiFi físico
-            if not wlan.isconnected():
-                print("[NET] Enlace WiFi físico perdido. Pasando a Fallback BLE...")
+            # Monitorear enlace WiFi físico Y validez de la IP asignada
+            if not wlan.isconnected() or wlan.ifconfig()[0] == "0.0.0.0":
+                log_debug("[NET] Enlace WiFi o IP perdida. Pasando a Fallback BLE...")
                 wifi_conectado = False
                 async with mqtt_lock:
                     mqtt_client = None
@@ -372,29 +374,25 @@ async def gestionar_interfaces_network():
             else:
                 # Mantener conexión MQTT activa
                 if mqtt_client is None:
-                    print("[NET] Reintentando conexión MQTT...")
+                    log_debug("[NET] Intentando conectar MQTT...")
                     mqtt_ok = await conectar_mqtt_async()
                     if mqtt_ok:
                         intentos_fallidos_mqtt = 0
                     else:
                         intentos_fallidos_mqtt += 1
                         espera_reintento = 5
-                        print(f"[NET] Fallo conexión MQTT ({intentos_fallidos_mqtt}/30). Reintentando en {espera_reintento}s...")
+                        log_debug(f"[NET] Fallo conexión MQTT ({intentos_fallidos_mqtt}/6). Reintentando en {espera_reintento}s...")
 
-                        # Solo si falla durante más de 2.5 minutos continuos (30 intentos)
-                        # y confirmamos que REALMENTE no hay salida a internet:
-                        if intentos_fallidos_mqtt >= 30:
-                            if not comprobar_internet():
-                                print("[NET] Sin internet exterior prolongado (>2.5 min). Activando Fallback BLE para control de emergencia...")
-                                wlan.disconnect()
-                                wifi_conectado = False
-                                async with mqtt_lock:
-                                    mqtt_client = None
-                                intentos_fallidos_mqtt = 0
-                                current_state = STATE_FALLBACK_BLE
-                            else:
-                                print("[NET] Hay internet pero el broker MQTT no responde. Manteniendo WiFi activo y reintentando...")
-                                intentos_fallidos_mqtt = 15  # Mantener reintentos sin desconectar WiFi
+                        # Si falla 6 veces seguidas (~30 segundos):
+                        # Enlace con repetidor posiblemente congelado. Desconectar WiFi para forzar reconexión limpia
+                        if intentos_fallidos_mqtt >= 6:
+                            log_debug("[NET] 6 fallos seguidos de MQTT. Desconectando WiFi para renegociar enlace con repetidor...")
+                            wlan.disconnect()
+                            wifi_conectado = False
+                            async with mqtt_lock:
+                                mqtt_client = None
+                            intentos_fallidos_mqtt = 0
+                            current_state = STATE_FALLBACK_BLE
 
                         await asyncio.sleep(espera_reintento)
                         continue
